@@ -12,7 +12,7 @@ class ReleaseController extends Controller
     public function __construct(private readonly ReleaseService $service) {}
 
     /**
-     * GET /api/v1/releases
+     * GET /api/v2/releases
      * 查询所有产品的最新版本汇总
      */
     public function index(Request $request): JsonResponse
@@ -26,7 +26,7 @@ class ReleaseController extends Controller
     }
 
     /**
-     * GET /api/v1/releases/latest?product=tui&platform=linux&arch=amd64
+     * GET /api/v2/releases/latest?product=tui&platform=linux&arch=amd64
      */
     public function latest(Request $request): JsonResponse
     {
@@ -52,7 +52,7 @@ class ReleaseController extends Controller
     }
 
     /**
-     * POST /api/v1/releases  (需要 release:upload 权限)
+     * POST /api/v2/releases  (需要 release:upload 权限)
      */
     public function store(Request $request): JsonResponse
     {
@@ -78,21 +78,21 @@ class ReleaseController extends Controller
     }
 
     /**
-     * GET /api/v1/releases/{releaseId}/download/{filename}
+     * GET /api/v2/releases/{releaseId}/download/{filename}
      */
-    public function download(Request $request, int $releaseId, string $filename): \Symfony\Component\HttpFoundation\StreamedResponse
+    public function download(Request $request, int $releaseId, string $filename): \Symfony\Component\HttpFoundation\BinaryFileResponse
     {
-        $filePath = $this->service->download(
+        $absolutePath = $this->service->download(
             $releaseId,
             $request->ip(),
             $request->userAgent() ?? ''
         );
 
-        return response()->download(storage_path("app/{$filePath}"), $filename);
+        return response()->download($absolutePath, $filename);
     }
 
     /**
-     * DELETE /api/v1/releases/{releaseId}  (需要 release:manage 权限)
+     * DELETE /api/v2/releases/{releaseId}  (需要 release:manage 权限)
      */
     public function disable(int $releaseId): JsonResponse
     {

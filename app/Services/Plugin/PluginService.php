@@ -89,7 +89,7 @@ class PluginService
             'referer'       => request()->header('Referer', ''),
             'created_at'    => now(),
         ]);
-        return $plugin->file_path;
+        return Storage::disk('local')->path($plugin->file_path);
     }
 
     public function disable(int $pluginId): void
@@ -104,6 +104,6 @@ class PluginService
 
     private function buildDownloadUrl(int $id, string $filename): string
     {
-        return rtrim(config('app.url'), '/') . "/api/v1/plugins/{$id}/download/{$filename}";
+        return rtrim(config('app.url'), '/') . "/d/plugins/{$filename}";
     }
 }

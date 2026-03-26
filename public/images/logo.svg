@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 240 64" width="240" height="64">
+  <image href="/images/icon.png" x="0" y="0" width="64" height="64"/>
+  <text x="80" y="46"
+        font-family="-apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif"
+        font-size="34" font-weight="700" fill="#111827">MyNet</text>
+</svg>

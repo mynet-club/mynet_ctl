@@ -1,0 +1,330 @@
+#!/bin/bash
+# ════════════════════════════════════════════════════════════
+# MyNet CTL 数据库初始化 & 本地数据同步
+#
+# 用法:
+#   ./scripts/deploy/db-setup.sh                 # 完整流程：建库 + 迁移 + 同步
+#   ./scripts/deploy/db-setup.sh create-db       # 仅在远程创建数据库和用户
+#   ./scripts/deploy/db-setup.sh migrate         # 仅运行迁移
+#   ./scripts/deploy/db-setup.sh sync            # 仅导出本地 → 导入远程
+#   ./scripts/deploy/db-setup.sh dump-local      # 仅导出本地数据到 SQL 文件
+#
+# 依赖:
+#   - 本地 MySQL 可用（mysqldump）
+#   - 远程 SSH 可达
+#
+# ════════════════════════════════════════════════════════════
+
+set -euo pipefail
+
+# ── 配置 ──
+REMOTE_HOST="10.182.236.180"
+REMOTE_USER="root"
+REMOTE_DIR="/data/app/mynet.club/ctl"
+
+# 本地数据库
+LOCAL_DB_HOST="127.0.0.1"
+LOCAL_DB_PORT="3306"
+LOCAL_DB_NAME="mynet_ctl"
+LOCAL_DB_USER="mynet"
+LOCAL_DB_PASS="Mynet@Dev2026"
+
+# 远程数据库（将在远程创建）
+REMOTE_DB_NAME="mynet_ctl"
+REMOTE_DB_USER="mynet_admin"
+# 密码将手动输入或从远程 .env 读取
+
+# 脚本路径
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+DUMP_FILE="$SCRIPT_DIR/mynet_ctl_dump.sql"
+TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+
+# ── 颜色 ──
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+log_info()    { echo -e "${BLUE}[INFO]${NC} $1"; }
+log_success() { echo -e "${GREEN}[OK]${NC} $1"; }
+log_warn()    { echo -e "${YELLOW}[WARN]${NC} $1"; }
+log_error()   { echo -e "${RED}[ERROR]${NC} $1"; }
+
+# ════════════════════════════════════════════════════════════
+# 在远程服务器创建数据库和用户
+# ════════════════════════════════════════════════════════════
+
+create_remote_db() {
+    echo
+    log_info "在远程服务器创建数据库..."
+    echo -e "${YELLOW}请输入远程 MySQL root 密码（或留空如果远程 MySQL 免密）:${NC}"
+    read -rs REMOTE_MYSQL_ROOT_PASS
+
+    echo -e "${YELLOW}请设置生产数据库用户 ${REMOTE_DB_USER} 的密码:${NC}"
+    read -rs REMOTE_DB_PASS
+    echo
+
+    ssh "$REMOTE_USER@$REMOTE_HOST" << EOFDB
+mysql ${REMOTE_MYSQL_ROOT_PASS:+-p"$REMOTE_MYSQL_ROOT_PASS"} -e "
+CREATE DATABASE IF NOT EXISTS \\\`$REMOTE_DB_NAME\\\`
+    CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+CREATE USER IF NOT EXISTS '$REMOTE_DB_USER'@'localhost'
+    IDENTIFIED BY '$REMOTE_DB_PASS';
+
+GRANT ALL PRIVILEGES ON \\\`$REMOTE_DB_NAME\\\`.* TO '$REMOTE_DB_USER'@'localhost';
+
+FLUSH PRIVILEGES;
+
+SELECT 'Database and user created successfully' AS result;
+"
+EOFDB
+
+    log_success "远程数据库 $REMOTE_DB_NAME 创建完成"
+    echo
+    echo -e "${YELLOW}请将以下内容更新到远程 .env:${NC}"
+    echo "  DB_DATABASE=$REMOTE_DB_NAME"
+    echo "  DB_USERNAME=$REMOTE_DB_USER"
+    echo "  DB_PASSWORD=$REMOTE_DB_PASS"
+    echo
+}
+
+# ════════════════════════════════════════════════════════════
+# 运行远程迁移
+# ════════════════════════════════════════════════════════════
+
+run_remote_migrate() {
+    log_info "运行远程数据库迁移..."
+
+    ssh "$REMOTE_USER@$REMOTE_HOST" << 'EOF'
+cd /data/app/mynet.club/ctl
+php artisan migrate --force 2>&1
+echo "✅ 迁移完成"
+EOF
+    log_success "远程迁移完成"
+}
+
+# ════════════════════════════════════════════════════════════
+# 导出本地数据（结构 + 数据）
+# ════════════════════════════════════════════════════════════
+
+dump_local_data() {
+    log_info "导出本地数据库..."
+
+    # 需要同步的业务表（排除 Laravel 框架表如 sessions, cache, jobs, migrations）
+    TABLES=(
+        releases
+        plugins
+        scripts
+        download_logs
+        api_tokens
+        openwrt_devices
+        openwrt_device_firmware
+    )
+
+    log_info "导出表: ${TABLES[*]}"
+
+    # 先导出结构（CREATE TABLE），再导出数据（INSERT）
+    # 使用 --no-create-info 只导出数据，因为结构由 migration 管理
+    mysqldump \
+        -h "$LOCAL_DB_HOST" \
+        -P "$LOCAL_DB_PORT" \
+        -u "$LOCAL_DB_USER" \
+        -p"$LOCAL_DB_PASS" \
+        --no-create-info \
+        --complete-insert \
+        --skip-lock-tables \
+        --set-gtid-purged=OFF \
+        --single-transaction \
+        --quick \
+        "$LOCAL_DB_NAME" \
+        "${TABLES[@]}" \
+        > "$DUMP_FILE" 2>/dev/null
+
+    # 统计行数
+    local rows
+    rows=$(grep -c '^INSERT' "$DUMP_FILE" 2>/dev/null || echo "0")
+    local size
+    size=$(du -h "$DUMP_FILE" | cut -f1)
+
+    log_success "导出完成: $DUMP_FILE ($size, $rows 条 INSERT)"
+}
+
+# ════════════════════════════════════════════════════════════
+# 域名替换（本地 → 生产）
+# ════════════════════════════════════════════════════════════
+
+fix_domains_in_dump() {
+    log_info "替换 SQL 中的本地域名为生产域名..."
+
+    if [ ! -f "$DUMP_FILE" ]; then
+        log_error "找不到 $DUMP_FILE，请先运行 dump-local"
+        exit 1
+    fi
+
+    # 替换域名映射
+    sed -i.bak \
+        -e 's|http://ctl\.mynet\.local|https://ctl.mynet.club|g' \
+        -e 's|http://api\.mynet\.local|https://api.mynet.club|g' \
+        -e 's|http://www\.mynet\.local|https://www.mynet.club|g' \
+        -e 's|http://my\.mynet\.local|https://my.mynet.club|g' \
+        -e 's|ctl\.mynet\.local|ctl.mynet.club|g' \
+        -e 's|api\.mynet\.local|api.mynet.club|g' \
+        -e 's|www\.mynet\.local|www.mynet.club|g' \
+        -e 's|my\.mynet\.local|my.mynet.club|g' \
+        -e 's|download\.mynet\.club|ctl.mynet.club|g' \
+        "$DUMP_FILE"
+
+    rm -f "${DUMP_FILE}.bak"
+
+    local changes
+    changes=$(grep -c 'mynet\.club' "$DUMP_FILE" 2>/dev/null || echo "0")
+    log_success "域名替换完成（$changes 处包含 mynet.club）"
+}
+
+# ════════════════════════════════════════════════════════════
+# 导入数据到远程
+# ════════════════════════════════════════════════════════════
+
+import_to_remote() {
+    if [ ! -f "$DUMP_FILE" ]; then
+        log_error "找不到 $DUMP_FILE，请先运行 dump-local"
+        exit 1
+    fi
+
+    log_info "上传并导入数据到远程..."
+
+    # 上传
+    scp "$DUMP_FILE" "$REMOTE_USER@$REMOTE_HOST:/tmp/mynet_ctl_import_${TIMESTAMP}.sql"
+
+    # 导入
+    ssh "$REMOTE_USER@$REMOTE_HOST" << EOFIMPORT
+cd $REMOTE_DIR
+
+# 从 .env 读取数据库信息
+DB_NAME=\$(grep '^DB_DATABASE=' .env | cut -d= -f2)
+DB_USER=\$(grep '^DB_USERNAME=' .env | cut -d= -f2)
+DB_PASS=\$(grep '^DB_PASSWORD=' .env | cut -d= -f2)
+
+echo "导入到数据库: \$DB_NAME"
+mysql -u "\$DB_USER" -p"\$DB_PASS" "\$DB_NAME" < /tmp/mynet_ctl_import_${TIMESTAMP}.sql
+echo "✅ 数据导入完成"
+
+# 清理临时文件
+rm -f /tmp/mynet_ctl_import_${TIMESTAMP}.sql
+
+# 统计行数
+mysql -u "\$DB_USER" -p"\$DB_PASS" "\$DB_NAME" -e "
+SELECT 'releases' AS tbl, COUNT(*) AS cnt FROM releases
+UNION ALL SELECT 'plugins', COUNT(*) FROM plugins
+UNION ALL SELECT 'scripts', COUNT(*) FROM scripts
+UNION ALL SELECT 'api_tokens', COUNT(*) FROM api_tokens
+UNION ALL SELECT 'openwrt_devices', COUNT(*) FROM openwrt_devices
+UNION ALL SELECT 'openwrt_device_firmware', COUNT(*) FROM openwrt_device_firmware;
+"
+EOFIMPORT
+
+    log_success "远程数据导入完成"
+}
+
+# ════════════════════════════════════════════════════════════
+# 同步本地 storage 文件到远程
+# ════════════════════════════════════════════════════════════
+
+sync_storage_files() {
+    log_info "同步 storage/app/ 文件到远程..."
+
+    for dir in releases plugins scripts; do
+        local local_dir="$PROJECT_ROOT/storage/app/$dir"
+        if [ -d "$local_dir" ] && [ "$(ls -A "$local_dir" 2>/dev/null)" ]; then
+            log_info "同步 storage/app/$dir ..."
+            rsync -avz --progress \
+                "$local_dir/" \
+                "$REMOTE_USER@$REMOTE_HOST:$REMOTE_DIR/storage/app/$dir/"
+        else
+            log_warn "storage/app/$dir 为空，跳过"
+        fi
+    done
+
+    # 修复权限
+    ssh "$REMOTE_USER@$REMOTE_HOST" << EOF
+chown -R www-data:www-data "$REMOTE_DIR/storage/app/"
+chmod -R 775 "$REMOTE_DIR/storage/app/"
+echo "✅ 文件权限已修复"
+EOF
+
+    log_success "文件同步完成"
+}
+
+# ════════════════════════════════════════════════════════════
+# 完整流程
+# ════════════════════════════════════════════════════════════
+
+do_full() {
+    echo
+    echo -e "${BLUE}════════════════════════════════════════${NC}"
+    echo -e "${BLUE}  MyNet CTL 数据库初始化 & 数据同步${NC}"
+    echo -e "${BLUE}════════════════════════════════════════${NC}"
+    echo
+
+    create_remote_db
+    run_remote_migrate
+    dump_local_data
+    fix_domains_in_dump
+    import_to_remote
+    sync_storage_files
+
+    echo
+    log_success "════════════════════════════════════════"
+    log_success "  数据库初始化 & 同步完成"
+    log_success "════════════════════════════════════════"
+    echo
+}
+
+do_sync() {
+    dump_local_data
+    fix_domains_in_dump
+    import_to_remote
+    sync_storage_files
+
+    echo
+    log_success "数据同步完成"
+}
+
+# ════════════════════════════════════════════════════════════
+# 入口
+# ════════════════════════════════════════════════════════════
+
+CMD="${1:-}"
+
+case "$CMD" in
+    create-db)
+        create_remote_db
+        ;;
+    migrate)
+        run_remote_migrate
+        ;;
+    sync)
+        do_sync
+        ;;
+    dump-local)
+        dump_local_data
+        fix_domains_in_dump
+        log_info "SQL 文件: $DUMP_FILE"
+        ;;
+    "")
+        do_full
+        ;;
+    *)
+        echo "用法: $0 [create-db|migrate|sync|dump-local]"
+        echo
+        echo "  (无参数)    完整流程：建库 + 迁移 + 同步"
+        echo "  create-db   仅创建远程数据库和用户"
+        echo "  migrate     仅运行远程迁移"
+        echo "  sync        导出本地数据 + 域名替换 + 导入远程 + 同步文件"
+        echo "  dump-local  仅导出本地数据到 SQL 文件（不上传）"
+        exit 1
+        ;;
+esac

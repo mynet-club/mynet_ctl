@@ -11,7 +11,7 @@ class Script extends Model
 
     protected $fillable = [
         'script_id', 'name', 'display_name', 'category', 'platform',
-        'version', 'description', 'content', 'lang', 'checksum',
+        'version', 'target_version', 'description', 'content', 'lang', 'checksum',
         'is_standalone', 'download_url', 'download_cnt', 'uploaded_by', 'status',
     ];
 
@@ -35,5 +35,23 @@ class Script extends Model
     public function scopeStandalone($query)
     {
         return $query->where('is_standalone', 1);
+    }
+
+    /**
+     * 通用版（target_version IS NULL）
+     */
+    public function scopeGeneric($query)
+    {
+        return $query->whereNull('target_version');
+    }
+
+    /**
+     * 指定产品版本或通用
+     */
+    public function scopeForTargetVersion($query, ?string $targetVersion)
+    {
+        return $targetVersion
+            ? $query->where('target_version', $targetVersion)
+            : $query->whereNull('target_version');
     }
 }

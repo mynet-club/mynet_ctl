@@ -1,0 +1,65 @@
+# MyNet CTL 生产部署 rsync 排除列表
+# 用法: rsync --exclude-from=scripts/deploy/.rsyncignore
+
+# Git 和版本控制
+.git/
+.gitignore
+.gitattributes
+.github/
+
+# IDE / 编辑器
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# 环境配置（服务器已有，不覆盖）
+.env
+.env.*
+
+# 开发依赖
+node_modules/
+vendor/
+
+# 测试
+tests/
+phpunit.xml
+.phpunit.result.cache
+
+# 文档和说明
+docs/
+*.md
+
+# 前端源码（已构建到 public/build/）
+resources/js/
+resources/css/
+vite.config.js
+package.json
+package-lock.json
+
+# 数据库开发文件
+database/factories/
+database/seeders/
+database/sql/
+database/*.sqlite
+
+# Laravel 缓存和日志（服务器端生成）
+storage/logs/*.log
+storage/framework/cache/*
+storage/framework/sessions/*
+storage/framework/views/*
+bootstrap/cache/*
+
+# 脚本目录（开发/部署工具，不需要在生产环境）
+scripts/
+
+# 临时和备份
+*.tmp
+*.bak
+*.log
+*.sql
+*.sql.gz
+
+# 生产环境模板（不覆盖远程 .env）
+.env.production

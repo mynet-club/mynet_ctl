@@ -11,7 +11,7 @@ class PluginDomainService
 {
     const CATEGORIES = ['proxy', 'dns', 'service', 'tool', 'general'];
 
-    const PLATFORMS = ['linux', 'openwrt', 'darwin', 'all'];
+    const PLATFORMS = ['linux', 'openwrt', 'darwin', 'windows', 'all'];
 
     public function validateCategory(string $category): bool
     {

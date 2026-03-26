@@ -95,7 +95,7 @@ class ReleaseService
     }
 
     /**
-     * 记录下载并返回文件路径
+     * 记录下载并返回文件绝对路径
      */
     public function download(int $releaseId, string $ip, string $userAgent): string
     {
@@ -105,7 +105,25 @@ class ReleaseService
 
         $this->logDownload('release', $releaseId, $ip, $userAgent);
 
-        return $release->file_path;
+        return Storage::disk('local')->path($release->file_path);
+    }
+
+    /**
+     * 按文件名属性查找并返回文件绝对路径（用于 /d/ 下载路由）
+     */
+    public function downloadByFilename(string $product, string $platform, string $arch, string $version, string $ip, string $userAgent): string
+    {
+        $release = Release::active()
+            ->where('product', $product)
+            ->where('platform', $platform)
+            ->where('arch', $arch)
+            ->where('version', $version)
+            ->firstOrFail();
+
+        Release::where('id', $release->id)->increment('download_cnt');
+        $this->logDownload('release', $release->release_id, $ip, $userAgent);
+
+        return Storage::disk('local')->path($release->file_path);
     }
 
     /**
@@ -171,7 +189,14 @@ class ReleaseService
 
     private function buildDownloadUrl(string $type, int $id, string $filename): string
     {
-        return rtrim(config('app.url'), '/') . "/api/v1/{$type}s/{$id}/download/{$filename}";
+        // 新上传的 release 存 /d/ URL，旧数据由 ManifestService 动态生成
+        $parsed = $this->domain->parseFilename($filename);
+        if ($parsed) {
+            $name = $this->domain->getProductFilenamePrefix($parsed['product']);
+            return rtrim(config('app.url'), '/') . "/d/{$name}/{$filename}";
+        }
+        // fallback——无法解析时仍用 /d/ 前缀
+        return rtrim(config('app.url'), '/') . "/d/{$filename}";
     }
 
     private function logDownload(string $type, int $resourceId, string $ip, string $userAgent): void

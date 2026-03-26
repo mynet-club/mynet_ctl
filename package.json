@@ -4,7 +4,9 @@
     "type": "module",
     "scripts": {
         "build": "vite build",
-        "dev": "vite"
+        "dev": "vite",
+        "import:openwrt": "node scripts/import_openwrt_forever.mjs --once",
+        "import:openwrt:forever": "node scripts/import_openwrt_forever.mjs"
     },
     "devDependencies": {
         "@tailwindcss/vite": "^4.0.0",

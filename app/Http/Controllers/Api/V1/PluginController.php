@@ -2,17 +2,19 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Models\Plugin;
 use App\Services\Plugin\PluginService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
+use Illuminate\Support\Facades\Storage;
 
 class PluginController extends Controller
 {
     public function __construct(private readonly PluginService $service) {}
 
     /**
-     * GET /api/v1/plugins?platform=linux
+     * GET /api/v2/plugins?platform=linux
      */
     public function index(Request $request): JsonResponse
     {
@@ -21,7 +23,7 @@ class PluginController extends Controller
     }
 
     /**
-     * POST /api/v1/plugins  (需要 plugin:upload 权限)
+     * POST /api/v2/plugins  (需要 plugin:upload 权限)
      */
     public function store(Request $request): JsonResponse
     {
@@ -49,25 +51,46 @@ class PluginController extends Controller
     }
 
     /**
-     * GET /api/v1/plugins/{pluginId}/download/{filename}
+     * GET /api/v2/plugins/{pluginId}/download/{filename}
      */
-    public function download(Request $request, int $pluginId, string $filename): \Symfony\Component\HttpFoundation\StreamedResponse
+    public function download(Request $request, int $pluginId, string $filename): \Symfony\Component\HttpFoundation\BinaryFileResponse
     {
-        $filePath = $this->service->download(
+        $absolutePath = $this->service->download(
             $pluginId,
             $request->ip(),
             $request->userAgent() ?? ''
         );
 
-        return response()->download(storage_path("app/{$filePath}"), $filename);
+        return response()->download($absolutePath, $filename);
     }
 
     /**
-     * DELETE /api/v1/plugins/{pluginId}
+     * DELETE /api/v2/plugins/{pluginId}
      */
     public function disable(int $pluginId): JsonResponse
     {
         $this->service->disable($pluginId);
         return response()->json(['message' => 'ok']);
+    }
+
+    /**
+     * GET /d/plugins/{filename}
+     * 按文件名查找插件并下载
+     */
+    public function downloadByFilename(Request $request, string $filename): \Symfony\Component\HttpFoundation\BinaryFileResponse
+    {
+        $plugin = Plugin::active()->where('filename', $filename)->firstOrFail();
+
+        Plugin::where('id', $plugin->id)->increment('download_cnt');
+        \App\Models\DownloadLog::create([
+            'resource_type' => 'plugin',
+            'resource_id'   => $plugin->plugin_id,
+            'ip'            => $request->ip(),
+            'user_agent'    => $request->userAgent() ?? '',
+            'referer'       => $request->header('Referer', ''),
+            'created_at'    => now(),
+        ]);
+
+        return response()->download(Storage::disk('local')->path($plugin->file_path), $filename);
     }
 }

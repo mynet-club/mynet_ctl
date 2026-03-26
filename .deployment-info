@@ -1,0 +1,17 @@
+{
+    "deployment": {
+        "time": "2026-03-25 13:48:17",
+        "user": "yue",
+        "type": "upgrade"
+    },
+    "git": {
+        "commit": "ef283d46f09840f3f3a99a3beed6a2b0005d395b",
+        "branch": "main",
+        "tag": "no-tag",
+        "short_commit": "ef283d46"
+    },
+    "environment": {
+        "target": "remote",
+        "domain": "ctl.mynet.club"
+    }
+}
