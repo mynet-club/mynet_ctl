@@ -13,6 +13,8 @@ use Illuminate\Routing\Controller;
  * 代理插件（mynet_proxy）专用端点：
  *   GET /d/proxy/install.sh        → 在线安装脚本（curl | bash）
  *   GET /api/v2/proxy/latest       → 最新版本信息
+ *   GET /api/v2/proxy/iplists      → 代理 IP 列表（chinaip + interip）
+ *   GET /api/v2/proxy/iplists/meta → IP 列表元信息
  */
 class ProxyController extends Controller
 {
@@ -58,6 +60,69 @@ class ProxyController extends Controller
                 'released_at'  => $release->created_at->toIso8601String(),
             ],
         ]);
+    }
+
+    /**
+     * GET /api/v2/proxy/iplists
+     * 返回 chinaip.txt + interip.txt 内容（供 client 一次性下载）
+     */
+    public function iplists(): \Illuminate\Http\JsonResponse
+    {
+        $dir = storage_path('app/public/proxy-lists');
+
+        $chinaipFile = $dir . '/chinaip.txt';
+        $interipFile = $dir . '/interip.txt';
+
+        if (!file_exists($chinaipFile) || !file_exists($interipFile)) {
+            return response()->json(['message' => 'IP lists not generated yet. Run: php artisan proxy:update-iplists'], 404);
+        }
+
+        $metaFile = $dir . '/meta.json';
+        $meta = file_exists($metaFile) ? json_decode(file_get_contents($metaFile), true) : null;
+
+        return response()->json([
+            'chinaip' => file_get_contents($chinaipFile),
+            'interip' => file_get_contents($interipFile),
+            'meta'    => $meta,
+        ]);
+    }
+
+    /**
+     * GET /d/proxy/iplists/interip.txt
+     * GET /d/proxy/iplists/chinaip.txt
+     * 以纯文本格式直接返回单个 IP 列表文件（供 curl -o 直接保存）
+     */
+    public function iplistFile(string $name): \Illuminate\Http\Response
+    {
+        if (!in_array($name, ['interip.txt', 'chinaip.txt'], true)) {
+            abort(404);
+        }
+
+        $file = storage_path('app/public/proxy-lists/' . $name);
+
+        if (!file_exists($file)) {
+            abort(404, 'IP list not generated yet. Run: php artisan proxy:update-iplists');
+        }
+
+        return response(file_get_contents($file), 200, [
+            'Content-Type'  => 'text/plain; charset=utf-8',
+            'Cache-Control' => 'public, max-age=3600',
+        ]);
+    }
+
+    /**
+     * GET /api/v2/proxy/iplists/meta
+     * 仅返回 IP 列表的元信息（行数、大小、SHA256、更新时间）
+     */
+    public function iplistsMeta(): \Illuminate\Http\JsonResponse
+    {
+        $metaFile = storage_path('app/public/proxy-lists/meta.json');
+
+        if (!file_exists($metaFile)) {
+            return response()->json(['message' => 'IP lists not generated yet'], 404);
+        }
+
+        return response()->json(json_decode(file_get_contents($metaFile), true));
     }
 
     /**
