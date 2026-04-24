@@ -1,0 +1,1016 @@
+# MyNet CTL API — OpenAPI 3.1.0
+# API Version: 2.2.0 (统一版本号，与 back 共享)
+# Source of Truth: mynet_ctl/docs/api/openapi/ctl.yaml
+
+openapi: 3.1.0
+info:
+  title: MyNet CTL API
+  version: "2.2.0"
+  description: |
+    mynet_ctl 配置中心 API — 软件分发、设备检测、Setup 代理。
+    包含两类端点：
+    - `/d/*` — 公开分发端点（binary/脚本/配置）
+    - `/api/v2/*` — JSON API 端点（路由前缀 /api/v2/ 为历史原因）
+  contact:
+    name: MyNet Team
+  license:
+    name: Proprietary
+
+servers:
+  - url: https://ctl.mynet.club
+    description: Production
+  - url: http://localhost:8001
+    description: Local dev
+
+tags:
+  - name: distribution
+    description: 公开分发（/d/，无需认证）
+  - name: release
+    description: 版本管理
+  - name: plugin
+    description: 插件管理
+  - name: script
+    description: 脚本管理
+  - name: detect
+    description: 设备检测
+  - name: proxy
+    description: 代理服务
+  - name: setup
+    description: Setup 代理（透传 mynet_back）
+  - name: quickconfig
+    description: 快速配置（不依赖 back）
+
+components:
+  securitySchemes:
+    apiToken:
+      type: http
+      scheme: bearer
+      description: |
+        CTL API Token（api_tokens 表，SHA256 哈希）。
+        每个 token 携带 abilities 数组控制权限。
+    sanctumProxy:
+      type: http
+      scheme: bearer
+      description: |
+        mynet_back Sanctum Token（透传，不存储于 CTL）。
+        仅用于 /api/v2/setup/* 端点。
+
+  schemas:
+    # ── Distribution ──
+    AppsIndex:
+      type: object
+      description: 产品索引 (apps.json)
+      properties:
+        schema_version:
+          type: string
+        products:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              name:
+                type: string
+              description:
+                type: string
+              manifest_url:
+                type: string
+                format: uri
+
+    Manifest:
+      type: object
+      description: 产品版本清单 (manifest.json)
+      properties:
+        product:
+          type: string
+        latest:
+          type: object
+          additionalProperties:
+            type: string
+          description: "platform → version 映射"
+        versions:
+          type: array
+          items:
+            $ref: "#/components/schemas/VersionEntry"
+        scripts:
+          type: object
+          additionalProperties:
+            type: string
+          description: "脚本名 → URL 映射"
+
+    VersionEntry:
+      type: object
+      properties:
+        version:
+          type: string
+        platform:
+          type: string
+        arch:
+          type: string
+        filename:
+          type: string
+        url:
+          type: string
+          format: uri
+        sha256:
+          type: string
+        size:
+          type: integer
+        released_at:
+          type: string
+          format: date-time
+
+    # ── Release ──
+    Release:
+      type: object
+      properties:
+        id:
+          type: integer
+        product:
+          type: string
+        version:
+          type: string
+        platform:
+          type: string
+        arch:
+          type: string
+        filename:
+          type: string
+        file_size:
+          type: integer
+        sha256:
+          type: string
+        is_latest:
+          type: boolean
+        download_count:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+
+    UploadReleaseRequest:
+      type: object
+      required: [product, version, platform, arch, file]
+      properties:
+        product:
+          type: string
+          enum: [tui, client, utc, gnb]
+        version:
+          type: string
+        platform:
+          type: string
+          enum: [linux, openwrt, darwin, windows]
+        arch:
+          type: string
+        file:
+          type: string
+          format: binary
+
+    # ── Plugin ──
+    Plugin:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        product:
+          type: string
+        version:
+          type: string
+        filename:
+          type: string
+        description:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    # ── Script ──
+    Script:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+        target_version:
+          type: [string, "null"]
+        content_type:
+          type: string
+          enum: [sh, bash, py]
+        sha256:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    # ── Detect ──
+    OpenwrtDetectResult:
+      type: object
+      properties:
+        distrib_arch:
+          type: string
+        distrib_target:
+          type: string
+        ctl_arch:
+          type: string
+        confidence:
+          type: string
+          enum: [exact, arch_only, target_only, fallback]
+        soc:
+          type: [string, "null"]
+        cpu:
+          type: [string, "null"]
+        device:
+          type: [object, "null"]
+          properties:
+            model:
+              type: string
+            brand:
+              type: string
+            ram_mb:
+              type: integer
+            flash_mb:
+              type: integer
+        recommended_downloads:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              version:
+                type: string
+              url:
+                type: string
+                format: uri
+
+    ArchMapEntry:
+      type: object
+      properties:
+        distrib_arch:
+          type: string
+        ctl_arch:
+          type: string
+        example_devices:
+          type: array
+          items:
+            type: string
+
+    # ── Setup Proxy ──
+    SetupLoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+        device_name:
+          type: string
+
+    PlatformMatrix:
+      type: object
+      properties:
+        platforms:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              archs:
+                type: array
+                items:
+                  type: string
+              products:
+                type: array
+                items:
+                  type: string
+
+    # ── Error ──
+    CtlError:
+      type: object
+      required: [error_type, message]
+      properties:
+        error_type:
+          type: string
+          enum: [auth_invalid, permission_denied, not_found, validation_error, backend_maintenance, backend_error]
+        message:
+          type: string
+
+    # ── QuickConfig ──
+    QuickConfigRequest:
+      type: object
+      properties:
+        platform:
+          type: string
+        arch:
+          type: string
+        index_servers:
+          type: array
+          items:
+            type: string
+
+# ─── Paths ───────────────────────────────────────────────────────
+paths:
+  # ── Distribution /d/ ──
+  /d/apps.json:
+    get:
+      tags: [distribution]
+      operationId: getAppsIndex
+      summary: 产品索引
+      responses:
+        "200":
+          description: 产品索引
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppsIndex"
+
+  /d/conventions.json:
+    get:
+      tags: [distribution]
+      operationId: getConventions
+      summary: 命名规范 (SSOT)
+      responses:
+        "200":
+          description: 命名规范
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /d/{product}/manifest.json:
+    get:
+      tags: [distribution]
+      operationId: getManifest
+      summary: 产品版本清单
+      parameters:
+        - name: product
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 版本清单
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Manifest"
+
+  /d/{product}/plugins.json:
+    get:
+      tags: [distribution]
+      operationId: getPluginsList
+      summary: 产品插件清单
+      parameters:
+        - name: product
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 插件清单
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Plugin"
+
+  /d/{product}/{filename}:
+    get:
+      tags: [distribution]
+      operationId: downloadBinary
+      summary: 二进制文件下载
+      parameters:
+        - name: product
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: filename
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 二进制文件
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: 文件不存在
+
+  /d/scripts/{name}:
+    get:
+      tags: [distribution]
+      operationId: downloadScript
+      summary: 通用脚本下载
+      description: 响应头含 X-Script-Checksum (SHA256)
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 脚本内容
+          headers:
+            X-Script-Checksum:
+              schema:
+                type: string
+                description: SHA256
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  /d/scripts/{version}/{name}:
+    get:
+      tags: [distribution]
+      operationId: downloadVersionedScript
+      summary: 版本专属脚本（自动 fallback 到通用版）
+      parameters:
+        - name: version
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 脚本内容
+          headers:
+            X-Script-Checksum:
+              schema:
+                type: string
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  /d/plugins/{filename}:
+    get:
+      tags: [distribution]
+      operationId: downloadPlugin
+      summary: 插件文件下载
+      parameters:
+        - name: filename
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 插件文件
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+
+  /d/plugins/mp/{name}:
+    get:
+      tags: [distribution]
+      operationId: getIpList
+      summary: IP 列表 (interip.txt / chinaip.txt)
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: IP 列表
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  /d/detect/openwrt.sh:
+    get:
+      tags: [distribution]
+      operationId: getDetectScript
+      summary: OpenWrt POSIX sh 检测脚本
+      responses:
+        "200":
+          description: Shell 脚本
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  /d/proxy/install.sh:
+    get:
+      tags: [distribution]
+      operationId: getProxyInstallScript
+      summary: 代理安装脚本
+      responses:
+        "200":
+          description: Shell 脚本
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  # ── Releases API ──
+  /api/v2/releases:
+    get:
+      tags: [release]
+      operationId: listReleases
+      summary: 版本列表
+      parameters:
+        - name: product
+          in: query
+          schema:
+            type: string
+        - name: platform
+          in: query
+          schema:
+            type: string
+        - name: arch
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 版本列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Release"
+    post:
+      tags: [release]
+      operationId: uploadRelease
+      summary: 上传版本
+      security:
+        - apiToken: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/UploadReleaseRequest"
+      responses:
+        "201":
+          description: 上传成功
+        "401":
+          description: Token 无效
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CtlError"
+
+  /api/v2/releases/latest:
+    get:
+      tags: [release]
+      operationId: latestRelease
+      summary: 最新版本
+      parameters:
+        - name: product
+          in: query
+          schema:
+            type: string
+        - name: platform
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 最新版本
+
+  /api/v2/releases/{id}:
+    delete:
+      tags: [release]
+      operationId: deleteRelease
+      summary: 下架版本
+      security:
+        - apiToken: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: 已下架
+
+  # ── Plugins API ──
+  /api/v2/plugins:
+    get:
+      tags: [plugin]
+      operationId: listPlugins
+      summary: 插件列表
+      responses:
+        "200":
+          description: 插件列表
+    post:
+      tags: [plugin]
+      operationId: uploadPlugin
+      summary: 上传插件
+      security:
+        - apiToken: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [name, product, file]
+              properties:
+                name:
+                  type: string
+                product:
+                  type: string
+                version:
+                  type: string
+                description:
+                  type: string
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "201":
+          description: 上传成功
+
+  /api/v2/plugins/{id}:
+    delete:
+      tags: [plugin]
+      operationId: deletePlugin
+      summary: 下架插件
+      security:
+        - apiToken: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: 已下架
+
+  # ── Scripts API ──
+  /api/v2/scripts:
+    get:
+      tags: [script]
+      operationId: listScripts
+      summary: 脚本列表
+      responses:
+        "200":
+          description: 脚本列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Script"
+    post:
+      tags: [script]
+      operationId: publishScript
+      summary: 发布脚本
+      security:
+        - apiToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, content]
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+                content:
+                  type: string
+                content_type:
+                  type: string
+                  enum: [sh, bash, py]
+                target_version:
+                  type: string
+      responses:
+        "201":
+          description: 发布成功
+
+  /api/v2/scripts/{id}:
+    put:
+      tags: [script]
+      operationId: updateScript
+      summary: 更新脚本
+      security:
+        - apiToken: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                content:
+                  type: string
+                description:
+                  type: string
+      responses:
+        "200":
+          description: 更新成功
+    delete:
+      tags: [script]
+      operationId: deleteScript
+      summary: 下架脚本
+      security:
+        - apiToken: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: 已下架
+
+  # ── Detect API ──
+  /api/v2/detect/openwrt:
+    get:
+      tags: [detect]
+      operationId: detectOpenwrt
+      summary: OpenWrt 硬件检测
+      parameters:
+        - name: distrib_arch
+          in: query
+          required: true
+          schema:
+            type: string
+          description: "如 mipsel_24kc"
+        - name: distrib_target
+          in: query
+          schema:
+            type: string
+          description: "如 ramips/mt7621"
+        - name: board_name
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 检测结果
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/OpenwrtDetectResult"
+
+  /api/v2/detect/arch-map:
+    get:
+      tags: [detect]
+      operationId: getArchMap
+      summary: 完整架构映射表
+      responses:
+        "200":
+          description: 映射表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ArchMapEntry"
+
+  # ── Proxy API ──
+  /api/v2/proxy/latest:
+    get:
+      tags: [proxy]
+      operationId: proxyLatest
+      summary: 代理最新版本
+      responses:
+        "200":
+          description: 最新版本信息
+
+  /api/v2/proxy/iplists:
+    get:
+      tags: [proxy]
+      operationId: proxyIpLists
+      summary: IP 列表下载
+      responses:
+        "200":
+          description: IP 列表
+
+  /api/v2/proxy/iplists/meta:
+    get:
+      tags: [proxy]
+      operationId: proxyIpListsMeta
+      summary: IP 列表元数据
+      responses:
+        "200":
+          description: 元数据
+
+  # ── Setup Proxy API ──
+  /api/v2/setup/platforms:
+    get:
+      tags: [setup]
+      operationId: getPlatforms
+      summary: 支持的平台矩阵
+      responses:
+        "200":
+          description: 平台列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/PlatformMatrix"
+
+  /api/v2/setup/zones:
+    get:
+      tags: [setup]
+      operationId: setupListZones
+      summary: Zone 列表（代理 mynet_back）
+      security:
+        - sanctumProxy: []
+      responses:
+        "200":
+          description: Zone 列表（透传 back 响应）
+        "401":
+          description: Token 无效
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CtlError"
+
+  /api/v2/setup/switch-zone:
+    post:
+      tags: [setup]
+      operationId: setupSwitchZone
+      summary: 切换 Zone（代理 mynet_back）
+      security:
+        - sanctumProxy: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [zone_id]
+              properties:
+                zone_id:
+                  type: integer
+      responses:
+        "200":
+          description: 切换成功
+
+  /api/v2/setup/nodes:
+    get:
+      tags: [setup]
+      operationId: setupListNodes
+      summary: 节点列表（代理 mynet_back）
+      security:
+        - sanctumProxy: []
+      parameters:
+        - name: zone_id
+          in: query
+          required: true
+          schema:
+            type: integer
+          description: CTL 转为 X-Zone-ID 头传给 back
+      responses:
+        "200":
+          description: 节点列表
+
+  /api/v2/setup/nodes/{id}:
+    get:
+      tags: [setup]
+      operationId: setupGetNode
+      summary: 节点详情（代理 mynet_back）
+      security:
+        - sanctumProxy: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: zone_id
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: 节点详情
+
+  /api/v2/setup/config-pack/{id}:
+    get:
+      tags: [setup]
+      operationId: setupConfigPack
+      summary: 配置包下载 (ZIP)
+      description: |
+        通过 back config-bundle API 获取配置，打包为 ZIP 下载。
+        ZIP 内含 conf/node.conf、conf/address.conf、conf/route.conf、ed25519 密钥文件。
+      security:
+        - sanctumProxy: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: 节点 ID
+        - name: zone_id
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: platform
+          in: query
+          schema:
+            type: string
+        - name: arch
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ZIP 配置包
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+        "502":
+          description: 后端错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CtlError"
+
+  # ── QuickConfig API ──
+  /api/v2/quickconfig/node-id:
+    get:
+      tags: [quickconfig]
+      operationId: allocateNodeId
+      summary: 分配临时节点 ID
+      responses:
+        "200":
+          description: 节点 ID
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  node_id:
+                    type: integer
+
+  /api/v2/quickconfig/generate:
+    post:
+      tags: [quickconfig]
+      operationId: generateQuickConfig
+      summary: 生成快速配置 ZIP
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QuickConfigRequest"
+      responses:
+        "200":
+          description: 配置 ZIP
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary

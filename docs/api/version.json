@@ -1,0 +1,43 @@
+{
+    "_comment": "MyNet 生态系统 API 版本追踪（SSOT）",
+    "_maintained_by": "mynet_ctl（配置中心）",
+    "_updated_at": "2026-04-24",
+
+    "api": {
+        "_description": "back_api + ctl_api 共享统一 API 版本号。路径前缀 /api/v2/ 不变，精细版本由此字段追踪。",
+        "version": "2.2.0",
+        "released_at": "2026-04-20",
+        "changelog": "v2.2.0: config-bundle zone_id 安全修复 + peer key warnings + vpn_interfaces 规范化 + Setup 代理 error_type 结构化",
+        "breaking_since": null
+    },
+
+    "services": {
+        "mynet_back": {
+            "base_url": "https://api.mynet.club/api/v2",
+            "openapi": "openapi/back.yaml"
+        },
+        "mynet_ctl": {
+            "base_url": "https://ctl.mynet.club",
+            "openapi": "openapi/ctl.yaml"
+        }
+    },
+
+    "clients": {
+        "_description": "各客户端独立维护应用版本号，min_api_version 表示所需最低 API 版本。",
+        "mynet_gui":    { "app_version": "2.1.0", "min_api_version": "2.2.0", "stack": "Quasar/Vue 3",  "status": "active" },
+        "mynet_client": { "app_version": "0.1.0", "min_api_version": "2.2.0", "stack": "Node.js",       "status": "dev" },
+        "mynet_lua":    { "app_version": "1.0.0", "min_api_version": "2.0.0", "stack": "Lua/LuCI",      "status": "active", "gaps": ["未使用 config-bundle", "无心跳上报"] }
+    },
+
+    "openapi_specs": [
+        "openapi/back.yaml",
+        "openapi/ctl.yaml"
+    ],
+
+    "references": [
+        "references/middleware.md",
+        "references/client-matrix.md",
+        "references/errors.md",
+        "references/issues.md"
+    ]
+}

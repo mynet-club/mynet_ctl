@@ -1,0 +1,3279 @@
+# MyNet Back API — OpenAPI 3.1.0
+# API Version: 2.2.0 (统一版本号，与 ctl 共享)
+# Source of Truth: mynet_ctl/docs/api/openapi/back.yaml
+
+openapi: 3.1.0
+info:
+  title: MyNet Back API
+  version: "2.2.0"
+  description: |
+    mynet_back 业务 API — 认证、Zone、节点、路由、心跳。
+    路径前缀始终为 `/api/v2/`，精细版本见 `info.version`。
+  contact:
+    name: MyNet Team
+  license:
+    name: Proprietary
+
+servers:
+  - url: https://api.mynet.club/api/v2
+    description: Production
+  - url: http://localhost:8000/api/v2
+    description: Local dev
+
+tags:
+  - name: auth
+    description: 认证（登录/注册/Token 管理）
+  - name: user
+    description: 用户（个人资料/搜索）
+  - name: node
+    description: 节点（CRUD/状态/密钥/设备信息）
+  - name: node-config
+    description: 节点配置（VPN 配置/config-bundle）
+  - name: heartbeat
+    description: 心跳监控（HMAC-SHA256 认证）
+  - name: route
+    description: 路由（CRUD/批量/路由申请）
+  - name: zone
+    description: Zone（CRUD/用户 Zone 管理）
+  - name: zone-service
+    description: Zone 服务（索引服务/服务分享）
+  - name: ippool
+    description: IP 池（分配/统计/可用 IP 查询）
+  - name: social
+    description: 社交（好友/邀请/服务发现）
+  - name: asset
+    description: 资产（头像/节点图标上传）
+
+# ─── Security Schemes ────────────────────────────────────────────
+components:
+  securitySchemes:
+    sanctum:
+      type: http
+      scheme: bearer
+      description: Sanctum Token（login 返回的 auth_token）
+    hmac:
+      type: apiKey
+      in: header
+      name: X-Node-Signature
+      description: |
+        HMAC-SHA256 签名。
+        message = "{METHOD}|{path}|{timestamp}|{body_json}"
+        key = hex_decode(node_public_key)
+        签名前从 body 剥离 node_monitor 字段。
+        配合 X-Node-Id + X-Timestamp 头使用。
+
+  parameters:
+    ZoneId:
+      name: X-Zone-ID
+      in: header
+      required: true
+      schema:
+        type: integer
+      description: Zone ID（api.zone 中间件验证用户是否属于该 Zone）
+    NodeId:
+      name: X-Node-Id
+      in: header
+      required: true
+      schema:
+        type: integer
+      description: 节点 ID（心跳认证用）
+    Timestamp:
+      name: X-Timestamp
+      in: header
+      required: true
+      schema:
+        type: integer
+      description: Unix 时间戳（心跳认证用）
+
+  # ─── Reusable Schemas ──────────────────────────────────────────
+  schemas:
+    # ── Envelope ──
+    SuccessResponse:
+      type: object
+      required: [success]
+      properties:
+        success:
+          type: boolean
+          const: true
+        message:
+          type: string
+        data:
+          {}
+
+    ErrorResponse:
+      type: object
+      required: [success, message]
+      properties:
+        success:
+          type: boolean
+          const: false
+        message:
+          type: string
+        error_code:
+          type: string
+          description: 机器可读错误码
+        errors:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+          description: 字段级验证错误（422 时）
+        data:
+          description: 错误上下文（如邮箱未验证时的 resend_url）
+
+    # ── Auth ──
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+        device_name:
+          type: string
+          maxLength: 255
+          default: "Unknown Device"
+
+    LoginResponse:
+      type: object
+      properties:
+        auth_token:
+          type: string
+          description: Sanctum plaintext token
+        refresh_token:
+          type: string
+          description: 60 chars random
+        auth_token_expires_in:
+          type: integer
+          description: 秒，默认 1800
+        refresh_token_expires_in:
+          type: integer
+          description: 秒，默认 604800
+        user:
+          $ref: "#/components/schemas/LoginUser"
+
+    LoginUser:
+      type: object
+      properties:
+        user_id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        zone_id:
+          type: [integer, "null"]
+        user_role:
+          type: string
+          enum: [user, admin, super_admin]
+
+    RegisterRequest:
+      type: object
+      required: [name, email, password, invitation, activation_url]
+      properties:
+        name:
+          type: string
+          maxLength: 255
+        email:
+          type: string
+          format: email
+          maxLength: 255
+        password:
+          type: string
+          minLength: 8
+        device_name:
+          type: string
+          maxLength: 255
+        invitation:
+          type: string
+          maxLength: 255
+        activation_url:
+          type: string
+          format: uri
+          maxLength: 2048
+
+    RefreshTokenRequest:
+      type: object
+      required: [refresh_token]
+      properties:
+        refresh_token:
+          type: string
+
+    TokenPairResponse:
+      type: object
+      properties:
+        auth_token:
+          type: string
+        refresh_token:
+          type: string
+        auth_token_expires_in:
+          type: integer
+        refresh_token_expires_in:
+          type: integer
+
+    VerifyTokenResponse:
+      type: object
+      properties:
+        valid:
+          type: boolean
+        current_zone:
+          type: [object, "null"]
+        default_zone:
+          type: [object, "null"]
+        user_id:
+          type: integer
+        exp:
+          type: integer
+          description: Token 过期时间戳
+
+    # ── User ──
+    UserProfile:
+      type: object
+      properties:
+        user_id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        phone:
+          type: [string, "null"]
+        signature:
+          type: [string, "null"]
+          maxLength: 140
+        zone_id:
+          type: [integer, "null"]
+        user_role:
+          type: string
+          enum: [user, admin, super_admin]
+        preferences:
+          $ref: "#/components/schemas/UserPreferences"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    UserPreferences:
+      type: object
+      properties:
+        theme:
+          type: string
+          enum: [light, dark, auto]
+        language:
+          type: string
+          enum: [zh-CN, en-US]
+        timezone:
+          type: string
+        notifications_enabled:
+          type: boolean
+
+    # ── Node ──
+    NodeSummary:
+      type: object
+      properties:
+        node_id:
+          type: integer
+        node_name:
+          type: string
+        vpn_type:
+          type: string
+          enum: [gnb, wireguard, openvpn]
+        node_ip:
+          type: [string, "null"]
+          description: 点分十进制 (long2ip)
+        node_type:
+          type: integer
+        node_status:
+          type: integer
+          description: "-1=未配置, 0=禁用, 1=就绪, 2=启用, 99=维护"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    NodeDetail:
+      allOf:
+        - $ref: "#/components/schemas/NodeSummary"
+        - type: object
+          properties:
+            node_app_version:
+              type: [string, "null"]
+            endpoint:
+              type: [string, "null"]
+            node_port:
+              type: [integer, "null"]
+            node_remarks:
+              type: [string, "null"]
+
+    CreateNodeRequest:
+      type: object
+      required: [node_name, vpn_type]
+      properties:
+        node_name:
+          type: string
+          minLength: 3
+          maxLength: 255
+        vpn_type:
+          type: string
+          enum: [gnb, wireguard, openvpn]
+        node_type:
+          type: integer
+          minimum: 1
+          maximum: 255
+        description:
+          type: string
+          maxLength: 1000
+        ip_pool_id:
+          type: integer
+
+    UpdateNodeRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 255
+          description: 别名 node_name
+        vpn_type:
+          type: string
+          enum: [gnb, wireguard, openvpn]
+        node_type:
+          type: integer
+          minimum: 1
+          maximum: 255
+        node_app_version:
+          type: string
+          maxLength: 50
+        server_host:
+          type: string
+          maxLength: 255
+          description: 别名 endpoint
+        server_port:
+          type: integer
+          minimum: 1024
+          description: 别名 node_port
+        description:
+          type: string
+          maxLength: 1000
+          description: 映射到 node_remarks
+        status:
+          type: string
+          enum: [active, inactive, maintenance]
+        is_active:
+          type: boolean
+        virtual_ip:
+          type: string
+          format: ipv4
+
+    NodeKey:
+      type: object
+      properties:
+        key_id:
+          type: string
+          format: uuid
+        node_id:
+          type: integer
+        key_type:
+          type: string
+          enum: [gnbkey, wireguard, rsa]
+        public_key:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: [string, "null"]
+          format: date-time
+        status:
+          type: string
+          enum: [active, expired, revoked]
+
+    GenerateKeyRequest:
+      type: object
+      properties:
+        force_regenerate:
+          type: boolean
+        custom_private_key:
+          type: string
+          maxLength: 4096
+        custom_public_key:
+          type: string
+          maxLength: 4096
+
+    GenerateKeyResponse:
+      allOf:
+        - $ref: "#/components/schemas/NodeKey"
+        - type: object
+          properties:
+            private_key:
+              type: string
+              description: 仅生成时返回一次
+
+    RouterKeysRequest:
+      type: object
+      required: [router_node_ids]
+      properties:
+        router_node_ids:
+          type: array
+          items:
+            type: integer
+          minItems: 1
+          maxItems: 100
+
+    RouterKeysResponse:
+      type: object
+      properties:
+        keys:
+          type: array
+          items:
+            type: object
+            properties:
+              router_node_id:
+                type: integer
+              key_type:
+                type: string
+              public_key:
+                type: string
+              expires_at:
+                type: [string, "null"]
+        failed:
+          type: array
+          items:
+            type: object
+            properties:
+              router_node_id:
+                type: integer
+              error:
+                type: string
+
+    DeviceInfo:
+      type: object
+      properties:
+        cpu_model:
+          type: [string, "null"]
+        cpu_arch:
+          type: [string, "null"]
+        cpu_cores:
+          type: [integer, "null"]
+        memory_total_mb:
+          type: [integer, "null"]
+        os_name:
+          type: [string, "null"]
+        os_version:
+          type: [string, "null"]
+        kernel_version:
+          type: [string, "null"]
+        system_arch:
+          type: [string, "null"]
+        local_ips:
+          type: [string, "null"]
+          description: JSON encoded array
+        public_ip:
+          type: [string, "null"]
+        nic_count:
+          type: [integer, "null"]
+
+    NodeStatusDetail:
+      type: object
+      properties:
+        node_id:
+          type: integer
+        current_status:
+          type: object
+          properties:
+            code:
+              type: integer
+            name:
+              type: string
+            description:
+              type: string
+        configuration_status:
+          type: object
+          properties:
+            is_fully_configured:
+              type: boolean
+            missing_items:
+              type: array
+              items:
+                type: string
+            completion_percentage:
+              type: integer
+              minimum: 0
+              maximum: 100
+        can_enable:
+          type: boolean
+        available_transitions:
+          type: object
+          additionalProperties:
+            type: string
+        next_steps:
+          type: array
+          items:
+            type: string
+
+    # ── Node Config ──
+    ConfigBundle:
+      type: object
+      properties:
+        node_id:
+          type: integer
+        zone_id:
+          type: integer
+        version:
+          type: string
+          format: date-time
+          description: ISO 8601
+        files:
+          type: object
+          properties:
+            "node.conf":
+              type: string
+              description: 纯文本 GNB 配置
+            "address.conf":
+              type: string
+              description: "i|0|ip|port 格式"
+            "route.conf":
+              type: string
+              description: "nodeId|ip|mask 格式"
+        keys:
+          type: object
+          properties:
+            ed25519:
+              type: object
+              additionalProperties:
+                type: string
+                description: hex 编码公钥
+            security:
+              type: object
+              properties:
+                private:
+                  type: [string, "null"]
+                  description: hex 编码私钥
+                public:
+                  type: string
+                  description: hex 编码公钥
+        warnings:
+          type: array
+          items:
+            type: object
+            properties:
+              message:
+                type: string
+
+    VpnConfigurationResponse:
+      type: object
+      properties:
+        vpn:
+          type: object
+          properties:
+            base:
+              type: object
+            expert:
+              type: object
+            sys:
+              type: object
+        network:
+          type: object
+          properties:
+            ifname:
+              type: string
+            node_ip:
+              type: [string, "null"]
+            lan_ips:
+              type: array
+              items:
+                type: string
+            public_ips:
+              type: array
+              items:
+                type: string
+            index_servers:
+              type: array
+              items:
+                type: object
+
+    # ── Heartbeat ──
+    HeartbeatRequest:
+      type: object
+      required: [node_id, timestamp, cpu_usage, memory_usage, disk_usage, connection_count]
+      properties:
+        node_id:
+          type: integer
+          minimum: 1
+        timestamp:
+          type: integer
+          description: Unix 秒
+        cpu_usage:
+          type: number
+          minimum: 0
+          maximum: 100
+        memory_usage:
+          type: number
+          minimum: 0
+          maximum: 100
+        disk_usage:
+          type: number
+          minimum: 0
+          maximum: 100
+        connection_count:
+          type: integer
+          minimum: 0
+        vpn_interface:
+          description: 旧格式 — 单个对象 (client 使用)
+          $ref: "#/components/schemas/VpnInterface"
+        vpn_interfaces:
+          description: 新格式 — 数组 (lua 使用)
+          type: array
+          items:
+            $ref: "#/components/schemas/VpnInterface"
+        node_monitor:
+          $ref: "#/components/schemas/NodeMonitor"
+
+    VpnInterface:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [gnb, wireguard]
+        ifname:
+          type: string
+          maxLength: 50
+        status:
+          type: string
+          enum: [up, down]
+        ip:
+          type: [string, "null"]
+          maxLength: 50
+        tx_bytes:
+          type: [integer, "null"]
+          minimum: 0
+        rx_bytes:
+          type: [integer, "null"]
+          minimum: 0
+        peers_count:
+          type: [integer, "null"]
+          minimum: 0
+
+    NodeMonitor:
+      type: object
+      properties:
+        node_self:
+          type: object
+          required: [is_running, connected_peers, total_peers, uptime_seconds, last_active_at, rx_bytes, tx_bytes]
+          properties:
+            is_running:
+              type: boolean
+            connected_peers:
+              type: integer
+              minimum: 0
+            total_peers:
+              type: integer
+              minimum: 0
+            uptime_seconds:
+              type: integer
+              minimum: 0
+            last_active_at:
+              type: integer
+              description: Unix 秒
+            rx_bytes:
+              type: integer
+              minimum: 0
+            tx_bytes:
+              type: integer
+              minimum: 0
+            wanip:
+              type: [string, "null"]
+              maxLength: 100
+            wan_ipv4:
+              type: [string, "null"]
+              maxLength: 100
+            wan_ipv6:
+              type: [string, "null"]
+              maxLength: 150
+            addresses:
+              type: array
+              maxItems: 3
+              items:
+                type: object
+                required: [addr]
+                properties:
+                  addr:
+                    type: string
+                    maxLength: 150
+                  type:
+                    type: string
+                    enum: [wan, local, available]
+        peers_status:
+          type: array
+          items:
+            type: object
+            required: [peer_id, conn_type, latency, rx, tx, seen]
+            properties:
+              peer_id:
+                type: integer
+                minimum: 1
+              conn_type:
+                type: string
+                enum: [direct_ipv4, direct_ipv6, dual_stack, relay, offline, local, none]
+              latency:
+                type: number
+                minimum: 0
+              wanip:
+                type: [string, "null"]
+                maxLength: 100
+              rx:
+                type: integer
+                minimum: 0
+              tx:
+                type: integer
+                minimum: 0
+              seen:
+                type: integer
+                description: Unix 秒
+
+    HeartbeatResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        node_id:
+          type: integer
+        node_status:
+          type: integer
+        server_time:
+          type: integer
+          description: Unix 时间戳
+        message:
+          type: string
+          description: 状态消息（如 VPN 全 down 时）
+        commands:
+          type: array
+          items:
+            $ref: "#/components/schemas/NodeCommand"
+
+    NodeCommand:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        command:
+          type: string
+          description: 原始命令类型
+        action:
+          type: string
+          enum: [config.refresh, service.restart, gnb.restart, gnb.start, gnb.stop, route.refresh, client.update, client.report]
+        params:
+          type: [object, "null"]
+        created_at:
+          type: integer
+          description: Unix 时间戳
+
+    CommandResultRequest:
+      type: object
+      required: [success]
+      properties:
+        success:
+          type: boolean
+        message:
+          type: [string, "null"]
+          maxLength: 10240
+        result:
+          type: [object, "null"]
+
+    # ── Route ──
+    CreateRouteRequest:
+      type: object
+      required: [destination]
+      properties:
+        destination:
+          type: string
+        gateway:
+          type: [string, "null"]
+        metric:
+          type: integer
+          minimum: 0
+        interface:
+          type: [string, "null"]
+        description:
+          type: string
+          maxLength: 255
+        is_active:
+          type: boolean
+
+    RouteDetail:
+      type: object
+      properties:
+        route_id:
+          type: integer
+        destination:
+          type: string
+        gateway:
+          type: [string, "null"]
+        metric:
+          type: [integer, "null"]
+        interface:
+          type: [string, "null"]
+        description:
+          type: [string, "null"]
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    RouteRequestPayload:
+      type: object
+      required: [source_node_id, target_node_id, target_user_id]
+      properties:
+        source_node_id:
+          type: integer
+        target_node_id:
+          type: integer
+        target_user_id:
+          type: integer
+        vpn_type:
+          type: string
+          enum: [gnb, wireguard]
+        message:
+          type: string
+          maxLength: 500
+
+    # ── Zone Service ──
+    IndexService:
+      type: object
+      properties:
+        service_id:
+          type: integer
+        service_name:
+          type: string
+        service_type:
+          type: string
+          enum: [public, friend_shared]
+        service_address:
+          type: string
+        service_port:
+          type: integer
+        service_protocol:
+          type: string
+
+    CreateServiceRequest:
+      type: object
+      required: [service_name, service_type, service_port, service_protocol]
+      properties:
+        service_name:
+          type: string
+          maxLength: 100
+        service_type:
+          type: string
+          enum: [music, video, netbridge]
+        bind_mode:
+          type: string
+          enum: [direct, dnat, lan, public, proxy]
+        node_id:
+          type: integer
+        service_address:
+          type: string
+          maxLength: 255
+          description: 不含端口
+        service_url:
+          type: string
+          maxLength: 255
+        service_port:
+          type: integer
+          minimum: 1
+          maximum: 65535
+        service_protocol:
+          type: string
+          enum: [tcp, udp, http, https, both]
+        service_description:
+          type: string
+          maxLength: 500
+        service_auth_required:
+          type: boolean
+        service_auth_type:
+          type: string
+          enum: [none, basic, bearer, api_key, oauth]
+        service_priority:
+          type: integer
+          minimum: 0
+          maximum: 999
+        service_max_connections:
+          type: integer
+          minimum: 0
+          maximum: 10000
+
+# ─── Paths ───────────────────────────────────────────────────────
+paths:
+  # ── Auth ──
+  /auth/login:
+    post:
+      tags: [auth]
+      operationId: login
+      summary: 用户登录
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: 登录成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - properties:
+                      data:
+                        $ref: "#/components/schemas/LoginResponse"
+        "401":
+          description: 凭证错误
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                message: "用户名或密码错误"
+                error_code: "INVALID_CREDENTIALS"
+        "403":
+          description: 邮箱未验证
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ErrorResponse"
+                  - properties:
+                      error_code:
+                        enum: ["4031", "4032"]
+                      data:
+                        type: object
+                        properties:
+                          resend_url:
+                            type: string
+                          action_required:
+                            type: string
+                            enum: [check_email, resend_activation]
+
+  /auth/register:
+    post:
+      tags: [auth]
+      operationId: register
+      summary: 用户注册
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "201":
+          description: 注册成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - properties:
+                      data:
+                        type: object
+                        properties:
+                          user_id:
+                            type: integer
+                          email:
+                            type: string
+                          message:
+                            type: string
+
+  /auth/refresh-token:
+    post:
+      tags: [auth]
+      operationId: refreshToken
+      summary: 刷新 Token
+      security:
+        - sanctum: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshTokenRequest"
+      responses:
+        "200":
+          description: 刷新成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - properties:
+                      data:
+                        $ref: "#/components/schemas/TokenPairResponse"
+        "403":
+          description: Refresh Token 无效
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                message: "Refresh Token无效或已过期"
+                error_code: "INVALID_REFRESH_TOKEN"
+
+  /auth/logout:
+    post:
+      tags: [auth]
+      operationId: logout
+      summary: 退出登录
+      security:
+        - sanctum: []
+      responses:
+        "200":
+          description: 已退出
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /auth/verify-token:
+    get:
+      tags: [auth]
+      operationId: verifyToken
+      summary: 验证 Token 有效性
+      security:
+        - sanctum: []
+      responses:
+        "200":
+          description: Token 状态
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - properties:
+                      data:
+                        $ref: "#/components/schemas/VerifyTokenResponse"
+
+  /auth/forgot-password:
+    post:
+      tags: [auth]
+      operationId: forgotPassword
+      summary: 忘记密码
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, redirect_url]
+              properties:
+                email:
+                  type: string
+                  format: email
+                redirect_url:
+                  type: string
+                  format: uri
+      responses:
+        "200":
+          description: 重置邮件已发送
+
+  /auth/reset-password:
+    post:
+      tags: [auth]
+      operationId: resetPassword
+      summary: 重置密码
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, token, code, password, password_confirmation]
+              properties:
+                email:
+                  type: string
+                token:
+                  type: string
+                code:
+                  type: string
+                password:
+                  type: string
+                password_confirmation:
+                  type: string
+      responses:
+        "200":
+          description: 密码重置成功
+
+  /auth/activate-account:
+    post:
+      tags: [auth]
+      operationId: activateAccount
+      summary: 激活账号
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, user_id, token, code]
+              properties:
+                email:
+                  type: string
+                user_id:
+                  type: integer
+                token:
+                  type: string
+                code:
+                  type: string
+      responses:
+        "200":
+          description: 激活成功
+
+  /auth/validate-session:
+    post:
+      tags: [auth]
+      operationId: validateSession
+      summary: 会话校验
+      security:
+        - sanctum: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                user_id:
+                  type: integer
+                token_hash:
+                  type: string
+                last_sync:
+                  type: integer
+                client_version:
+                  type: string
+                timestamp:
+                  type: integer
+      responses:
+        "200":
+          description: 校验结果
+
+  # ── User ──
+  /user:
+    get:
+      tags: [user]
+      operationId: getProfile
+      summary: 获取当前用户信息
+      security:
+        - sanctum: []
+      responses:
+        "200":
+          description: 用户资料
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - properties:
+                      data:
+                        $ref: "#/components/schemas/UserProfile"
+
+  /users/profile:
+    put:
+      tags: [user]
+      operationId: updateProfile
+      summary: 更新个人资料
+      security:
+        - sanctum: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                phone:
+                  type: string
+                signature:
+                  type: string
+                preferences:
+                  type: object
+                  properties:
+                    theme:
+                      type: string
+                    language:
+                      type: string
+                    timezone:
+                      type: string
+      responses:
+        "200":
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - properties:
+                      data:
+                        $ref: "#/components/schemas/UserProfile"
+
+  /users/search:
+    get:
+      tags: [user]
+      operationId: searchUsers
+      summary: 搜索用户
+      security:
+        - sanctum: []
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 255
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+      responses:
+        "200":
+          description: 搜索结果
+
+  /user/zones:
+    get:
+      tags: [user]
+      operationId: listZones
+      summary: 用户 Zone 列表
+      security:
+        - sanctum: []
+      responses:
+        "200":
+          description: Zone 列表
+
+  /user/switch-zone:
+    post:
+      tags: [user]
+      operationId: switchZone
+      summary: 切换活跃 Zone
+      security:
+        - sanctum: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [zone_id]
+              properties:
+                zone_id:
+                  type: integer
+      responses:
+        "200":
+          description: 切换成功
+
+  # ── Nodes ──
+  /nodes:
+    get:
+      tags: [node]
+      operationId: listNodes
+      summary: Zone 内节点列表
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, inactive, suspended]
+        - name: search
+          in: query
+          schema:
+            type: string
+            maxLength: 255
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: 节点列表
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - properties:
+                      data:
+                        type: object
+                        properties:
+                          nodes:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/NodeSummary"
+                          meta:
+                            type: object
+                            properties:
+                              total:
+                                type: integer
+                              zone_id:
+                                type: integer
+                              user_id:
+                                type: integer
+
+  /nodes/create:
+    post:
+      tags: [node]
+      operationId: createNode
+      summary: 创建节点
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateNodeRequest"
+      responses:
+        "201":
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - properties:
+                      data:
+                        $ref: "#/components/schemas/NodeSummary"
+
+  /nodes/quick-create:
+    post:
+      tags: [node]
+      operationId: quickCreateNode
+      summary: 一键创建节点
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [node_name]
+              properties:
+                node_name:
+                  type: string
+                  minLength: 3
+                  maxLength: 255
+      responses:
+        "201":
+          description: 创建成功
+
+  /nodes/{id}:
+    get:
+      tags: [node]
+      operationId: getNode
+      summary: 节点详情
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: 节点详情
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - properties:
+                      data:
+                        $ref: "#/components/schemas/NodeDetail"
+    patch:
+      tags: [node]
+      operationId: updateNode
+      summary: 更新节点
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateNodeRequest"
+      responses:
+        "200":
+          description: 更新成功
+    delete:
+      tags: [node]
+      operationId: deleteNode
+      summary: 删除节点
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: 删除成功
+    put:
+      tags: [node]
+      operationId: updateNodeFull
+      summary: 更新节点基本信息（PUT）
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                node_name:
+                  type: string
+                node_remarks:
+                  type: string
+      responses:
+        "200":
+          description: 更新成功
+
+  /nodes/{id}/status:
+    patch:
+      tags: [node]
+      operationId: updateNodeStatus
+      summary: 更新节点状态
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: integer
+                  enum: [-1, 0, 1, 2, 99]
+      responses:
+        "200":
+          description: 状态更新成功
+    get:
+      tags: [node]
+      operationId: getNodeStatus
+      summary: 节点状态详情 (v2)
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: 状态详情
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - properties:
+                      data:
+                        $ref: "#/components/schemas/NodeStatusDetail"
+
+  /nodes/{id}/keys:
+    get:
+      tags: [node]
+      operationId: getNodeKeys
+      summary: 获取节点密钥
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: 密钥信息
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - properties:
+                      data:
+                        $ref: "#/components/schemas/NodeKey"
+    post:
+      tags: [node]
+      operationId: generateOrUploadKeys
+      summary: 生成/上传密钥 (v2 合并)
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenerateKeyRequest"
+      responses:
+        "201":
+          description: 密钥生成成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - properties:
+                      data:
+                        $ref: "#/components/schemas/GenerateKeyResponse"
+    delete:
+      tags: [node]
+      operationId: revokeNodeKeys
+      summary: 撤销节点密钥
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: 密钥撤销成功
+
+  /nodes/{id}/router-keys:
+    post:
+      tags: [node]
+      operationId: getRouterKeys
+      summary: 批量获取对等节点公钥
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RouterKeysRequest"
+      responses:
+        "200":
+          description: 路由密钥
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - properties:
+                      data:
+                        $ref: "#/components/schemas/RouterKeysResponse"
+
+  /nodes/{id}/deviceinfo:
+    get:
+      tags: [node]
+      operationId: getDeviceInfo
+      summary: 获取设备信息
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: 设备信息
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - properties:
+                      data:
+                        type: object
+                        properties:
+                          exists:
+                            type: boolean
+                          node_id:
+                            type: integer
+                          device_info:
+                            $ref: "#/components/schemas/DeviceInfo"
+    patch:
+      tags: [node]
+      operationId: updateDeviceInfo
+      summary: 更新设备信息
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                cpu_model:
+                  type: string
+                  maxLength: 255
+                cpu_cores:
+                  type: integer
+                  minimum: 1
+                memory_total_mb:
+                  type: integer
+                  minimum: 0
+                os_name:
+                  type: string
+                  maxLength: 128
+                os_version:
+                  type: string
+                  maxLength: 128
+                kernel_version:
+                  type: string
+                  maxLength: 128
+                local_ips:
+                  oneOf:
+                    - type: array
+                      items:
+                        type: string
+                    - type: string
+                public_ip:
+                  type: string
+                  maxLength: 64
+                nic_count:
+                  type: integer
+                  minimum: 0
+                firewall_enabled:
+                  type: integer
+                  enum: [0, 1]
+                collected_at:
+                  type: string
+                  format: date
+      responses:
+        "200":
+          description: 更新成功
+
+  /nodes/deviceinfo:
+    post:
+      tags: [node]
+      operationId: batchDeviceInfo
+      summary: 批量获取设备信息 (v2=POST, v1=PUT)
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [node_ids]
+              properties:
+                node_ids:
+                  type: array
+                  items:
+                    type: integer
+                  minItems: 1
+                  maxItems: 100
+      responses:
+        "200":
+          description: 批量设备信息
+
+  # ── Node Config ──
+  /nodes/{id}/configuration:
+    get:
+      tags: [node-config]
+      operationId: getConfiguration
+      summary: 节点配置 (v2 合并 config+network)
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: section
+          in: query
+          schema:
+            type: string
+            enum: [vpn, network, all]
+            default: all
+        - name: render_conf
+          in: query
+          schema:
+            type: boolean
+        - name: version
+          in: query
+          schema:
+            type: string
+        - name: include_sys
+          in: query
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: 配置数据
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - properties:
+                      data:
+                        $ref: "#/components/schemas/VpnConfigurationResponse"
+            text/plain:
+              schema:
+                type: string
+                description: render_conf=true 时返回纯文本 node.conf
+
+  /nodes/{id}/config:
+    get:
+      tags: [node-config]
+      operationId: getNodeConfig
+      summary: 获取节点配置（别名 /configuration）
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: 节点配置
+    put:
+      tags: [node-config]
+      operationId: saveConfig
+      summary: 保存节点 VPN 配置
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                vpn_type:
+                  type: string
+                  enum: [gnb, wireguard, openvpn]
+                vpn_version:
+                  type: string
+                  maxLength: 50
+                nodeid:
+                  type: integer
+                ifname:
+                  type: string
+                  maxLength: 32
+                listen:
+                  type: integer
+                  minimum: 1
+                  maximum: 65535
+                mtu:
+                  type: integer
+                  minimum: 500
+                  maximum: 9000
+                multi_socket:
+                  type: string
+                  enum: ["on", "off"]
+                direct_forwarding:
+                  type: string
+                  enum: ["on", "off"]
+                unified_forwarding:
+                  type: string
+                  enum: ["off", auto, force, super, hyper]
+                keepalive:
+                  type: integer
+                  minimum: 0
+                  maximum: 300
+                daemon:
+                  type: string
+                  enum: ["on", "off"]
+                zip:
+                  type: string
+                  enum: [auto, force]
+                crypto:
+                  type: string
+                  maxLength: 32
+                node_worker:
+                  type: integer
+                  minimum: 1
+                  maximum: 32
+      responses:
+        "200":
+          description: 配置保存成功
+
+  /nodes/{id}/config-bundle:
+    get:
+      tags: [node-config]
+      operationId: getConfigBundle
+      summary: 一次性配置包 (v2)
+      description: |
+        返回 node.conf + address.conf + route.conf + 所有密钥。
+        支持 ETag 304 缓存。
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: If-None-Match
+          in: header
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 配置包
+          headers:
+            ETag:
+              schema:
+                type: string
+            Cache-Control:
+              schema:
+                type: string
+                default: "private, no-cache"
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - properties:
+                      data:
+                        $ref: "#/components/schemas/ConfigBundle"
+        "304":
+          description: ETag 匹配，未变更
+
+  /nodes/{id}/network-config:
+    put:
+      tags: [node-config]
+      operationId: updateNetworkConfig
+      summary: 更新网络配置
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ifname:
+                  type: string
+                  maxLength: 32
+                node_ip:
+                  type: string
+                  format: ipv4
+                ip_group_sequence_number:
+                  type: integer
+                  minimum: 1
+                lan_ips:
+                  type: array
+                  items:
+                    type: string
+                public_ips:
+                  type: array
+                  items:
+                    type: string
+                index_servers:
+                  type: array
+                  items: {}
+      responses:
+        "200":
+          description: 网络配置更新成功
+
+  # ── Heartbeat ──
+  /monitor/heartbeat:
+    post:
+      tags: [heartbeat]
+      operationId: heartbeat
+      summary: 节点心跳上报
+      description: |
+        使用 HMAC-SHA256 签名认证（非 Sanctum）。
+        签名 message = "{METHOD}|{path}|{timestamp}|{body}"。
+        node_monitor 字段在签名前从 body 中剥离。
+      security:
+        - hmac: []
+      parameters:
+        - $ref: "#/components/parameters/NodeId"
+        - $ref: "#/components/parameters/Timestamp"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HeartbeatRequest"
+      responses:
+        "200":
+          description: 心跳接收成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HeartbeatResponse"
+
+  /monitor/commands/{id}/result:
+    patch:
+      tags: [heartbeat]
+      operationId: reportCommandResult
+      summary: 上报指令执行结果
+      security:
+        - hmac: []
+      parameters:
+        - $ref: "#/components/parameters/NodeId"
+        - $ref: "#/components/parameters/Timestamp"
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CommandResultRequest"
+      responses:
+        "200":
+          description: 已更新，返回下一条待执行命令
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  commands:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/NodeCommand"
+
+  # ── Route ──
+  /route:
+    post:
+      tags: [route]
+      operationId: createRoute
+      summary: 创建路由
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRouteRequest"
+      responses:
+        "201":
+          description: 路由创建成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - properties:
+                      data:
+                        $ref: "#/components/schemas/RouteDetail"
+
+  /route/data:
+    get:
+      tags: [route]
+      operationId: getRouteData
+      summary: 路由统计概览
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+      responses:
+        "200":
+          description: 路由统计
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - properties:
+                      data:
+                        type: object
+                        properties:
+                          total_routes:
+                            type: integer
+                          active_routes:
+                            type: integer
+                          pending_requests:
+                            type: integer
+
+  /route/{id}:
+    get:
+      tags: [route]
+      operationId: getRoute
+      summary: 路由详情
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: 路由详情
+    put:
+      tags: [route]
+      operationId: updateRoute
+      summary: 更新路由
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRouteRequest"
+      responses:
+        "200":
+          description: 更新成功
+    delete:
+      tags: [route]
+      operationId: deleteRoute
+      summary: 删除路由
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: 删除成功
+
+  /route/bulk/status:
+    post:
+      tags: [route]
+      operationId: bulkRouteStatus
+      summary: 批量路由状态
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [route_ids, is_active]
+              properties:
+                route_ids:
+                  type: array
+                  items:
+                    type: integer
+                is_active:
+                  type: boolean
+      responses:
+        "200":
+          description: 批量更新成功
+
+  /route/bulk:
+    delete:
+      tags: [route]
+      operationId: bulkDeleteRoutes
+      summary: 批量删除路由
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [route_ids]
+              properties:
+                route_ids:
+                  type: array
+                  items:
+                    type: integer
+      responses:
+        "200":
+          description: 批量删除成功
+
+  /route/node/{id}:
+    get:
+      tags: [route]
+      operationId: getNodeRoutes
+      summary: 节点路由配置
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: render_conf
+          in: query
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: 路由配置
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+            text/plain:
+              schema:
+                type: string
+                description: "render_conf=1 时返回纯文本 route.conf"
+
+  /route/send-request:
+    post:
+      tags: [route]
+      operationId: sendRouteRequest
+      summary: 发送路由申请
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RouteRequestPayload"
+      responses:
+        "200":
+          description: 路由申请已发送
+
+  /route/accept-request/{id}:
+    post:
+      tags: [route]
+      operationId: acceptRouteRequest
+      summary: 接受路由申请
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: 已接受
+
+  /route/reject-request/{id}:
+    post:
+      tags: [route]
+      operationId: rejectRouteRequest
+      summary: 拒绝路由申请
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+      responses:
+        "200":
+          description: 已拒绝
+
+  # ── Zone Services ──
+  /zones/services/indexes:
+    get:
+      tags: [zone-service]
+      operationId: getIndexServices
+      summary: 索引服务列表
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+        - name: render_conf
+          in: query
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: 索引服务
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - properties:
+                      data:
+                        type: object
+                        properties:
+                          index_services:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/IndexService"
+                          meta:
+                            type: object
+                            properties:
+                              zone_id:
+                                type: integer
+                              total_services:
+                                type: integer
+            text/plain:
+              schema:
+                type: string
+                description: "render_conf=1 时返回 address.conf 格式"
+
+  /zones/services/create:
+    post:
+      tags: [zone-service]
+      operationId: createService
+      summary: 创建服务
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateServiceRequest"
+      responses:
+        "201":
+          description: 服务创建成功
+
+  /zones/services/update/{id}:
+    put:
+      tags: [zone-service]
+      operationId: updateService
+      summary: 更新服务
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateServiceRequest"
+      responses:
+        "200":
+          description: 更新成功
+
+  /zones/services/delete/{id}:
+    delete:
+      tags: [zone-service]
+      operationId: deleteService
+      summary: 删除服务
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: 删除成功
+
+  /zones/services/share/{id}:
+    post:
+      tags: [zone-service]
+      operationId: shareService
+      summary: 分享服务
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [friend_ids]
+              properties:
+                friend_ids:
+                  type: array
+                  items:
+                    type: integer
+      responses:
+        "200":
+          description: 分享成功
+    delete:
+      tags: [zone-service]
+      operationId: unshareService
+      summary: 取消分享
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [friend_id]
+              properties:
+                friend_id:
+                  type: integer
+      responses:
+        "200":
+          description: 取消成功
+
+# ─── DOC GAP 补全（2026-04-24 三方对账，共 43 个）───────────────────────────
+
+  # ── Auth 补充 ──────────────────────────────────────────────────────────────
+  /auth/validate-reset-token:
+    post:
+      tags: [auth]
+      operationId: validateResetToken
+      summary: 验证密码重置 Token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: string
+      responses:
+        "200":
+          description: Token 有效
+
+  /auth/cancel-password-reset:
+    delete:
+      tags: [auth]
+      operationId: cancelPasswordReset
+      summary: 取消密码重置
+      security:
+        - sanctum: []
+      responses:
+        "200":
+          description: 已取消
+
+  /auth/change-password:
+    post:
+      tags: [auth]
+      operationId: changePassword
+      summary: 修改密码
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [current_password, new_password, new_password_confirmation]
+              properties:
+                current_password:
+                  type: string
+                new_password:
+                  type: string
+                new_password_confirmation:
+                  type: string
+      responses:
+        "200":
+          description: 密码已更新
+
+  /auth/resend-activation-email:
+    post:
+      tags: [auth]
+      operationId: resendActivationEmail
+      summary: 重发激活邮件
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+      responses:
+        "200":
+          description: 邮件已发送
+
+  /auth/check-activation-status:
+    get:
+      tags: [auth]
+      operationId: checkActivationStatus
+      summary: 检查邮箱激活状态
+      parameters:
+        - name: email
+          in: query
+          required: true
+          schema:
+            type: string
+            format: email
+      responses:
+        "200":
+          description: 激活状态
+
+  /auth/status:
+    get:
+      tags: [auth]
+      operationId: authStatus
+      summary: 获取认证状态（包含用户基本信息）
+      security:
+        - sanctum: []
+      responses:
+        "200":
+          description: 当前认证状态
+
+  /auth/token/generate:
+    post:
+      tags: [auth]
+      operationId: generateToken
+      summary: 生成长期 Token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                token_name:
+                  type: string
+      responses:
+        "200":
+          description: Token 生成成功
+
+  # ── Nodes 补充 ─────────────────────────────────────────────────────────────
+  /nodes/{id}/index-services:
+    get:
+      tags: [node]
+      operationId: getNodeIndexServices
+      summary: 获取节点索引服务列表
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: 节点关联的索引服务
+
+  /nodes/{id}/operator:
+    post:
+      tags: [node]
+      operationId: nodeOperator
+      summary: 节点操作（重启/重置/同步等）
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action:
+                  type: string
+                  enum: [restart, reset, sync, reload]
+      responses:
+        "200":
+          description: 操作已执行
+
+  # ── Assets 补充 ────────────────────────────────────────────────────────────
+  /assets/avatar/upload:
+    post:
+      tags: [asset]
+      operationId: uploadUserAvatar
+      summary: 上传用户头像
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [avatar]
+              properties:
+                avatar:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: 头像上传成功
+
+  # ── Users 补充 ─────────────────────────────────────────────────────────────
+  /users/onboarding:
+    get:
+      tags: [user]
+      operationId: getOnboardingState
+      summary: 获取用户引导状态
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+      responses:
+        "200":
+          description: 引导状态
+    put:
+      tags: [user]
+      operationId: saveOnboardingState
+      summary: 保存用户引导状态
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200":
+          description: 引导状态已保存
+
+  # ── IP Pools ───────────────────────────────────────────────────────────────
+  /ippools:
+    get:
+      tags: [ippool]
+      operationId: listIPPools
+      summary: 获取 IP 池列表
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: IP 池列表
+    post:
+      tags: [ippool]
+      operationId: createIPPool
+      summary: 创建 IP 池
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pool_name, pool_cidr]
+              properties:
+                pool_name:
+                  type: string
+                pool_cidr:
+                  type: string
+                  description: CIDR 格式（如 10.0.0.0/24）
+                pool_remarks:
+                  type: string
+      responses:
+        "201":
+          description: IP 池已创建
+
+  /ippools/statistics:
+    get:
+      tags: [ippool]
+      operationId: getIPPoolStatistics
+      summary: 获取 IP 池统计信息
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+      responses:
+        "200":
+          description: 统计数据
+
+  /ippools/auto-allocate:
+    post:
+      tags: [ippool]
+      operationId: autoAllocateIPPool
+      summary: 自动分配 IP 池
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                node_id:
+                  type: integer
+      responses:
+        "200":
+          description: 自动分配结果
+
+  /ippools/available-ips:
+    get:
+      tags: [ippool]
+      operationId: getAvailableIPs
+      summary: 获取可用 IP 列表
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+        - name: pool_id
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: 可用 IP 列表
+
+  /ippools/{id}:
+    get:
+      tags: [ippool]
+      operationId: getIPPool
+      summary: 获取单个 IP 池
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: IP 池详情
+    delete:
+      tags: [ippool]
+      operationId: deleteIPPool
+      summary: 删除（释放）IP 池
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: IP 池已释放
+
+  # ── Social ─────────────────────────────────────────────────────────────────
+  /social/data:
+    get:
+      tags: [social]
+      operationId: getSocialData
+      summary: 获取社交综合数据
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+      responses:
+        "200":
+          description: 好友/邀请/申请综合数据
+
+  /social/search-users:
+    post:
+      tags: [social]
+      operationId: searchUsers
+      summary: 搜索用户
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [keyword]
+              properties:
+                keyword:
+                  type: string
+      responses:
+        "200":
+          description: 用户搜索结果
+
+  /social/friends:
+    get:
+      tags: [social]
+      operationId: getFriends
+      summary: 获取好友列表
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+      responses:
+        "200":
+          description: 好友列表
+
+  /social/friends/all/nodes:
+    get:
+      tags: [social]
+      operationId: getAllFriendsNodes
+      summary: 获取所有好友的节点
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+      responses:
+        "200":
+          description: 所有好友节点列表
+
+  /social/friends/{id}/nodes:
+    get:
+      tags: [social]
+      operationId: getFriendNodes
+      summary: 获取指定好友的节点
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: 好友用户 ID
+      responses:
+        "200":
+          description: 好友节点列表
+
+  /social/friend-request:
+    post:
+      tags: [social]
+      operationId: sendFriendRequest
+      summary: 发送好友申请
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [target_user_id]
+              properties:
+                target_user_id:
+                  type: integer
+                message:
+                  type: string
+      responses:
+        "200":
+          description: 申请已发送
+
+  /social/friend-request/accept:
+    post:
+      tags: [social]
+      operationId: acceptFriendRequest
+      summary: 接受好友申请
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [request_id]
+              properties:
+                request_id:
+                  type: integer
+      responses:
+        "200":
+          description: 已接受
+
+  /social/friend-request/reject:
+    post:
+      tags: [social]
+      operationId: rejectFriendRequest
+      summary: 拒绝好友申请
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [request_id]
+              properties:
+                request_id:
+                  type: integer
+      responses:
+        "200":
+          description: 已拒绝
+
+  /social/friend-request/cancel:
+    post:
+      tags: [social]
+      operationId: cancelFriendRequest
+      summary: 撤销已发出的好友申请
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [request_id]
+              properties:
+                request_id:
+                  type: integer
+      responses:
+        "200":
+          description: 已撤销
+
+  /social/friend/remove:
+    post:
+      tags: [social]
+      operationId: removeFriend
+      summary: 删除好友
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [friend_id]
+              properties:
+                friend_id:
+                  type: integer
+      responses:
+        "200":
+          description: 好友已删除
+
+  /social/invitations:
+    get:
+      tags: [social]
+      operationId: getInvitations
+      summary: 获取邀请码列表
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+      responses:
+        "200":
+          description: 邀请码列表
+
+  /social/invitation:
+    post:
+      tags: [social]
+      operationId: generateInvitation
+      summary: 生成邀请码
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                max_uses:
+                  type: integer
+                expires_at:
+                  type: string
+                  format: date-time
+      responses:
+        "200":
+          description: 邀请码已生成
+
+  /social/invitation/{id}:
+    delete:
+      tags: [social]
+      operationId: deleteInvitation
+      summary: 删除邀请码
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: 邀请码已删除
+
+  # ── Zones ──────────────────────────────────────────────────────────────────
+  /zones:
+    get:
+      tags: [zone]
+      operationId: listZones
+      summary: 获取 Zone 列表
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, inactive]
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Zone 列表
+    post:
+      tags: [zone]
+      operationId: createZone
+      summary: 创建 Zone
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+      responses:
+        "201":
+          description: Zone 已创建
+
+  /zones/{id}:
+    get:
+      tags: [zone]
+      operationId: getZone
+      summary: 获取单个 Zone 详情
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Zone 详情
+    put:
+      tags: [zone]
+      operationId: updateZone
+      summary: 更新 Zone
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+                status:
+                  type: string
+                  enum: [active, inactive]
+      responses:
+        "200":
+          description: Zone 已更新
+    delete:
+      tags: [zone]
+      operationId: deleteZone
+      summary: 删除 Zone
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Zone 已删除
+
+  # ── Zone Services 补充 ────────────────────────────────────────────────────
+  /zones/services/public:
+    get:
+      tags: [zone-service]
+      operationId: getPublicServices
+      summary: 获取公开服务列表
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+      responses:
+        "200":
+          description: 公开服务列表
+
+  /zones/services/friends:
+    get:
+      tags: [zone-service]
+      operationId: getFriendsServices
+      summary: 获取好友分享的服务列表
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+      responses:
+        "200":
+          description: 好友服务列表
+
+  /zones/services/anonymous:
+    get:
+      tags: [zone-service]
+      operationId: getAnonymousServices
+      summary: 获取匿名公开服务列表
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+      responses:
+        "200":
+          description: 匿名服务列表
+
+  /zones/services/my:
+    get:
+      tags: [zone-service]
+      operationId: getMyServices
+      summary: 获取当前用户在当前 Zone 下的服务列表
+      security:
+        - sanctum: []
+      parameters:
+        - $ref: "#/components/parameters/ZoneId"
+        - name: zone_id
+          in: query
+          schema:
+            type: integer
+        - name: service_type
+          in: query
+          schema:
+            type: string
+        - name: share_type
+          in: query
+          schema:
+            type: string
+            enum: [public, friend, anonymous, my]
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: 我的服务列表

@@ -1,0 +1,46 @@
+{
+    "_comment": "⚠️ DEPRECATED — 新版本追踪请使用 docs/api/version.json",
+    "_see": "docs/api/version.json",
+    "_maintained_by": "mynet_ctl（配置中心）",
+    "_description": "各端根据此文件判断是否需要升级对齐。back API 路径前缀始终为 /api/v2/，精细版本通过此文件追踪。",
+    "_updated_at": "2026-04-20",
+
+    "back_api": {
+        "version": "2.2.0",
+        "released_at": "2026-04-19",
+        "changelog": "v2.2.0: config-bundle zone_id 安全修复 + peer key warnings 字段 + vpn_interfaces 规范化 + 命令去重修复",
+        "known_issues": [],
+        "endpoints_doc": "/d/docs/back-api.json",
+        "breaking_since": null
+    },
+
+    "ctl_api": {
+        "version": "1.1.0",
+        "released_at": "2026-04-19",
+        "changelog": "Setup 代理错误增加 error_type 结构化类型 + node.conf 失败中断 + 移除冗余 zone_id query",
+        "endpoints_doc": "/d/docs/ctl-api.json"
+    },
+
+    "clients": {
+        "mynet_gui": {
+            "min_back_api": "2.2.0",
+            "min_ctl_api": "1.0.0",
+            "current": "2.1.0",
+            "status": "需升级适配 warnings 字段"
+        },
+        "mynet_lua": {
+            "min_back_api": "2.0.0",
+            "min_ctl_api": "1.0.0",
+            "current": "1.0.0",
+            "gaps": ["未使用 config-bundle", "无心跳上报"],
+            "status": "急需升级"
+        },
+        "mynet_client": {
+            "min_back_api": "2.2.0",
+            "min_ctl_api": "1.0.0",
+            "current": "0.1.0",
+            "gaps": ["API base URL 应改为 api.mynet.club"],
+            "status": "开发中"
+        }
+    }
+}
