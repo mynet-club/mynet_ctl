@@ -88,9 +88,10 @@ class ProxyController extends Controller
     }
 
     /**
-     * GET /d/proxy/iplists/interip.txt
-     * GET /d/proxy/iplists/chinaip.txt
-     * 以纯文本格式直接返回单个 IP 列表文件（供 curl -o 直接保存）
+     * GET /plugins/mp/interip.txt
+     * GET /plugins/mp/chinaip.txt
+     * 以纯文本格式直接返回单个 IP 列表文件（供 proxy.sh refresh 的 curl -o 直接保存）
+     * 文件由 scripts/proxy-lists/update_proxy_lists.sh 每日生成
      */
     public function iplistFile(string $name): \Illuminate\Http\Response
     {

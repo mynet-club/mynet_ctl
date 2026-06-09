@@ -25,16 +25,17 @@ graph TD
         UTC["mynet_utc\nUDP→TCP + 加速器\n(C binary)"]
     end
 
-    subgraph CLIENT["🖥️ 客户端配置工具 mynet_client"]
-        DESKTOP["desktop (Node.js)\nLinux / macOS / Windows / Server"]
-        OPENWRT["openwrt (Lua/LuCI)\nOpenWrt 路由器"]
+    subgraph APP["🖥️ 应用层 — 前端/客户端（全部同级）"]
+        GUI["mynet_gui\nmy.mynet.club\nWeb 管理前端"]
+        WEB["mynet_web\nwww.mynet.club\n官网"]
+        DESKTOP["mynet_client desktop\nNode.js 跨平台客户端\nLinux / macOS / Windows"]
+        TUI["mynet_tui\nGo TUI（旧，待替代）"]
+        OPENWRT["mynet_lua\nOpenWrt LuCI\n路由器客户端"]
     end
 
-    subgraph PLATFORM["🌐 mynet 组网服务（有社交属性的组网平台）"]
-        BACK["mynet_back\napi/admin.mynet.club\n用户 · Zone · 节点 · 心跳"]
-        CTL["mynet_ctl\nctl.mynet.club\n软件分发中心"]
-        GUI["mynet_gui\nmy.mynet.club"]
-        WEB["mynet_web\nwww.mynet.club"]
+    subgraph PLATFORM["🌐 平台层 — 后端服务"]
+        BACK["mynet_back\napi.mynet.club\nAPI v2 · 用户 · Zone · 节点 · 心跳"]
+        CTL["mynet_ctl\nctl.mynet.club\n配置中心 · 分发 · 文档"]
     end
 
     subgraph JAVIS["🤖 独立应用场景（基于 GNB，与 mynet 弱耦合）"]
@@ -48,10 +49,12 @@ graph TD
     UTC -->|"管理进程"| DESKTOP
     UTC -->|"管理进程"| OPENWRT
 
-    DESKTOP <-->|"binary / 脚本下载"| CTL
-    OPENWRT <-->|"binary / 脚本下载"| CTL
+    DESKTOP <-->|"配置/binary 下载"| CTL
+    OPENWRT <-->|"配置/binary 下载"| CTL
+    TUI <-->|"配置/binary 下载"| CTL
     DESKTOP <-->|"认证 · Zone · 节点配置"| BACK
     OPENWRT <-->|"认证 · Zone · 节点配置"| BACK
+    TUI <-->|"认证 · Zone · 节点配置"| BACK
     GUI --> BACK
 
     JAVIS_BACK -->|"① 复用账号体系\nSanctum Token 认证"| BACK

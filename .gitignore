@@ -3,6 +3,13 @@
 .env
 .env.backup
 .env.production
+
+# 凭证集中目录（仅 README / 模板可入 git，由 .credentials/.gitignore 进一步过滤）
+.credentials/*
+!.credentials/.gitignore
+!.credentials/README.md
+!.credentials/_templates/
+!.credentials/_templates/**
 .phpactor.json
 .phpunit.result.cache
 /.fleet

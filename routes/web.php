@@ -31,7 +31,9 @@ Route::prefix('d')->group(function () {
         ->where('product', '[a-z0-9_\-]+');
     Route::get('/detect/openwrt.sh', [DetectController::class, 'openwrtScript']);
     Route::get('/proxy/install.sh', [ProxyController::class, 'installScript']);
-    Route::get('/proxy/iplists/{name}', [ProxyController::class, 'iplistFile'])
+
+    // mynet_proxy 插件 IP 列表（mp = mynet_proxy）
+    Route::get('/plugins/mp/{name}', [ProxyController::class, 'iplistFile'])
         ->where('name', '(interip|chinaip)\.txt');
 
     // 插件下载

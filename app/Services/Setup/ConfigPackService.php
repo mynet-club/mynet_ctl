@@ -124,11 +124,8 @@ class ConfigPackService
         $configs = [];
 
         // node.conf — v2: /nodes/{id}/configuration?section=vpn&render_conf=1
-        try {
-            $configs['node.conf'] = $this->backClient->getNodeConfig($token, $zoneId, $nodeId, true);
-        } catch (RuntimeException $e) {
-            $configs['node.conf'] = "# 获取 node.conf 失败: {$e->getMessage()}\n";
-        }
+        // node.conf 是核心配置，获取失败应中断整个流程
+        $configs['node.conf'] = $this->backClient->getNodeConfig($token, $zoneId, $nodeId, true);
 
         // address.conf — Zone 级 /zones/services/indexes?render_conf=1（格式: i|0|ip|port）
         try {

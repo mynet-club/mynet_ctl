@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\V1\DetectController;
+use App\Http\Controllers\Api\V1\ManifestController;
 use App\Http\Controllers\Api\V1\PluginController;
 use App\Http\Controllers\Api\V1\ProxyController;
 use App\Http\Controllers\Api\V1\QuickConfigController;
@@ -73,6 +74,8 @@ Route::prefix('v2')->group(function () {
 
     // ── Proxy（JSON API） ────────────────────────────────────────────────
     Route::get('/proxy/latest', [ProxyController::class, 'latest']);
+    Route::get('/proxy/iplists', [ProxyController::class, 'iplists']);
+    Route::get('/proxy/iplists/meta', [ProxyController::class, 'iplistsMeta']);
 
     // ── Setup（代理 mynet_back，Token 认证） ─────────────────────────────
     Route::prefix('setup')->group(function () {

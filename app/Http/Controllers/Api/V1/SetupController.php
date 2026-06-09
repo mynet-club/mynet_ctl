@@ -88,7 +88,7 @@ class SetupController extends Controller
         }
 
         try {
-            $query = array_filter($request->only(['zone_id', 'status', 'search', 'page', 'per_page']));
+            $query = array_filter($request->only(['status', 'search', 'page', 'per_page']));
             return response()->json($this->backClient->listNodes($token, $zoneId, $query));
         } catch (RuntimeException $e) {
             return $this->handleBackendError($e);
@@ -171,16 +171,23 @@ class SetupController extends Controller
     private function handleBackendError(RuntimeException $e): JsonResponse
     {
         $code = $e->getCode();
-        if ($code === 401) {
-            return response()->json(['message' => 'Token 无效或已过期，请重新登录'], 401);
-        }
-        if ($code === 403) {
-            return response()->json(['message' => '无权访问该资源'], 403);
-        }
-        if ($code === 404) {
-            return response()->json(['message' => '节点不存在或不属于当前 Zone'], 404);
+
+        $map = [
+            401 => ['error_type' => 'auth_invalid',      'message' => 'Token 无效或已过期，请重新登录'],
+            403 => ['error_type' => 'permission_denied',  'message' => '无权访问该资源'],
+            404 => ['error_type' => 'not_found',          'message' => '节点不存在或不属于当前 Zone'],
+            422 => ['error_type' => 'validation_error',   'message' => $e->getMessage()],
+            503 => ['error_type' => 'backend_maintenance', 'message' => '后端服务维护中，请稍后重试'],
+        ];
+
+        if (isset($map[$code])) {
+            return response()->json($map[$code], $code);
         }
 
-        return response()->json(['message' => '后端服务暂时不可用: ' . $e->getMessage()], 502);
+        $errorType = $code >= 500 ? 'backend_error' : 'unknown_error';
+        return response()->json([
+            'error_type' => $errorType,
+            'message'    => '后端服务暂时不可用: ' . $e->getMessage(),
+        ], $code >= 500 ? 502 : $code);
     }
 }

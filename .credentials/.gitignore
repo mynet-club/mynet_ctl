@@ -1,0 +1,7 @@
+# 本目录所有内容默认不入 git
+# 仅在显式 git add -f 时才能提交（用于占位/模板文件）
+*
+!.gitignore
+!README.md
+!_templates/
+!_templates/**

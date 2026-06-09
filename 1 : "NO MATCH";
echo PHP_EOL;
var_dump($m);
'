@@ -1,4 +1,0 @@
-bash: -c: line 3: syntax error near unexpected token `('
-bash: -c: line 3: `preg_match('/_token.*?curl_close($ch);'
-bash: -c: line 3: syntax error near unexpected token `('
-bash: -c: line 3: `preg_match('/_token.*?curl_close($ch);'

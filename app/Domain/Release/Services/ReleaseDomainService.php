@@ -29,11 +29,12 @@ class ReleaseDomainService
     // 平台
     // ═══════════════════════════════════════════════════════════════════════
     const PLATFORMS = [
-        'linux'   => ['label' => 'Linux',   'ext' => 'tgz'],
-        'openwrt' => ['label' => 'OpenWrt', 'ext' => 'tgz'],
-        'darwin'  => ['label' => 'macOS',   'ext' => 'tgz'],
-        'windows' => ['label' => 'Windows', 'ext' => 'zip'],
-        'freebsd' => ['label' => 'FreeBSD', 'ext' => 'tgz'],
+        'linux'       => ['label' => 'Linux',          'ext' => 'tgz'],
+        'openwrt'     => ['label' => 'OpenWrt',        'ext' => 'tgz'],
+        'openwrt-sdk' => ['label' => 'OpenWrt SDK',    'ext' => 'tgz'],
+        'darwin'      => ['label' => 'macOS',          'ext' => 'tgz'],
+        'windows'     => ['label' => 'Windows',        'ext' => 'zip'],
+        'freebsd'     => ['label' => 'FreeBSD',        'ext' => 'tgz'],
     ];
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -65,6 +66,8 @@ class ReleaseDomainService
         'mipsel'        => ['family' => 'mips',  'bits' => 32, 'goarch' => 'mipsle',  'goarm' => null, 'label' => 'MIPS 32-bit LE (hard-float)'],
         'mipsel-softfp' => ['family' => 'mips',  'bits' => 32, 'goarch' => 'mipsle',  'goarm' => null, 'label' => 'MIPS 32-bit LE (soft-float)'],
         'mipsel-muslsf' => ['family' => 'mips',  'bits' => 32, 'goarch' => 'mipsle',  'goarm' => null, 'label' => 'MIPS 32-bit LE (musl soft-float, GNB)'],
+        'mipsel-sf'     => ['family' => 'mips',  'bits' => 32, 'goarch' => 'mipsle',  'goarm' => null, 'label' => 'MIPS 32-bit LE (soft-float, GNB SDK)'],
+        'mips-sf'       => ['family' => 'mips',  'bits' => 32, 'goarch' => 'mips',    'goarm' => null, 'label' => 'MIPS 32-bit BE (soft-float, GNB SDK)'],
         // RISC-V
         'riscv64'       => ['family' => 'riscv', 'bits' => 64, 'goarch' => 'riscv64', 'goarm' => null, 'label' => 'RISC-V 64-bit'],
     ];
@@ -74,8 +77,9 @@ class ReleaseDomainService
     // ═══════════════════════════════════════════════════════════════════════
     const VALID_COMBINATIONS = [
         'linux'   => ['amd64', 'arm64', 'armv7', 'armv7-hardfp', 'armv7-softfp', 'armv6-softfp', 'i386', 'mips', 'mips64', 'mipsel', 'mips64el', 'mips-softfp', 'mipsel-softfp', 'arm64-softfp', 'riscv64'],
-        'openwrt' => ['amd64', 'arm64', 'armv7', 'armv7-hardfp', 'armv7-softfp', 'armv6-softfp', 'i386', 'mips', 'mips64', 'mipsel', 'mips64el', 'mips-softfp', 'mipsel-softfp', 'mipsel-muslsf', 'arm64-softfp', 'riscv64'],
-        'darwin'  => ['amd64', 'arm64'],
+        'openwrt'     => ['amd64', 'arm64', 'armv7', 'armv7-hardfp', 'armv7-softfp', 'armv6-softfp', 'i386', 'mips', 'mips64', 'mipsel', 'mips64el', 'mips-softfp', 'mipsel-softfp', 'mipsel-muslsf', 'arm64-softfp', 'riscv64'],
+        'openwrt-sdk' => ['amd64', 'arm64', 'armv7', 'mips', 'mips-sf', 'mipsel', 'mipsel-sf'],
+        'darwin'      => ['amd64', 'arm64'],
         'windows' => ['amd64', 'arm64'],
         'freebsd' => ['amd64', 'arm64'],
     ];
@@ -173,7 +177,7 @@ class ReleaseDomainService
     {
         // Pattern: {name}_{platform}_{arch}_{version}.{ext}
         // arch 可含连字符 (armv7-softfp)，version 以 v 开头
-        if (!preg_match('/^([a-z0-9]+)_([a-z]+)_([a-z0-9\-]+)_(v[0-9a-z.\-]+)\.(tgz|zip|tar\.gz|ipk)$/i', $filename, $m)) {
+        if (!preg_match('/^([a-z0-9]+)_([a-z][a-z0-9-]*)_([a-z0-9\-]+)_(v[0-9a-z.\-]+)\.(tgz|zip|tar\.gz|ipk)$/i', $filename, $m)) {
             return null;
         }
 
