@@ -146,17 +146,40 @@ VPNDriver  (现有读方法保持)
 
 ---
 
-## 4. 落地步骤（P1 起）
+## 4. 现状落差（2026-09-21 对 mynet_agent 实测）⚠️
 
-1. **冻结抽象 schema**：在 `data-models.md` 新增「VPNBundle（抽象）」节，`config-bundle` 响应改为该结构（或在 v2 新增 `?format=abstract`，v1 原样保留 → 向后兼容 I3）。
-2. **接口壳**：`VPNDriver` 补 `Capabilities/WriteConfig/Start/Stop/Reload/Status`；`GnbDriver` 把现有 gnb 逻辑搬进来（**行为不变**）。
-3. **back 侧**：`ConfigBundleService` 改为产出抽象 bundle；gnb 格式串由 agent 的 `GnbDriver.WriteConfig` 生成。
-4. **ctl 侧**：`conventions.md` 产品表加 `wireguard`；manifest 支持 driver 维度。
-5. **wireguard driver**：`WireGuardDriver` 实现接口；`wg` 相关能力用 `Capabilities()` 声明，缺项优雅降级。
+本节写于侦察**之后**。上文 §1-§3 的部分假设与代码实际不符，落地前必须知道：
+
+| # | 原假设 | 实测 | 影响 |
+|---|--------|------|------|
+| **D1** | 热重启已存在（`gnb_ctl -b gnb.map -w core.flag=2`） | **代码里根本不存在**。全仓（含非 Go）搜不到 `gnb_ctl -w` / `core.flag`。仅 `cmd/mynetd/main.go:152,174` 的 SIGHUP 用于重载 **daemon 自身 config**，与 gnb 无关 | `Reload()` 无现成实现可搬；首版只能冷重启，热重启需单独立项并**先验证目标 gnb 版本支持** |
+| **D2** | 只有一个 driver 待扩展 | `GNBDriver` 仅**只读**（`internal/infrastructure/gnb_driver.go`，走 `gnb_ctl -s -b gnb.map`）；工厂对 wireguard 直接返回 `"TODO v0.10.0"`（`vpn_driver_factory.go:26-31`）；`driver/wireguard/` 是**空目录** | `WriteConfig/Start/Stop` **无承接者**，需从零散代码收敛 |
+| **D3** | VPN 类型抽象单一 | **三套常量并存**：`domain.VPNDriverType` / `node.VPNTypeWireGuard` / `common.NodeTypeWireGuard`（另有 `config.WG`） | 不先统一，driver 分派必然漂移 |
+| **D4** | conf 路径集中、生命周期单点 | `driver/gnb/conf/{nodeID}` 硬编码散落 **~10 个文件**；gnb 生命周期有**三条并存**：`GNBRunner`(PID 文件) / `Manager`(内存 PID) / 系统服务(systemd·launchd·procd) | `Start/Stop` 统一需先指定唯一权威，否则行为分叉 |
+
+> 另有落盘敏感点：`security/*.private` 为 0600，搬迁**不得改变文件模式**。
 
 ---
 
-## 5. 非目标
+## 5. 落地步骤（修订）
+
+**原则：先立接口、划边界（行为零变化），再逐步收敛。不要一步到位。**
+
+| 步 | 动作 | 出口判据 |
+|----|------|----------|
+| **S1** | 只加接口与类型：`Capabilities()/WriteConfig()/Start()/Stop()/Reload()/Status()` + `DriverCaps` + `VPNBundle`，**不做实现搬迁** | 编译通过，行为零变化 |
+| **S2** | 统一 VPN 类型常量（D3）→ 单一来源，旧常量标 `deprecated` | 三套收敛为一 |
+| **S3** | 把现有 gnb 行为**逐项**搬进 `GnbDriver`：只读（已在）→ `WriteConfig` → `Start/Stop` → `Reload`(冷启) | 每搬一项可独立验证行为不变 |
+| **S4** | 指定 gnb 生命周期的**唯一权威**（D4），其余两条改为委托 | 全系统只有一处启动 gnb |
+| **S5** | `Reload()` 热重启（D1）：**先验证**目标 gnb 版本是否支持 `gnb_ctl -w core.flag=2`；不支持则维持冷启 | 有验证记录 + 回落路径 |
+| **S6** | back 改产抽象 bundle（见 `back-upshift-design.md` §5）；ctl 注册 `wireguard` 产品位 | 契约与产品位就位 |
+| **S7** | `WireGuardDriver` 实现（D2），能力差异用 `Capabilities()` 声明 | 缺项优雅降级 |
+
+**风险**：S3/S4 触碰 gnb 生命周期，是高风险区——动手前需建立可验证的行为基线（或至少人工核对清单）。
+
+---
+
+## 6. 非目标
 
 - 不做通用插件框架 / 动态加载 `.so`
 - 不改 gnb 源码（不变量 I1）
