@@ -416,6 +416,22 @@ components:
               type: string
               description: 仅生成时返回一次
 
+    # PUT /nodes/{id}/keys 的请求体。
+    # 与 POST 的差异：PUT 接受 key_type（显式指定密钥类型），POST 不接受
+    # （见 NodeController::putKeys 的 validate 与 ::generateKeys 的 validate）。
+    UpdateKeyRequest:
+      type: object
+      properties:
+        custom_private_key:
+          type: string
+          maxLength: 4096
+        custom_public_key:
+          type: string
+          maxLength: 4096
+        key_type:
+          type: string
+          enum: [gnbkey, ed25519, wireguard]
+
     RouterKeysRequest:
       type: object
       required: [router_node_ids]
@@ -429,29 +445,43 @@ components:
 
     RouterKeysResponse:
       type: object
+      description: |
+        批量取对等节点公钥的响应。
+        ⚠️ `keys` 是**映射**（节点 ID → 公钥 hex），**不是对象数组** ——
+        实现见 NodeKeyDomainService：`$keys[(string) $id] = $nodeKey->public_key`。
+        声明成数组会让按 spec 生成的客户端在解析时直接失败
+        （Go 侧即为 `cannot unmarshal object into ... []RouterKeyInfo`）。
       properties:
+        request_node_id:
+          type: integer
+          description: 发起请求的节点 ID
         keys:
-          type: array
-          items:
-            type: object
-            properties:
-              router_node_id:
-                type: integer
-              key_type:
-                type: string
-              public_key:
-                type: string
-              expires_at:
-                type: [string, "null"]
+          type: object
+          description: 节点 ID（十进制字符串）→ Ed25519 公钥 hex
+          additionalProperties:
+            type: string
+          example:
+            "8283289760467957": "a49e4acf243383bc68a6ab2635867986ec386e2f0faff5bc3394c78fc7f64bc3"
         failed:
           type: array
           items:
             type: object
             properties:
-              router_node_id:
+              node_id:
                 type: integer
-              error:
+              reason:
                 type: string
+        summary:
+          type: object
+          properties:
+            total_requested:
+              type: integer
+            original_requested:
+              type: integer
+            success_count:
+              type: integer
+            failed_count:
+              type: integer
 
     DeviceInfo:
       type: object
@@ -1638,7 +1668,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/GenerateKeyRequest"
+              $ref: "#/components/schemas/UpdateKeyRequest"
       responses:
         "200":
           description: 密钥已替换
@@ -3407,7 +3437,11 @@ paths:
                     type: integer
       responses:
         "200":
-          description: 对等节点公钥列表
+          description: 对等节点公钥列表（keys 为「节点 ID → 公钥 hex」映射）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RouterKeysResponse"
 
   # ── MyNet 首页聚合 ──
   /mynet/stats:
