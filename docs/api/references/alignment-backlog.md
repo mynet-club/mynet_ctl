@@ -131,6 +131,39 @@
 
 ---
 
+## 0.6 第三批执行结果（2026-09-21）
+
+| ID | 结果 | commit |
+|----|------|--------|
+| **C1** | ✅ 已修。且实测确认该路径**无调用方**（`useConfigBundle` 只在 `index.ts` 再导出）→ **潜在 bug，非现网故障** | `mynet_gui 54af29c` |
+| **G1** | ✅ 10 处路径迁移 + **payload key 修正**：`/user/tenants/switch` 校验 `tenant_id`，GUI 原来发 `zone_id`——只改 URL 仍会 422 | `mynet_gui da1a070` |
+| **X1** | ✅ 移除 `/assets/*`。类全库不存在且**无 `class_alias` 桥**（`App\Models\*` 指的是框架真实 `app/Models/*`，不是 Modules 别名），命中即 `BindingResolutionException` 500；前端已改用 `/files/entity/*` | `mynet_back 0a3ef65c` |
+| **X3/T17** | ✅ 13 个僵尸路径改名：`/zones*`→`/tenants*`、`/zones/services/*`→`/services/*`（back 中服务是**独立 prefix 组**，不是 tenants 子路径）。pyyaml 校验通过，78 paths，`/zones*` 清零 | `mynet_ctl 7dac269` |
+| W2 设计稿 | ✅ 按实测修订：**热重载代码根本不存在**（仅 daemon 自身 SIGHUP）、`GNBDriver` 仅只读、wireguard 空目录、三套 VPN 常量、conf 路径散落 ~10 文件、gnb 三条生命周期 → 补 S1-S7 分步 | `mynet_ctl 9f801a9` |
+
+### ⚠️ T21（IPPool）结论被推翻：不是契约漂移，是**死代码**
+
+原判「GUI 有 7 条 IPPool 路径与 back 不匹配」不成立。实测：
+
+| 发现 | 细节 |
+|------|------|
+| 服务层整片死掉 | `services/ippool/ipPoolService.ts`、`mockIPPoolService.ts`、`index.ts` **零引用**（barrel 无人 import） |
+| 组件也是死的 | `IPPoolDialog.vue`、`IPPoolDetailsDialog.vue`、`IPPoolCard.vue` **零引用** |
+| 唯一活链 | `IpPoolListPage.vue` → `IPPoolManager.vue` → `useIPPools`，其 4 个调用点（`GET /ippools`、`GET /ippools/statistics`、`POST /ippools`、`DELETE /ippools/{sequence}`）与 back **已一一对应** |
+| 语义陷阱 | `release`（单 IP）**≠** `DELETE /ippools/{sequence}`（整池）；`check-ip`(GET) **≠** `check-availability`(POST，且是恒返回 true 的 TODO 桩) |
+
+**正确动作 = 删死代码**，不是补 back 端点。另建议把 `autoAllocatePool: createPoolAdvanced` 这个别名改名为 `createPools`（现名易误读为 `/ippools/auto-allocate`）。
+
+### 本批遗留
+
+| ID | 事项 |
+|----|------|
+| ZoneId 参数清理 | `$ref: "#/components/parameters/ZoneId"`（X-Zone-ID 头）在 back.yaml 被引用 **82 处**，但 back 路由已**无 `api.zone` 中间件**。属于全文件级修正，勿只改局部 |
+| `/user/tenants/current` | back 有 `GET /user/tenants/current`，OpenAPI 未声明 |
+| operationId 重复 | `searchUsers` 在 back.yaml 出现两次（**既有问题**，非本批引入） |
+
+---
+
 ## 1. 归属重映射（旧线 → 新线）
 
 v1 的 issue 清单按 `lua / client / GUI` 记名，需按目标线重新归属：
