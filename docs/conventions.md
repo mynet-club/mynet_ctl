@@ -33,12 +33,16 @@ gnb_windows_amd64_v1.6.0.zip
 
 | ID | 名称 | 文件名前缀 | 语言 | 说明 |
 |----|------|------------|------|------|
-| `tui` | MyNet TUI | `mynet` (别名) | Go | Go 终端客户端（旧版） |
-| `gnb` | GNB | `gnb` | C | GNB P2P 组网核心 |
+| `agent` | MyNet Agent | `agent` | Go | **产品本体**：`mynetd` + `mynet` CLI（目标线） |
+| `gnb` | GNB | `gnb` | C | GNB P2P 组网核心（**冻结**，仅保留驱动接缝） |
+| `wireguard` | WireGuard | `wireguard` | C | 预留驱动位（见 `knowledge-base/spec/driver-abstraction.md`） |
 | `utc` | UTC | `utc` | C | UDP→TCP 隧道转换器 |
-| `client` | MyNet Client | `client` | Node.js | 跨平台客户端（计划中） |
 | `proxy` | MyNet Proxy | `proxy` | Node.js | Mihomo 代理管理器 |
-| `lua` | MyNet Lua | `lua` | Lua | OpenWrt LuCI 插件 |
+| `lua` | MyNet Lua | `lua` | Lua | OpenWrt LuCI 壳（`.ipk`） |
+| `tui` | MyNet TUI | `mynet` (别名) | Go | Go 终端客户端（**冻结**） |
+| `client` | MyNet Client | `client` | Node.js | 跨平台客户端（**冻结**，已被 `agent` 线取代） |
+
+> 产品表按 [`knowledge-base/integration-plan-v2.md`](knowledge-base/integration-plan-v2.md) §2 冻结策略维护。
 
 ## 平台（Platforms）
 

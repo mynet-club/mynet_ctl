@@ -1,7 +1,11 @@
 # SPEC: 数据模型（Data Models）
 
-> 更新：2026-05 | 适用：mynet_lua / mynet_client  
+> 更新：2026-09-21 | 适用：mynet_agent（实现）/ mynet_ui / mynet_openwrt  
 > **本文件是所有 JSON/conf 格式的唯一定义处。两端修改格式前必须先更新此处。**
+>
+> **注意（目标线）**：§4 与 §9 描述的 gnb 原生格式属**驱动适配层**。back 下发的应是 driver-agnostic
+> **抽象 bundle**，由 agent 侧 driver 翻译为原生格式。见 [`driver-abstraction.md`](driver-abstraction.md)
+> 与 [`../integration-plan-v2.md`](../integration-plan-v2.md) §3 W2。本文件后续将拆为「抽象层」+「gnb adapter」两节。
 
 ---
 

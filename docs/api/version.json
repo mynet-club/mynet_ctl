@@ -1,7 +1,7 @@
 {
     "_comment": "MyNet 生态系统 API 版本追踪（SSOT）",
     "_maintained_by": "mynet_ctl（配置中心）",
-    "_updated_at": "2026-04-24",
+    "_updated_at": "2026-09-21",
 
     "api": {
         "_description": "back_api + ctl_api 共享统一 API 版本号。路径前缀 /api/v2/ 不变，精细版本由此字段追踪。",
@@ -23,10 +23,15 @@
     },
 
     "clients": {
-        "_description": "各客户端独立维护应用版本号，min_api_version 表示所需最低 API 版本。",
-        "mynet_gui":    { "app_version": "2.1.0", "min_api_version": "2.2.0", "stack": "Quasar/Vue 3",  "status": "active" },
-        "mynet_client": { "app_version": "0.1.0", "min_api_version": "2.2.0", "stack": "Node.js",       "status": "dev" },
-        "mynet_lua":    { "app_version": "1.0.0", "min_api_version": "2.0.0", "stack": "Lua/LuCI",      "status": "active", "gaps": ["未使用 config-bundle", "无心跳上报"] }
+        "_description": "目标线：agent/ui/desktop/openwrt；旧线 client/tui/lua 已冻结。min_api_version 表示所需最低 API 版本。",
+        "mynet_agent":   { "app_version": "0.1.0", "min_api_version": "2.2.0", "stack": "Go",           "status": "active", "note": "产品本体：mynetd + mynet CLI" },
+        "mynet_ui":      { "app_version": "0.1.0", "min_api_version": "2.2.0", "stack": "Vue 3/Vite",   "status": "active", "note": "本机静态 WebUI，只调 agent 本机 API（HTTP/ubus），不直连 back" },
+        "mynet_gui":     { "app_version": "2.1.0", "min_api_version": "2.2.0", "stack": "Quasar/Vue 3", "status": "active" },
+        "mynet_desktop": { "app_version": "0.1.0", "min_api_version": "2.2.0", "stack": "Shell",        "status": "dev",    "note": "非 OpenWrt 平台适配，无独立 back API 调用" },
+        "mynet_openwrt": { "app_version": "1.0.0", "min_api_version": "2.2.0", "stack": "Lua/LuCI",     "status": "active", "note": "LuCI 壳，业务经 ubus 转 mynetd" },
+        "mynet_client":  { "app_version": "0.1.0", "min_api_version": "2.2.0", "stack": "Node.js",      "status": "frozen" },
+        "mynet_tui":     { "app_version": "1.4.0", "min_api_version": "2.0.0", "stack": "Go",           "status": "frozen" },
+        "mynet_lua":     { "app_version": "1.0.0", "min_api_version": "2.0.0", "stack": "Lua/LuCI",     "status": "frozen", "gaps": ["未使用 config-bundle", "无心跳上报"] }
     },
 
     "openapi_specs": [

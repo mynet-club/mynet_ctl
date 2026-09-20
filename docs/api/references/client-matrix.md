@@ -4,6 +4,27 @@
 
 ---
 
+## 0. 目标线客户端（2026-09 起）
+
+> 背景：旧线的 `mynet_lua` / `mynet_client`（Node）已冻结，产品本体改为 **mynet_agent** + **mynet_ui**。
+> 见 [`../../knowledge-base/integration-plan-v2.md`](../../knowledge-base/integration-plan-v2.md) §1。
+
+| 项 | mynet_agent | mynet_ui |
+|----|-------------|----------|
+| 形态 | Go：`mynetd`（守护）+ `mynet`（CLI） | 静态 WebUI（`dist/`） |
+| 对 back 的调用 | 用户面 `/api/v2/*`（Bearer）；心跳 `/monitor/*`（HMAC） | **无**（不直连 back） |
+| 对 ctl 的调用 | `/d/apps.json`、`/d/{product}/manifest.json`、`/d/{product}/{file}` | **无** |
+| 对**本机**的调用 | 提供 HTTP `/api/v1` + ubus `mynet.*` | 调 agent 本机 API（HTTP/ubus） |
+| Token 存储 | `$MYNET_HOME/conf/credential.json`（0600） | 不存 token（经 agent 代理） |
+| User-Agent | `mynet-agent/{ver}` | — |
+| 平台差异 | 桌面/Linux/Windows 走 HTTP；OpenWrt 走 ubus | 页面由 agent 提供或 LuCI 壳承载 |
+
+> 关键：**ui 的能力全部来自 agent 本机 API**。ui 不持有 token，也不直接访问 back/ctl。
+>
+> 下方 §1-§3 的 `lua` / `client` 列对应**已冻结**的旧线，保留作迁移参考；继续维护时以 agent/ui 为准（含 `mynet_desktop` / `mynet_openwrt` 两个壳，它们不新增 back 调用）。
+
+---
+
 ## 1. 各客户端认证配置
 
 | 项 | GUI (Quasar/Vue) | client (Node.js) | lua (LuCI) |

@@ -20,6 +20,7 @@
 | 文件 | 内容 | 更新周期 |
 |------|------|---------|
 | [api-contracts.md](api-contracts.md) | API 契约：config-bundle、心跳、apps.json、插件分发 | 接口变更时 |
+| [../api/references/alignment-backlog.md](../api/references/alignment-backlog.md) | **API 偏差待办清单**（integration-plan-v2 §3 W3 的唯一执行清单） | 修复后回填 |
 | [url-architecture.md](url-architecture.md) | URL 架构：分发路径、脚本版本化、Nginx 配置 | 路由变更时 |
 | [brand-guide.md](brand-guide.md) | 品牌规范：色彩、字体、术语统一、组件约定 | 品牌变更时 |
 
@@ -43,13 +44,16 @@
 | [spec/proxy.md](spec/proxy.md) | 代理分流：策略路由 + DNS 分流 | 代理逻辑变更时 |
 | [spec/plugins.md](spec/plugins.md) | 插件生命周期（heartbeat、updater、proxy） | 插件接口变更时 |
 | [spec/data-models.md](spec/data-models.md) | 所有 JSON/conf 数据结构（唯一定义处） | 数据格式变更时 |
+| [spec/driver-abstraction.md](spec/driver-abstraction.md) | VPN driver 抽象层：抽象 bundle、驱动接口、gnb↔wg 映射 | 驱动/配置格式变更时 |
 
 ### 规划与迁移
 
 | 文件 | 内容 | 状态 |
 |------|------|------|
-| [client-migration-plan.md](client-migration-plan.md) | 客户端迁移计划：TUI→Client 策略、架构决策 | 执行中 |
-| [integration-plan.md](integration-plan.md) | 生态集成计划：瓶颈分析、里程碑、ADR | 执行中 |
+| **[integration-plan-v2.md](integration-plan-v2.md)** | **全生态整合规划 v2（当前权威）**：五层模型、四条工作流、SSOT 归属表 | **P0 执行中** |
+| [integration-plan.md](integration-plan.md) | v1 集成计划：瓶颈分析、里程碑、ADR（旧线口径） | 已被 v2 取代 |
+| [back-upshift-design.md](back-upshift-design.md) | back 业务上移设计：状态归属矩阵、上移/下沉判据 | 设计稿 |
+| [client-migration-plan.md](client-migration-plan.md) | 客户端迁移计划（旧线 TUI→Client） | 历史 |
 | [v2-upgrade-plan.md](v2-upgrade-plan.md) | V2 升级计划：API 迁移、URL 统一、时间线 | 执行中 |
 
 ## 使用方式

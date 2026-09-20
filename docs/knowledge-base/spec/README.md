@@ -1,15 +1,25 @@
 # MyNet 操作契约规范（Operation Contract Spec）
 
 > **SSOT 位置**：`mynet_ctl/docs/knowledge-base/spec/`  
-> **上次更新**：2026-05  
-> **适用项目**：mynet_lua（OpenWrt/LuCI）、mynet_client（Node.js CLI/WebUI）
+> **上次更新**：2026-09-21  
+> **适用项目**：**mynet_agent**（`mynetd`，跨端一致逻辑的唯一实现）；`mynet_ui` / `mynet_openwrt` / `mynet_desktop`（只调不改的壳）  
+> 旧线口径（`mynet_lua` / `mynet_client`）已冻结，见 [`../integration-plan-v2.md`](../integration-plan-v2.md) §2。
 
 ---
 
 ## 目的
 
-本目录是两端客户端实现的**操作契约 SSOT**。  
+本目录是跨端实现的**操作契约 SSOT**。  
 所有跨平台必须一致的业务逻辑都定义在这里，各实现只管同步。
+
+### 实现归属（目标线）
+
+| 角色 | 仓 | 职责 |
+|------|----|------|
+| **唯一实现** | `mynet_agent`（`mynetd`） | spec 定义的业务逻辑在此实现 |
+| 桌面 UI | `mynet_ui` | 只调 agent 本机 API（HTTP/ubus），不含业务 |
+| 路由器壳 | `mynet_openwrt` | LuCI 菜单 / rpcd ACL，业务经 ubus 转 mynetd |
+| 平台胶水 | `mynet_desktop` | 安装 / 服务 / 打包，不含业务 |
 
 ---
 

@@ -1,6 +1,22 @@
 # MyNet 生态系统全景
 
-> 最后更新：2026-04-19
+> 最后更新：2026-09-21（目标线修订）
+> **分层与仓角色的权威定义**：见 [`integration-plan-v2.md`](integration-plan-v2.md) §1。
+
+## 目标线修订（2026-09）
+
+v1 全景图把 `mynet_client`(Node) / `mynet_tui`(Go) / `mynet_lua` 列为设备客户端。
+目标线已改为**产品本体与平台适配分离**：
+
+| 层 | 仓 | 说明 |
+|----|----|------|
+| 产品本体 | **mynet_agent**（`mynetd` + `mynet` CLI）、**mynet_ui**（静态 WebUI） | 只写一份 |
+| 平台适配 | **mynet_desktop**（Linux/macOS/Windows）、**mynet_openwrt**（LuCI 壳） | 一平台一份 |
+| 冻结归档 | mynet_client / mynet_tui / mynet_lua / mynet_client-hotproxy | 不再改造 |
+
+> 下方 v1 全景图与速查表保留作历史对照。
+
+---
 
 ## 产品定位架构
 
