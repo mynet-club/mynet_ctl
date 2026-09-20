@@ -30,19 +30,25 @@ tags:
   - name: node-config
     description: 节点配置（VPN 配置/config-bundle）
   - name: heartbeat
-    description: 心跳监控（HMAC-SHA256 认证）
+    description: 心跳与节点拉取（HMAC-SHA256 认证通道）
   - name: route
     description: 路由（CRUD/批量/路由申请）
+  - name: tenant
+    description: 租户（原 Zone，实体已更名；对外契约字段沿用 zone_*）
   - name: zone
-    description: Zone（CRUD/用户 Zone 管理）
+    description: Zone（历史命名，正逐步并入 tenant）
   - name: zone-service
     description: Zone 服务（索引服务/服务分享）
   - name: ippool
     description: IP 池（分配/统计/可用 IP 查询）
   - name: social
     description: 社交（好友/邀请/服务发现）
-  - name: asset
-    description: 资产（头像/节点图标上传）
+  - name: notifications
+    description: 通知中心
+  - name: ids
+    description: ID 生成与校验
+  - name: mynet
+    description: 客户端首页聚合与健康检查
 
 # ─── Security Schemes ────────────────────────────────────────────
 components:
@@ -2768,7 +2774,7 @@ paths:
   /social/search-users:
     post:
       tags: [social]
-      operationId: searchUsers
+      operationId: searchSocialUsers
       summary: 搜索用户
       security:
         - sanctum: []
@@ -3185,3 +3191,673 @@ paths:
       responses:
         "200":
           description: 我的服务列表
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # T18 补全（2026-09-21）：代码有、OpenAPI 未声明的端点
+  #
+  # 来源：mynet_back app/Modules/VPN/routes/api.php。注意该模块**原生前缀是 /api/v1**，
+  # /api/v2 由 RewriteApiVersion 中间件重写而来（bootstrap/app.php 中 prepend），
+  # 故此处 server 前缀 /api/v2 与实际路由可对应。
+  #
+  # 刻意**不**纳入：
+  #   - /auth/{login,register,logout,forgot-password,reset-password}：framework-owned，
+  #     由 dsplat MultiTenantSaas 各模块提供，契约归属框架，本文件不重复声明。
+  #   - POST /channels/{enterprise-wechat,wechat-official}/webhook：第三方回调、无认证、
+  #     非客户端 API，如需文档化应单列 webhooks tag 且不生成 SDK。
+  #
+  # 刻意**不**新增（语义重复或仅缺 method，见文末「缺 method」说明）：
+  #   /users/profile≈/user、/nodes/{id}/config 的 POST≈PUT、/nodes/{id}/keys 的 PUT、
+  #   /route/{id} 的 PATCH、/tenants/{id} 的 PATCH、/ippools/{sequence}≈/ippools/{id}
+  # ══════════════════════════════════════════════════════════════════════════
+
+  # ── Monitor 拉取（HMAC 签名通道，与 /monitor/heartbeat 同组）──
+  /monitor/node/info:
+    get:
+      tags: [heartbeat]
+      operationId: monitorNodeInfo
+      summary: 拉取节点自身信息（HMAC 通道）
+      security:
+        - hmac: []
+      parameters:
+        - $ref: "#/components/parameters/NodeId"
+        - $ref: "#/components/parameters/Timestamp"
+      responses:
+        "200":
+          description: 节点信息
+
+  /monitor/node/config:
+    get:
+      tags: [heartbeat]
+      operationId: monitorNodeConfig
+      summary: 拉取节点配置（HMAC 通道）
+      security:
+        - hmac: []
+      parameters:
+        - $ref: "#/components/parameters/NodeId"
+        - $ref: "#/components/parameters/Timestamp"
+      responses:
+        "200":
+          description: 节点配置
+
+  /monitor/node/routes:
+    get:
+      tags: [heartbeat]
+      operationId: monitorNodeRoutes
+      summary: 拉取节点路由表（HMAC 通道）
+      security:
+        - hmac: []
+      parameters:
+        - $ref: "#/components/parameters/NodeId"
+        - $ref: "#/components/parameters/Timestamp"
+      responses:
+        "200":
+          description: 路由表
+
+  /monitor/node/full-config:
+    get:
+      tags: [heartbeat]
+      operationId: monitorNodeFullConfig
+      summary: 拉取完整配置包（HMAC 通道）
+      security:
+        - hmac: []
+      parameters:
+        - $ref: "#/components/parameters/NodeId"
+        - $ref: "#/components/parameters/Timestamp"
+      responses:
+        "200":
+          description: 完整配置
+
+  /monitor/node/route-config:
+    get:
+      tags: [heartbeat]
+      operationId: monitorNodeRouteConfig
+      summary: 拉取路由配置文本（HMAC 通道）
+      security:
+        - hmac: []
+      parameters:
+        - $ref: "#/components/parameters/NodeId"
+        - $ref: "#/components/parameters/Timestamp"
+      responses:
+        "200":
+          description: 路由配置文本
+
+  /monitor/index-services:
+    get:
+      tags: [heartbeat]
+      operationId: monitorIndexServices
+      summary: 拉取索引服务列表（HMAC 通道）
+      security:
+        - hmac: []
+      parameters:
+        - $ref: "#/components/parameters/NodeId"
+        - $ref: "#/components/parameters/Timestamp"
+      responses:
+        "200":
+          description: 索引服务列表
+
+  /monitor/router-keys:
+    post:
+      tags: [heartbeat]
+      operationId: monitorRouterKeys
+      summary: 取对等节点公钥（HMAC 通道）
+      security:
+        - hmac: []
+      parameters:
+        - $ref: "#/components/parameters/NodeId"
+        - $ref: "#/components/parameters/Timestamp"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                router_node_ids:
+                  type: array
+                  items:
+                    type: integer
+      responses:
+        "200":
+          description: 对等节点公钥列表
+
+  # ── MyNet 首页聚合 ──
+  /mynet/stats:
+    get:
+      tags: [mynet]
+      operationId: mynetStats
+      summary: 首页初始数据聚合
+      security:
+        - sanctum: []
+      responses:
+        "200":
+          description: 首页聚合数据
+
+  /mynet/health:
+    get:
+      tags: [mynet]
+      operationId: mynetHealth
+      summary: 健康状态
+      security:
+        - sanctum: []
+      responses:
+        "200":
+          description: 健康状态
+
+  # ── Nodes 补充 ──
+  /nodes/{nodeId}/commands:
+    get:
+      tags: [node]
+      operationId: getNodeCommands
+      summary: 节点待执行命令列表
+      security:
+        - sanctum: []
+      parameters:
+        - name: nodeId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: 命令列表
+
+  /nodes/commands/{id}:
+    delete:
+      tags: [node]
+      operationId: cancelNodeCommand
+      summary: 取消待执行命令
+      security:
+        - sanctum: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 已取消
+
+  /nodes/{id}/ips:
+    delete:
+      tags: [node]
+      operationId: releaseNodeIP
+      summary: 释放节点 IP
+      security:
+        - sanctum: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: 已释放
+
+  /nodes/{id}/peer-connections:
+    get:
+      tags: [node]
+      operationId: getNodePeerConnections
+      summary: 节点对等连接历史
+      security:
+        - sanctum: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: 连接历史
+
+  /nodes/{id}/connection-stats:
+    get:
+      tags: [node]
+      operationId: getNodeConnectionStats
+      summary: 节点连接统计
+      security:
+        - sanctum: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: 连接统计
+
+  # ── Route 补充 ──
+  /route/statistics:
+    get:
+      tags: [route]
+      operationId: getRouteStatistics
+      summary: 路由统计（全局）
+      security:
+        - sanctum: []
+      responses:
+        "200":
+          description: 路由统计
+
+  /route/requests:
+    get:
+      tags: [route]
+      operationId: getRouteRequests
+      summary: 路由申请列表
+      security:
+        - sanctum: []
+      responses:
+        "200":
+          description: 申请列表
+
+  # ── IP Pools 补充 ──
+  /ippools/user-resources:
+    get:
+      tags: [ippool]
+      operationId: getIPPoolUserResources
+      summary: 当前用户的 IP 资源
+      security:
+        - sanctum: []
+      responses:
+        "200":
+          description: 用户 IP 资源
+
+  /ippools/check-availability:
+    post:
+      tags: [ippool]
+      operationId: checkIPAvailability
+      summary: 校验 IP 可用性
+      security:
+        - sanctum: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ip_address:
+                  type: string
+      responses:
+        "200":
+          description: 可用性结果
+
+  # ── Zone Services 补充 ──
+  /services/show/{id}:
+    get:
+      tags: [zone-service]
+      operationId: getServiceDetail
+      summary: 服务详情
+      security:
+        - sanctum: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: 服务详情
+
+  /services/request-approval/{id}:
+    post:
+      tags: [zone-service]
+      operationId: requestServiceApproval
+      summary: 申请服务公开审批
+      security:
+        - sanctum: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: 已提交申请
+
+  # ── Users 补充 ──
+  /users:
+    get:
+      tags: [user]
+      operationId: listUsers
+      summary: 用户列表
+      security:
+        - sanctum: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: 用户列表
+
+  /users/my/statistics:
+    get:
+      tags: [user]
+      operationId: getMyStatistics
+      summary: 当前用户统计
+      security:
+        - sanctum: []
+      responses:
+        "200":
+          description: 统计
+
+  /users/tips/suggestions:
+    get:
+      tags: [user]
+      operationId: getUserTips
+      summary: 用户提示建议
+      security:
+        - sanctum: []
+      responses:
+        "200":
+          description: 提示列表
+
+  /users/{id}:
+    get:
+      tags: [user]
+      operationId: getUser
+      summary: 用户详情
+      security:
+        - sanctum: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: 用户详情
+    put:
+      tags: [user]
+      operationId: updateUser
+      summary: 更新用户
+      security:
+        - sanctum: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: 已更新
+    delete:
+      tags: [user]
+      operationId: deleteUser
+      summary: 删除用户
+      security:
+        - sanctum: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: 已删除
+
+  /users/{id}/statistics:
+    get:
+      tags: [user]
+      operationId: getUserStatistics
+      summary: 指定用户统计
+      security:
+        - sanctum: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: 统计
+
+  /users/{id}/activity:
+    get:
+      tags: [user]
+      operationId: getUserActivity
+      summary: 用户活动记录
+      security:
+        - sanctum: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: 活动记录
+
+  /users/{id}/permissions:
+    get:
+      tags: [user]
+      operationId: getUserPermissions
+      summary: 用户权限
+      security:
+        - sanctum: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: 权限
+
+  /users/{id}/nodes:
+    get:
+      tags: [user]
+      operationId: getUserNodes
+      summary: 用户节点列表
+      security:
+        - sanctum: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: 节点列表
+
+  /users/{id}/tenants:
+    get:
+      tags: [user]
+      operationId: getUserTenants
+      summary: 用户所属租户
+      security:
+        - sanctum: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: 租户列表
+
+  # ── IDs ──
+  /ids/generate:
+    post:
+      tags: [ids]
+      operationId: generateId
+      summary: 生成 ID
+      security:
+        - sanctum: []
+      responses:
+        "200":
+          description: 生成的 ID
+
+  /ids/generate/batch:
+    post:
+      tags: [ids]
+      operationId: generateIdBatch
+      summary: 批量生成 ID
+      security:
+        - sanctum: []
+      responses:
+        "200":
+          description: ID 列表
+
+  /ids/validate:
+    post:
+      tags: [ids]
+      operationId: validateId
+      summary: 校验 ID
+      security:
+        - sanctum: []
+      responses:
+        "200":
+          description: 校验结果
+
+  /ids/parse:
+    post:
+      tags: [ids]
+      operationId: parseId
+      summary: 解析 ID
+      security:
+        - sanctum: []
+      responses:
+        "200":
+          description: 解析结果
+
+  /ids/formats:
+    get:
+      tags: [ids]
+      operationId: getIdFormats
+      summary: ID 格式清单
+      security:
+        - sanctum: []
+      responses:
+        "200":
+          description: 格式清单
+
+  /ids/statistics:
+    get:
+      tags: [ids]
+      operationId: getIdStatistics
+      summary: ID 生成统计
+      security:
+        - sanctum: []
+      responses:
+        "200":
+          description: 统计
+
+  # ── Notifications ──
+  /notifications:
+    get:
+      tags: [notifications]
+      operationId: listNotifications
+      summary: 通知列表
+      security:
+        - sanctum: []
+      responses:
+        "200":
+          description: 通知列表
+
+  /notifications/unread-count:
+    get:
+      tags: [notifications]
+      operationId: getUnreadNotificationCount
+      summary: 未读通知数
+      security:
+        - sanctum: []
+      responses:
+        "200":
+          description: 未读数
+
+  /notifications/stats:
+    get:
+      tags: [notifications]
+      operationId: getNotificationStats
+      summary: 通知统计
+      security:
+        - sanctum: []
+      responses:
+        "200":
+          description: 统计
+
+  /notifications/{id}/read:
+    post:
+      tags: [notifications]
+      operationId: markNotificationRead
+      summary: 标记单条已读
+      security:
+        - sanctum: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 已标记
+
+  /notifications/read-all:
+    post:
+      tags: [notifications]
+      operationId: markAllNotificationsRead
+      summary: 全部标记已读
+      security:
+        - sanctum: []
+      responses:
+        "200":
+          description: 已全部标记
+
+  /notifications/batch-delete:
+    post:
+      tags: [notifications]
+      operationId: batchDeleteNotifications
+      summary: 批量删除通知
+      security:
+        - sanctum: []
+      responses:
+        "200":
+          description: 已删除
+
+  /notifications/clear-read:
+    post:
+      tags: [notifications]
+      operationId: clearReadNotifications
+      summary: 清空已读通知
+      security:
+        - sanctum: []
+      responses:
+        "200":
+          description: 已清空
+
+  /notifications/{id}:
+    delete:
+      tags: [notifications]
+      operationId: deleteNotification
+      summary: 删除通知
+      security:
+        - sanctum: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 已删除
