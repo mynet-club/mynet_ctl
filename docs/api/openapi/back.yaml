@@ -2257,7 +2257,7 @@ paths:
         "200":
           description: 批量删除成功
 
-  /route/node/{id}:
+  /route/node/{nodeId}:
     get:
       tags: [route]
       operationId: getNodeRoutes
@@ -2265,7 +2265,7 @@ paths:
       security:
         - sanctum: []
       parameters:
-        - name: id
+        - name: nodeId
           in: path
           required: true
           schema:
@@ -2798,7 +2798,7 @@ paths:
         "200":
           description: 可用 IP 列表
 
-  /ippools/{id}:
+  /ippools/{sequence}:
     get:
       tags: [ippool]
       operationId: getIPPool
@@ -2806,8 +2806,9 @@ paths:
       security:
         - sanctum: []
       parameters:
-        - name: id
+        - name: sequence
           in: path
+          description: IP 池分组序号（ip_group_sequence_number），**不是** ippool 主键；该接口按 sequence 操作整池
           required: true
           schema:
             type: integer
@@ -2821,8 +2822,9 @@ paths:
       security:
         - sanctum: []
       parameters:
-        - name: id
+        - name: sequence
           in: path
+          description: IP 池分组序号（ip_group_sequence_number），**不是** ippool 主键；该接口按 sequence 操作整池
           required: true
           schema:
             type: integer
@@ -2885,7 +2887,7 @@ paths:
         "200":
           description: 所有好友节点列表
 
-  /social/friends/{id}/nodes:
+  /social/friends/{friendId}/nodes:
     get:
       tags: [social]
       operationId: getFriendNodes
@@ -2893,7 +2895,7 @@ paths:
       security:
         - sanctum: []
       parameters:
-        - name: id
+        - name: friendId
           in: path
           required: true
           schema:
