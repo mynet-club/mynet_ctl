@@ -164,6 +164,44 @@
 
 ---
 
+## 0.7 T18 定稿对账（2026-09-21）
+
+| 项 | 数 |
+|----|----|
+| 代码侧 (method,path)：VPN 142 + channels 2 + 框架 Auth 5 | **147** |
+| OpenAPI 声明（T17 改名后） | **95** |
+| A · 代码有 / OA 无 | **55** |
+| 其中属「重命名/别名类」（非真缺口） | 6 |
+| **真缺口** | **49** |
+| B · OA 有 / 代码无 | 6（真僵尸仅 `/assets/avatar/upload`；其余 5 条 `/auth/*` 由框架 MultiTenantSaas 提供，属**误报**，应在 spec 标注 framework-owned） |
+
+**6 条重命名/别名类**：`GET /users/profile`(≈`GET /user`)、`GET /user/tenants/current`、`POST /nodes/{id}/config`(≈PUT)、`PUT /nodes/{id}/keys`(OA 有路径缺 PUT verb)、`PATCH /route/{id}`(≈PUT)、`PATCH /tenants/{id}`(≈PUT)
+
+**本批已补（commit `8a96d08`）**：`/user/tenants/current`、`/tenants/overview`、`/tenants/{id}/statistics`；并移除僵尸 `/assets/avatar/upload`。
+
+**余量（55 − 3 = 52 条）**：
+
+| 组 | 条数 | 端点 |
+|----|------|------|
+| monitor | 7 | `GET /monitor/node/{info,config,routes,full-config,route-config}`、`GET /monitor/index-services`、`POST /monitor/router-keys` |
+| users | 11 | `GET /users`、`/users/my/statistics`、`/users/tips/suggestions`、`GET\|PUT\|DELETE /users/{id}`、`GET /users/{id}/{statistics,activity,permissions,nodes,tenants}` |
+| notifications | 8 | 通知中心全套：`GET /notifications[,-unread-count,-stats]`、`POST /{id}/read`、`/read-all`、`/batch-delete`、`/clear-read`、`DELETE /{id}` |
+| nodes | 6 | `GET /nodes/{id}/commands`、`DELETE /nodes/commands/{id}`、`DELETE /nodes/{id}/ips`、`GET /nodes/{id}/{peer-connections,connection-stats}` + `POST /nodes/{id}/config` |
+| ids | 6 | `/ids/{generate,generate/batch,validate,parse,formats,statistics}` |
+| route | 2 | `GET /route/statistics`、`GET /route/requests` |
+| ippools | 2 | `POST /ippools/check-availability`、`GET /ippools/user-resources` |
+| services | 2 | `GET /services/show/{id}`、`POST /services/request-approval/{id}` |
+| tenants | 2 | `PATCH /tenants/{id}` + 相关 |
+| mynet | 2 | `GET /mynet/{stats,health}` |
+| channels | 2 | `POST /channels/{enterprise-wechat,wechat-official}/webhook` |
+
+**纳入策略建议**：
+- `/monitor/*`：**纳入**并加 HMAC 安全方案（同属签名通道，OA 已声明其中 `heartbeat`、`commands/{id}/result` 两条）
+- `/channels/*`：**纳入**但用独立 `webhooks` tag 标注 no-auth / internal，**不生成客户端 SDK**
+- `/auth/*` 框架端点：标注 `framework-owned`，避免下次审计再次误报为僵尸
+
+---
+
 ## 1. 归属重映射（旧线 → 新线）
 
 v1 的 issue 清单按 `lua / client / GUI` 记名，需按目标线重新归属：
