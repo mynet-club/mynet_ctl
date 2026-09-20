@@ -1,6 +1,15 @@
 # MyNet CTL API — OpenAPI 3.1.0
 # API Version: 2.2.0 (统一版本号，与 back 共享)
 # Source of Truth: mynet_ctl/docs/api/openapi/ctl.yaml
+#
+# 范围边界（T18b 对账结论，2026-09-21）：
+#   本规范只文档化**对外/集成**端点（/d/* 分发、/api/v2/* JSON API）。
+#   以下路由**刻意不纳入**，也不随本规范变更：
+#     - /admin/**                 HTML 后台（Blade 视图 + 表单动作，302 重定向 + CSRF/session，
+#                                 与本文 securitySchemes 的 bearer 模型不匹配）
+#     - /, /downloads, /openwrt, /tools, /setup, /quickconfig    公开 HTML 页面
+#     - /up                       框架健康检查
+#   如需记录后台界面契约，请另起独立 spec，不要混入现有 tags。
 
 openapi: 3.1.0
 info:
@@ -615,6 +624,28 @@ paths:
         "200":
           description: 已下架
 
+  /api/v2/releases/{releaseId}/download/{filename}:
+    get:
+      tags: [release]
+      operationId: downloadReleaseArtifact
+      summary: 下载指定版本的构件文件（公开，无需鉴权）
+      parameters:
+        - name: releaseId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: filename
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 构件文件（application/octet-stream）
+        "404":
+          description: 版本或文件不存在
+
   # ── Plugins API ──
   /api/v2/plugins:
     get:
@@ -669,6 +700,28 @@ paths:
       responses:
         "200":
           description: 已下架
+
+  /api/v2/plugins/{pluginId}/download/{filename}:
+    get:
+      tags: [plugin]
+      operationId: downloadPluginArtifact
+      summary: 下载插件文件（公开，无需鉴权）
+      parameters:
+        - name: pluginId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: filename
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 插件文件（application/octet-stream）
+        "404":
+          description: 插件或文件不存在
 
   # ── Scripts API ──
   /api/v2/scripts:
@@ -758,6 +811,28 @@ paths:
       responses:
         "200":
           description: 已下架
+
+  /api/v2/scripts/{scriptId}/raw/{name}:
+    get:
+      tags: [script]
+      operationId: getScriptRaw
+      summary: 获取脚本原文（公开，无需鉴权）
+      parameters:
+        - name: scriptId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 脚本原文（text/plain）
+        "404":
+          description: 脚本不存在
 
   # ── Detect API ──
   /api/v2/detect/openwrt:
