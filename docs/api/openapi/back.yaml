@@ -1285,6 +1285,17 @@ paths:
         "200":
           description: "切换成功（data: {tenant_id, name}）"
 
+  /user/tenants/current:
+    get:
+      tags: [user]
+      operationId: getCurrentTenant
+      summary: 获取当前活跃 Tenant
+      security:
+        - sanctum: []
+      responses:
+        "200":
+          description: 当前 Tenant
+
   # ── Nodes ──
   /nodes:
     get:
@@ -2641,30 +2652,12 @@ paths:
         "200":
           description: 操作已执行
 
-  # ── Assets 补充 ────────────────────────────────────────────────────────────
-  /assets/avatar/upload:
-    post:
-      tags: [asset]
-      operationId: uploadUserAvatar
-      summary: 上传用户头像
-      security:
-        - sanctum: []
-      parameters:
-        - $ref: "#/components/parameters/ZoneId"
-      requestBody:
-        required: true
-        content:
-          multipart/form-data:
-            schema:
-              type: object
-              required: [avatar]
-              properties:
-                avatar:
-                  type: string
-                  format: binary
-      responses:
-        "200":
-          description: 头像上传成功
+  # ── 文件/头像（原 /assets/*，已迁移）────────────────────────────────────────
+  # 原 /assets/avatar/upload 指向的 BinaryAssetController 在模块迁移中丢失（全库不存在、
+  # 无 class_alias 桥），命中即 BindingResolutionException → 500，已从路由移除（mynet_back 0a3ef65c）。
+  # 前端改用框架 Storage 的 entity 接口：POST /files/entity/{module}/{entityId}、
+  # GET /files/entity/{module}/{entityId}/url。契约由 dsplat MultiTenantSaas 存储模块拥有，
+  # 本文件不再重复声明，以免与框架定义分叉。
 
   # ── Users 补充 ─────────────────────────────────────────────────────────────
   /users/onboarding:
@@ -3189,8 +3182,8 @@ paths:
           description: Zone 已更新
     delete:
       tags: [zone]
-      operationId: deleteZone
-      summary: 删除 Zone
+      operationId: deleteTenant
+      summary: 删除 Tenant
       security:
         - sanctum: []
       parameters:
@@ -3202,7 +3195,35 @@ paths:
             type: integer
       responses:
         "200":
-          description: Zone 已删除
+          description: Tenant 已删除
+
+  /tenants/overview:
+    get:
+      tags: [tenant]
+      operationId: getTenantsOverview
+      summary: 当前用户可访问 Tenant 的聚合概览
+      security:
+        - sanctum: []
+      responses:
+        "200":
+          description: "data: {total_zones, active_zones, total_nodes, total_routes}"
+
+  /tenants/{id}/statistics:
+    get:
+      tags: [tenant]
+      operationId: getTenantStatistics
+      summary: Tenant 统计摘要
+      security:
+        - sanctum: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: "data: {zone_id, node_count, active_node_count, route_count, ip_pool_count, user_count}"
 
   # ── Zone Services 补充 ────────────────────────────────────────────────────
   /services/public:
