@@ -1253,22 +1253,22 @@ paths:
         "200":
           description: 搜索结果
 
-  /user/zones:
+  /user/tenants:
     get:
       tags: [user]
-      operationId: listZones
-      summary: 用户 Zone 列表
+      operationId: listUserTenants
+      summary: 用户可访问的 Tenant 列表
       security:
         - sanctum: []
       responses:
         "200":
-          description: Zone 列表
+          description: "Tenant 列表（data 为裸数组，非 {zones: [...]}）"
 
-  /user/switch-zone:
+  /user/tenants/switch:
     post:
       tags: [user]
-      operationId: switchZone
-      summary: 切换活跃 Zone
+      operationId: switchTenant
+      summary: 切换活跃 Tenant
       security:
         - sanctum: []
       requestBody:
@@ -1277,13 +1277,13 @@ paths:
           application/json:
             schema:
               type: object
-              required: [zone_id]
+              required: [tenant_id]
               properties:
-                zone_id:
+                tenant_id:
                   type: integer
       responses:
         "200":
-          description: 切换成功
+          description: "切换成功（data: {tenant_id, name}）"
 
   # ── Nodes ──
   /nodes:
@@ -2305,7 +2305,7 @@ paths:
           description: 已拒绝
 
   # ── Zone Services ──
-  /zones/services/indexes:
+  /services/indexes:
     get:
       tags: [zone-service]
       operationId: getIndexServices
@@ -2346,7 +2346,7 @@ paths:
                 type: string
                 description: "render_conf=1 时返回 address.conf 格式"
 
-  /zones/services/create:
+  /services/create:
     post:
       tags: [zone-service]
       operationId: createService
@@ -2365,7 +2365,7 @@ paths:
         "201":
           description: 服务创建成功
 
-  /zones/services/update/{id}:
+  /services/update/{id}:
     put:
       tags: [zone-service]
       operationId: updateService
@@ -2388,7 +2388,7 @@ paths:
         "200":
           description: 更新成功
 
-  /zones/services/delete/{id}:
+  /services/delete/{id}:
     delete:
       tags: [zone-service]
       operationId: deleteService
@@ -2406,7 +2406,7 @@ paths:
         "200":
           description: 删除成功
 
-  /zones/services/share/{id}:
+  /services/share/{id}:
     post:
       tags: [zone-service]
       operationId: shareService
@@ -3086,12 +3086,12 @@ paths:
         "200":
           description: 邀请码已删除
 
-  # ── Zones ──────────────────────────────────────────────────────────────────
-  /zones:
+  # ── Tenants（原 Zones，实体已更名）────────────────────────────────────────────
+  /tenants:
     get:
-      tags: [zone]
-      operationId: listZones
-      summary: 获取 Zone 列表
+      tags: [tenant]
+      operationId: listTenants
+      summary: 获取 Tenant 列表
       security:
         - sanctum: []
       parameters:
@@ -3117,9 +3117,9 @@ paths:
         "200":
           description: Zone 列表
     post:
-      tags: [zone]
-      operationId: createZone
-      summary: 创建 Zone
+      tags: [tenant]
+      operationId: createTenant
+      summary: 创建 Tenant
       security:
         - sanctum: []
       parameters:
@@ -3140,7 +3140,7 @@ paths:
         "201":
           description: Zone 已创建
 
-  /zones/{id}:
+  /tenants/{id}:
     get:
       tags: [zone]
       operationId: getZone
@@ -3205,7 +3205,7 @@ paths:
           description: Zone 已删除
 
   # ── Zone Services 补充 ────────────────────────────────────────────────────
-  /zones/services/public:
+  /services/public:
     get:
       tags: [zone-service]
       operationId: getPublicServices
@@ -3218,7 +3218,7 @@ paths:
         "200":
           description: 公开服务列表
 
-  /zones/services/friends:
+  /services/friends:
     get:
       tags: [zone-service]
       operationId: getFriendsServices
@@ -3231,7 +3231,7 @@ paths:
         "200":
           description: 好友服务列表
 
-  /zones/services/anonymous:
+  /services/anonymous:
     get:
       tags: [zone-service]
       operationId: getAnonymousServices
@@ -3244,7 +3244,7 @@ paths:
         "200":
           description: 匿名服务列表
 
-  /zones/services/my:
+  /services/my:
     get:
       tags: [zone-service]
       operationId: getMyServices
