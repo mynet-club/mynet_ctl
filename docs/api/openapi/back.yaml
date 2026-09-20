@@ -1225,6 +1225,23 @@ paths:
                   - properties:
                       data:
                         $ref: "#/components/schemas/UserProfile"
+    get:
+      tags: [user]
+      operationId: getUsersProfile
+      summary: 获取当前用户资料（与 GET /user 同源）
+      security:
+        - sanctum: []
+      responses:
+        "200":
+          description: 用户资料
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - properties:
+                      data:
+                        $ref: "#/components/schemas/UserProfile"
 
   /users/search:
     get:
@@ -1603,6 +1620,28 @@ paths:
       responses:
         "200":
           description: 密钥撤销成功
+    put:
+      tags: [node]
+      operationId: updateNodeKeys
+      summary: 幂等替换节点密钥
+      description: 替换语义——不因密钥已存在而报错；未提供 custom_* 且已有密钥时原样返回。与 POST 的创建语义相区分。
+      security:
+        - sanctum: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenerateKeyRequest"
+      responses:
+        "200":
+          description: 密钥已替换
 
   /nodes/{id}/router-keys:
     post:
@@ -1880,6 +1919,22 @@ paths:
       responses:
         "200":
           description: 配置保存成功
+    post:
+      tags: [node-config]
+      operationId: saveNodeConfigAlias
+      summary: 保存节点配置（POST 别名）
+      description: 与 `PUT /nodes/{id}/config` 共用 NodeConfigController@saveConfig（路由为 match(['put','post'])），请求体与响应一致。
+      security:
+        - sanctum: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: 配置保存成功
 
   /nodes/{id}/config-bundle:
     get:
@@ -2137,6 +2192,22 @@ paths:
       responses:
         "200":
           description: 删除成功
+    patch:
+      tags: [route]
+      operationId: patchRoute
+      summary: 更新路由（PATCH 别名）
+      description: 与 `PUT /route/{id}` 共用 RouteController@update（路由为 match(['put','patch'])）。
+      security:
+        - sanctum: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: 已更新
 
   /route/bulk/status:
     post:
@@ -3100,6 +3171,22 @@ paths:
       responses:
         "200":
           description: Tenant 已删除
+    patch:
+      tags: [zone]
+      operationId: patchZone
+      summary: 更新 Tenant（PATCH 别名）
+      description: 与 `PUT /tenants/{id}` 共用 TenantController@update（路由为 match(['put','patch'])）。
+      security:
+        - sanctum: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: 已更新
 
   /tenants/overview:
     get:
