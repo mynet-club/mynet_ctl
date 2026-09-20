@@ -63,13 +63,6 @@ components:
         配合 X-Node-Id + X-Timestamp 头使用。
 
   parameters:
-    ZoneId:
-      name: X-Zone-ID
-      in: header
-      required: true
-      schema:
-        type: integer
-      description: Zone ID（api.zone 中间件验证用户是否属于该 Zone）
     NodeId:
       name: X-Node-Id
       in: header
@@ -1305,7 +1298,6 @@ paths:
       security:
         - sanctum: []
       parameters:
-        - $ref: "#/components/parameters/ZoneId"
         - name: status
           in: query
           schema:
@@ -1360,8 +1352,6 @@ paths:
       summary: 创建节点
       security:
         - sanctum: []
-      parameters:
-        - $ref: "#/components/parameters/ZoneId"
       requestBody:
         required: true
         content:
@@ -1387,8 +1377,6 @@ paths:
       summary: 一键创建节点
       security:
         - sanctum: []
-      parameters:
-        - $ref: "#/components/parameters/ZoneId"
       requestBody:
         required: true
         content:
@@ -1413,7 +1401,6 @@ paths:
       security:
         - sanctum: []
       parameters:
-        - $ref: "#/components/parameters/ZoneId"
         - name: id
           in: path
           required: true
@@ -1437,7 +1424,6 @@ paths:
       security:
         - sanctum: []
       parameters:
-        - $ref: "#/components/parameters/ZoneId"
         - name: id
           in: path
           required: true
@@ -1458,7 +1444,6 @@ paths:
       security:
         - sanctum: []
       parameters:
-        - $ref: "#/components/parameters/ZoneId"
         - name: id
           in: path
           required: true
@@ -1474,7 +1459,6 @@ paths:
       security:
         - sanctum: []
       parameters:
-        - $ref: "#/components/parameters/ZoneId"
         - name: id
           in: path
           required: true
@@ -1503,7 +1487,6 @@ paths:
       security:
         - sanctum: []
       parameters:
-        - $ref: "#/components/parameters/ZoneId"
         - name: id
           in: path
           required: true
@@ -1530,7 +1513,6 @@ paths:
       security:
         - sanctum: []
       parameters:
-        - $ref: "#/components/parameters/ZoneId"
         - name: id
           in: path
           required: true
@@ -1556,7 +1538,6 @@ paths:
       security:
         - sanctum: []
       parameters:
-        - $ref: "#/components/parameters/ZoneId"
         - name: id
           in: path
           required: true
@@ -1580,7 +1561,6 @@ paths:
       security:
         - sanctum: []
       parameters:
-        - $ref: "#/components/parameters/ZoneId"
         - name: id
           in: path
           required: true
@@ -1609,7 +1589,6 @@ paths:
       security:
         - sanctum: []
       parameters:
-        - $ref: "#/components/parameters/ZoneId"
         - name: id
           in: path
           required: true
@@ -1627,7 +1606,6 @@ paths:
       security:
         - sanctum: []
       parameters:
-        - $ref: "#/components/parameters/ZoneId"
         - name: id
           in: path
           required: true
@@ -1659,7 +1637,6 @@ paths:
       security:
         - sanctum: []
       parameters:
-        - $ref: "#/components/parameters/ZoneId"
         - name: id
           in: path
           required: true
@@ -1690,7 +1667,6 @@ paths:
       security:
         - sanctum: []
       parameters:
-        - $ref: "#/components/parameters/ZoneId"
         - name: id
           in: path
           required: true
@@ -1749,8 +1725,6 @@ paths:
       summary: 批量获取设备信息 (v2=POST, v1=PUT)
       security:
         - sanctum: []
-      parameters:
-        - $ref: "#/components/parameters/ZoneId"
       requestBody:
         required: true
         content:
@@ -1778,7 +1752,6 @@ paths:
       security:
         - sanctum: []
       parameters:
-        - $ref: "#/components/parameters/ZoneId"
         - name: id
           in: path
           required: true
@@ -1826,7 +1799,6 @@ paths:
       security:
         - sanctum: []
       parameters:
-        - $ref: "#/components/parameters/ZoneId"
         - name: id
           in: path
           required: true
@@ -1842,7 +1814,6 @@ paths:
       security:
         - sanctum: []
       parameters:
-        - $ref: "#/components/parameters/ZoneId"
         - name: id
           in: path
           required: true
@@ -1915,7 +1886,6 @@ paths:
       security:
         - sanctum: []
       parameters:
-        - $ref: "#/components/parameters/ZoneId"
         - name: id
           in: path
           required: true
@@ -1955,7 +1925,6 @@ paths:
       security:
         - sanctum: []
       parameters:
-        - $ref: "#/components/parameters/ZoneId"
         - name: id
           in: path
           required: true
@@ -2067,8 +2036,6 @@ paths:
       summary: 创建路由
       security:
         - sanctum: []
-      parameters:
-        - $ref: "#/components/parameters/ZoneId"
       requestBody:
         required: true
         content:
@@ -2094,8 +2061,6 @@ paths:
       summary: 路由统计概览
       security:
         - sanctum: []
-      parameters:
-        - $ref: "#/components/parameters/ZoneId"
       responses:
         "200":
           description: 路由统计
@@ -2123,7 +2088,6 @@ paths:
       security:
         - sanctum: []
       parameters:
-        - $ref: "#/components/parameters/ZoneId"
         - name: id
           in: path
           required: true
@@ -2139,7 +2103,6 @@ paths:
       security:
         - sanctum: []
       parameters:
-        - $ref: "#/components/parameters/ZoneId"
         - name: id
           in: path
           required: true
@@ -2160,7 +2123,6 @@ paths:
       security:
         - sanctum: []
       parameters:
-        - $ref: "#/components/parameters/ZoneId"
         - name: id
           in: path
           required: true
@@ -2177,8 +2139,6 @@ paths:
       summary: 批量路由状态
       security:
         - sanctum: []
-      parameters:
-        - $ref: "#/components/parameters/ZoneId"
       requestBody:
         required: true
         content:
@@ -2204,8 +2164,6 @@ paths:
       summary: 批量删除路由
       security:
         - sanctum: []
-      parameters:
-        - $ref: "#/components/parameters/ZoneId"
       requestBody:
         required: true
         content:
@@ -2230,7 +2188,6 @@ paths:
       security:
         - sanctum: []
       parameters:
-        - $ref: "#/components/parameters/ZoneId"
         - name: id
           in: path
           required: true
@@ -2259,8 +2216,6 @@ paths:
       summary: 发送路由申请
       security:
         - sanctum: []
-      parameters:
-        - $ref: "#/components/parameters/ZoneId"
       requestBody:
         required: true
         content:
@@ -2279,7 +2234,6 @@ paths:
       security:
         - sanctum: []
       parameters:
-        - $ref: "#/components/parameters/ZoneId"
         - name: id
           in: path
           required: true
@@ -2297,7 +2251,6 @@ paths:
       security:
         - sanctum: []
       parameters:
-        - $ref: "#/components/parameters/ZoneId"
         - name: id
           in: path
           required: true
@@ -2324,7 +2277,6 @@ paths:
       security:
         - sanctum: []
       parameters:
-        - $ref: "#/components/parameters/ZoneId"
         - name: render_conf
           in: query
           schema:
@@ -2364,8 +2316,6 @@ paths:
       summary: 创建服务
       security:
         - sanctum: []
-      parameters:
-        - $ref: "#/components/parameters/ZoneId"
       requestBody:
         required: true
         content:
@@ -2384,7 +2334,6 @@ paths:
       security:
         - sanctum: []
       parameters:
-        - $ref: "#/components/parameters/ZoneId"
         - name: id
           in: path
           required: true
@@ -2407,7 +2356,6 @@ paths:
       security:
         - sanctum: []
       parameters:
-        - $ref: "#/components/parameters/ZoneId"
         - name: id
           in: path
           required: true
@@ -2425,7 +2373,6 @@ paths:
       security:
         - sanctum: []
       parameters:
-        - $ref: "#/components/parameters/ZoneId"
         - name: id
           in: path
           required: true
@@ -2453,7 +2400,6 @@ paths:
       security:
         - sanctum: []
       parameters:
-        - $ref: "#/components/parameters/ZoneId"
         - name: id
           in: path
           required: true
@@ -2513,8 +2459,6 @@ paths:
       summary: 修改密码
       security:
         - sanctum: []
-      parameters:
-        - $ref: "#/components/parameters/ZoneId"
       requestBody:
         required: true
         content:
@@ -2613,7 +2557,6 @@ paths:
       security:
         - sanctum: []
       parameters:
-        - $ref: "#/components/parameters/ZoneId"
         - name: id
           in: path
           required: true
@@ -2631,7 +2574,6 @@ paths:
       security:
         - sanctum: []
       parameters:
-        - $ref: "#/components/parameters/ZoneId"
         - name: id
           in: path
           required: true
@@ -2667,8 +2609,6 @@ paths:
       summary: 获取用户引导状态
       security:
         - sanctum: []
-      parameters:
-        - $ref: "#/components/parameters/ZoneId"
       responses:
         "200":
           description: 引导状态
@@ -2678,8 +2618,6 @@ paths:
       summary: 保存用户引导状态
       security:
         - sanctum: []
-      parameters:
-        - $ref: "#/components/parameters/ZoneId"
       requestBody:
         required: true
         content:
@@ -2700,7 +2638,6 @@ paths:
       security:
         - sanctum: []
       parameters:
-        - $ref: "#/components/parameters/ZoneId"
         - name: page
           in: query
           schema:
@@ -2718,8 +2655,6 @@ paths:
       summary: 创建 IP 池
       security:
         - sanctum: []
-      parameters:
-        - $ref: "#/components/parameters/ZoneId"
       requestBody:
         required: true
         content:
@@ -2746,8 +2681,6 @@ paths:
       summary: 获取 IP 池统计信息
       security:
         - sanctum: []
-      parameters:
-        - $ref: "#/components/parameters/ZoneId"
       responses:
         "200":
           description: 统计数据
@@ -2759,8 +2692,6 @@ paths:
       summary: 自动分配 IP 池
       security:
         - sanctum: []
-      parameters:
-        - $ref: "#/components/parameters/ZoneId"
       requestBody:
         required: true
         content:
@@ -2782,7 +2713,6 @@ paths:
       security:
         - sanctum: []
       parameters:
-        - $ref: "#/components/parameters/ZoneId"
         - name: pool_id
           in: query
           schema:
@@ -2799,7 +2729,6 @@ paths:
       security:
         - sanctum: []
       parameters:
-        - $ref: "#/components/parameters/ZoneId"
         - name: id
           in: path
           required: true
@@ -2815,7 +2744,6 @@ paths:
       security:
         - sanctum: []
       parameters:
-        - $ref: "#/components/parameters/ZoneId"
         - name: id
           in: path
           required: true
@@ -2833,8 +2761,6 @@ paths:
       summary: 获取社交综合数据
       security:
         - sanctum: []
-      parameters:
-        - $ref: "#/components/parameters/ZoneId"
       responses:
         "200":
           description: 好友/邀请/申请综合数据
@@ -2846,8 +2772,6 @@ paths:
       summary: 搜索用户
       security:
         - sanctum: []
-      parameters:
-        - $ref: "#/components/parameters/ZoneId"
       requestBody:
         required: true
         content:
@@ -2869,8 +2793,6 @@ paths:
       summary: 获取好友列表
       security:
         - sanctum: []
-      parameters:
-        - $ref: "#/components/parameters/ZoneId"
       responses:
         "200":
           description: 好友列表
@@ -2882,8 +2804,6 @@ paths:
       summary: 获取所有好友的节点
       security:
         - sanctum: []
-      parameters:
-        - $ref: "#/components/parameters/ZoneId"
       responses:
         "200":
           description: 所有好友节点列表
@@ -2896,7 +2816,6 @@ paths:
       security:
         - sanctum: []
       parameters:
-        - $ref: "#/components/parameters/ZoneId"
         - name: id
           in: path
           required: true
@@ -2914,8 +2833,6 @@ paths:
       summary: 发送好友申请
       security:
         - sanctum: []
-      parameters:
-        - $ref: "#/components/parameters/ZoneId"
       requestBody:
         required: true
         content:
@@ -2939,8 +2856,6 @@ paths:
       summary: 接受好友申请
       security:
         - sanctum: []
-      parameters:
-        - $ref: "#/components/parameters/ZoneId"
       requestBody:
         required: true
         content:
@@ -2962,8 +2877,6 @@ paths:
       summary: 拒绝好友申请
       security:
         - sanctum: []
-      parameters:
-        - $ref: "#/components/parameters/ZoneId"
       requestBody:
         required: true
         content:
@@ -2985,8 +2898,6 @@ paths:
       summary: 撤销已发出的好友申请
       security:
         - sanctum: []
-      parameters:
-        - $ref: "#/components/parameters/ZoneId"
       requestBody:
         required: true
         content:
@@ -3008,8 +2919,6 @@ paths:
       summary: 删除好友
       security:
         - sanctum: []
-      parameters:
-        - $ref: "#/components/parameters/ZoneId"
       requestBody:
         required: true
         content:
@@ -3031,8 +2940,6 @@ paths:
       summary: 获取邀请码列表
       security:
         - sanctum: []
-      parameters:
-        - $ref: "#/components/parameters/ZoneId"
       responses:
         "200":
           description: 邀请码列表
@@ -3044,8 +2951,6 @@ paths:
       summary: 生成邀请码
       security:
         - sanctum: []
-      parameters:
-        - $ref: "#/components/parameters/ZoneId"
       requestBody:
         content:
           application/json:
@@ -3069,7 +2974,6 @@ paths:
       security:
         - sanctum: []
       parameters:
-        - $ref: "#/components/parameters/ZoneId"
         - name: id
           in: path
           required: true
@@ -3088,7 +2992,6 @@ paths:
       security:
         - sanctum: []
       parameters:
-        - $ref: "#/components/parameters/ZoneId"
         - name: page
           in: query
           schema:
@@ -3115,8 +3018,6 @@ paths:
       summary: 创建 Tenant
       security:
         - sanctum: []
-      parameters:
-        - $ref: "#/components/parameters/ZoneId"
       requestBody:
         required: true
         content:
@@ -3141,7 +3042,6 @@ paths:
       security:
         - sanctum: []
       parameters:
-        - $ref: "#/components/parameters/ZoneId"
         - name: id
           in: path
           required: true
@@ -3157,7 +3057,6 @@ paths:
       security:
         - sanctum: []
       parameters:
-        - $ref: "#/components/parameters/ZoneId"
         - name: id
           in: path
           required: true
@@ -3187,7 +3086,6 @@ paths:
       security:
         - sanctum: []
       parameters:
-        - $ref: "#/components/parameters/ZoneId"
         - name: id
           in: path
           required: true
@@ -3233,8 +3131,6 @@ paths:
       summary: 获取公开服务列表
       security:
         - sanctum: []
-      parameters:
-        - $ref: "#/components/parameters/ZoneId"
       responses:
         "200":
           description: 公开服务列表
@@ -3246,8 +3142,6 @@ paths:
       summary: 获取好友分享的服务列表
       security:
         - sanctum: []
-      parameters:
-        - $ref: "#/components/parameters/ZoneId"
       responses:
         "200":
           description: 好友服务列表
@@ -3259,8 +3153,6 @@ paths:
       summary: 获取匿名公开服务列表
       security:
         - sanctum: []
-      parameters:
-        - $ref: "#/components/parameters/ZoneId"
       responses:
         "200":
           description: 匿名服务列表
@@ -3269,15 +3161,10 @@ paths:
     get:
       tags: [zone-service]
       operationId: getMyServices
-      summary: 获取当前用户在当前 Zone 下的服务列表
+      summary: 获取当前用户在当前 Tenant 下的服务列表
       security:
         - sanctum: []
       parameters:
-        - $ref: "#/components/parameters/ZoneId"
-        - name: zone_id
-          in: query
-          schema:
-            type: integer
         - name: service_type
           in: query
           schema:
