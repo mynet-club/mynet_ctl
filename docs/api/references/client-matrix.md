@@ -33,7 +33,7 @@
 | User-Agent | 默认 | `mynet-client/{ver}` | `mynet-luci/2.1.0` |
 | Base URL | `VITE_API_BASE_URL/api/v2` | `config.json:api_base_url` | `config.lua:api_base_url` |
 | Token 存储 | localStorage | `credential.json` | `/etc/mynet/conf/credential.json` |
-| X-Zone-ID 来源 | `localStorage:user_info.zone_id` | `zone.zone_id \|\| zone.id` | `credential.zone_id` |
+| X-Tenant-ID 来源 | `localStorage:user_info.tenant_id` | `zone.tenant_id \|\| zone.id` | `credential.tenant_id` |
 | Token 刷新 | ✅ 自动 (401 拦截) | ✅ 自动 (401 拦截) | ✅ 手动 |
 | X-Client-Request-ID | ❌ | ✅ `c-{ts}-{seq}` | ❌ |
 
@@ -52,9 +52,8 @@
 | `data.user.user_id` | ✅ int | ✅ (映射 id→user_id) | ✅ (fallback user.id) | ✅ (fallback user.id) |
 | `data.user.name` | ✅ string | ✅ | ✅ → `user_name` | — |
 | `data.user.email` | ✅ string | ✅ | ✅ | — |
-| `data.user.zone_id` | ✅ int\|null | ✅ | ✅ | ✅ |
-| `data.current_zone` | ⚠️ 仅 verify-token | — | ✅ (自动恢复) | — |
-| `data.default_zone` | ⚠️ 仅 verify-token | — | ✅ (备选恢复) | — |
+| `data.user.tenant_id` | ✅ int\|null | ✅ | ✅ | ✅ |
+| `data.current_tenant` | ⚠️ 仅 verify-token | — | ✅ (自动恢复) | — |
 
 ### 2.2 节点列表字段
 
@@ -99,13 +98,31 @@
 
 | 特性 | back 期望/返回 | client | lua |
 |------|---------------|--------|-----|
-| 请求体 | `{ "router_node_ids": [int] }` | ✅ | ⚠️ 发送空 `{}` |
-| 响应路径 | `data.keys[]` | ✅ (多路径 fallback) | ✅ (多路径 fallback) |
-| key 结构 | `{ router_node_id, key_type, public_key }` | ⚠️ 期望 `{peerId: "hex"}` | ⚠️ 期望 `{peerId: "hex"}` |
+| 请求体 | `{ "router_node_ids": [int] }`（required, 1..100） | ✅ | ⚠️ 发送空 `{}` |
+| 响应路径 | `data.keys`（**对象映射**，非数组） | ✅ | ✅ (多路径 fallback) |
+| key 结构 | `{ "<nodeId>": "<public_key_hex>" }` | ✅ | ✅ |
+| 其他字段 | `data.request_node_id`、`data.failed[]={node_id,reason}`、`data.summary` | — | — |
+
+> 更正（2026-09-21）：此前本表把 key 结构写成 `{router_node_id,key_type,public_key}` 的**数组**，
+> 并断言 client 的 `{peerId:"hex"}` 期望是「⚠️ 不对」——**恰好相反**。
+> back 实际返回映射 `{"<nodeId>":"<hex>"}`（`NodeKeyDomainService` 里 `$keys[(string)$id]=public_key`），
+> 故 client 的映射期望才是对的。agent 侧已按此修正（mynet_agent 49fe022）。
 
 ---
 
 ## 3. mynet_back API 调用矩阵
+
+> ⚠️ **本表部分行已过时**（最后核对：2026-09-21）。路径与方法的**权威来源是
+> [`../openapi/back.yaml`](../openapi/back.yaml)**（123 paths / 147 ops，已与
+> `app/Modules/VPN/routes/api.php` 逐条对账）。本表保留用于「哪个客户端调用哪个端点」的对照；
+> **两者冲突时以 back.yaml 为准**。
+>
+> 已知仍待校对的区域（不在本轮修正范围内）：
+> - `/route/*` 数行：`/route/active`、`/route/connections/{type}`、`/route/friend-nodes`、
+>   `/route/connect/{nodeId}` 在 back 中并未注册（实际为 `/route/statistics`、`/route/requests`、
+>   `GET /route/{id}`、`PUT|PATCH /route/{id}`）
+> - keys 相关的 v1/v2 方法与 `/nodes/{id}/config` 的 `put|post` 组合
+> - 第 66+ 行汇总未覆盖 `/ippools`、`/notifications`、`/ids`、`/mynet/*`、`/users/*`、`/tenants/*`
 
 | # | Method | Path | 中间件 | GUI | client | lua | CTL代理 |
 |---|--------|------|--------|-----|--------|-----|---------|
@@ -125,56 +142,56 @@
 | 14 | GET | `/user` | sanctum | ✅ | — | — | — |
 | 15 | PUT | `/users/profile` | sanctum | ✅ | — | — | — |
 | 16 | GET | `/users/search` | sanctum | ✅ | — | — | — |
-| 17 | GET | `/user/zones` | sanctum | ✅ | ✅ | ✅ | ✅ |
-| 18 | POST | `/user/switch-zone` | sanctum | ✅ | ✅ | — | ✅ |
-| 19 | GET | `/nodes` | sanctum+zone | ✅ | ✅ | ✅ | ✅ |
-| 20 | POST | `/nodes/create` | sanctum+zone | ✅ | ✅ | — | — |
-| 21 | POST | `/nodes/quick-create` | sanctum+zone | ✅ | — | — | — |
-| 22 | GET | `/nodes/{id}` | sanctum+zone | ✅ | ✅ | ✅ | ✅ |
-| 23 | PATCH | `/nodes/{id}` | sanctum+zone | ✅ | — | — | — |
-| 24 | DELETE | `/nodes/{id}` | sanctum+zone | ✅ | — | — | — |
-| 25 | PATCH | `/nodes/{id}/status` | sanctum+zone | ✅ | ✅ | ✅ | — |
-| 26 | GET | `/nodes/{id}/config` (v1) | sanctum+zone | — | — | ✅ | — |
-| 27 | GET | `/nodes/{id}/configuration` (v2) | sanctum+zone | ✅ | ✅* | — | ✅ |
-| 28 | PUT | `/nodes/{id}/config` | sanctum+zone | ✅ | — | — | — |
-| 29 | GET | `/nodes/{id}/config-bundle` (v2) | sanctum+zone | — | ✅ | ✅† | ✅ |
-| 30 | GET | `/nodes/{id}/keys` | sanctum+zone | ✅ | ✅ | ✅ | ✅ |
-| 31 | POST | `/nodes/{id}/keys` (v2) | sanctum+zone | — | — | ✅ | — |
-| 32 | POST | `/nodes/{id}/keys/generate` (v1) | sanctum+zone | ✅ | — | — | — |
-| 33 | POST | `/nodes/{id}/keys/upload` (v1) | sanctum+zone | ✅ | ✅ | — | — |
-| 34 | DELETE | `/nodes/{id}/keys` | sanctum+zone | ✅ | — | — | — |
-| 35 | DELETE | `/nodes/{id}/keys/{keyId}` | sanctum+zone | ✅ | — | — | — |
-| 36 | PATCH | `/nodes/{id}/keys/{keyId}/status` | sanctum+zone | ✅ | — | — | — |
-| 37 | POST | `/nodes/{id}/router-keys` | sanctum+zone | ✅ | ✅ | ✅ | ✅ |
-| 38 | GET | `/nodes/{id}/deviceinfo` | sanctum+zone | ✅ | — | — | — |
-| 39 | PUT/POST | `/nodes/deviceinfo` (batch) | sanctum+zone | ✅ | — | — | — |
-| 40 | PUT | `/nodes/{id}/deviceinfo` | sanctum+zone | ✅ | ✅ | — | — |
-| 41 | POST | `/nodes/{id}/operator` | sanctum+zone | ✅ | — | — | — |
-| 42 | GET | `/nodes/{id}/status` (v2) | sanctum+zone | — | — | — | — |
-| 43 | GET | `/zones/services/indexes` | sanctum+zone | ✅ | ✅* | ✅ | ✅ |
-| 44 | GET | `/zones/services` | sanctum+zone | ✅ | — | — | — |
-| 45 | GET | `/zones/services/public` | sanctum+zone | ✅ | — | — | — |
-| 46 | GET | `/zones/services/friends` | sanctum+zone | ✅ | — | — | — |
-| 47 | GET | `/zones/services/anonymous` | sanctum+zone | ✅ | — | — | — |
-| 48 | GET | `/zones/services/my` | sanctum+zone | ✅ | — | — | — |
-| 49 | GET | `/zones/services/{id}` | sanctum+zone | ✅ | — | — | — |
-| 50 | POST | `/zones/services/create` | sanctum+zone | ✅ | — | — | — |
-| 51 | PUT | `/zones/services/update/{id}` | sanctum+zone | ✅ | — | — | — |
-| 52 | DELETE | `/zones/services/delete/{id}` | sanctum+zone | ✅ | — | — | — |
-| 53 | POST | `/zones/services/{id}/share` | sanctum+zone | ✅ | — | — | — |
-| 54 | GET | `/route/data` | sanctum+zone | ✅ | — | — | — |
-| 55 | GET | `/route/active` | sanctum+zone | ✅ | — | — | — |
-| 56 | GET | `/route/connections/{type}` | sanctum+zone | ✅ | — | — | — |
-| 57 | GET | `/route/friend-nodes` | sanctum+zone | ✅ | — | — | — |
-| 58 | POST | `/route/connect/{nodeId}` | sanctum+zone | ✅ | — | — | — |
-| 59 | POST | `/route/accept-request/{id}` | sanctum+zone | ✅ | — | — | — |
-| 60 | POST | `/route/reject-request/{id}` | sanctum+zone | ✅ | — | — | — |
-| 61 | DELETE | `/route/{id}` | sanctum+zone | ✅ | — | — | — |
-| 62 | POST | `/route/send-request` | sanctum+zone | ✅ | — | — | — |
-| 63 | GET | `/route/node/{id}` | sanctum+zone | — | ✅* | ✅ | ✅ |
+| 17 | GET | `/user/tenants` | sanctum | ✅ | ✅ | ✅ | ✅ |
+| 18 | POST | `/user/tenants/switch` | sanctum | ✅ | ✅ | — | ✅ |
+| 19 | GET | `/nodes` | sanctum+tenant | ✅ | ✅ | ✅ | ✅ |
+| 20 | POST | `/nodes/create` | sanctum+tenant | ✅ | ✅ | — | — |
+| 21 | POST | `/nodes/quick-create` | sanctum+tenant | ✅ | — | — | — |
+| 22 | GET | `/nodes/{id}` | sanctum+tenant | ✅ | ✅ | ✅ | ✅ |
+| 23 | PATCH | `/nodes/{id}` | sanctum+tenant | ✅ | — | — | — |
+| 24 | DELETE | `/nodes/{id}` | sanctum+tenant | ✅ | — | — | — |
+| 25 | PATCH | `/nodes/{id}/status` | sanctum+tenant | ✅ | ✅ | ✅ | — |
+| 26 | GET | `/nodes/{id}/config` (v1) | sanctum+tenant | — | — | ✅ | — |
+| 27 | GET | `/nodes/{id}/configuration` (v2) | sanctum+tenant | ✅ | ✅* | — | ✅ |
+| 28 | PUT | `/nodes/{id}/config` | sanctum+tenant | ✅ | — | — | — |
+| 29 | GET | `/nodes/{id}/config-bundle` (v2) | sanctum+tenant | — | ✅ | ✅† | ✅ |
+| 30 | GET | `/nodes/{id}/keys` | sanctum+tenant | ✅ | ✅ | ✅ | ✅ |
+| 31 | POST | `/nodes/{id}/keys` (v2) | sanctum+tenant | — | — | ✅ | — |
+| 32 | POST | `/nodes/{id}/keys/generate` (v1) | sanctum+tenant | ✅ | — | — | — |
+| 33 | POST | `/nodes/{id}/keys/upload` (v1) | sanctum+tenant | ✅ | ✅ | — | — |
+| 34 | DELETE | `/nodes/{id}/keys` | sanctum+tenant | ✅ | — | — | — |
+| 35 | DELETE | `/nodes/{id}/keys/{keyId}` | sanctum+tenant | ✅ | — | — | — |
+| 36 | PATCH | `/nodes/{id}/keys/{keyId}/status` | sanctum+tenant | ✅ | — | — | — |
+| 37 | POST | `/nodes/{id}/router-keys` | sanctum+tenant | ✅ | ✅ | ✅ | ✅ |
+| 38 | GET | `/nodes/{id}/deviceinfo` | sanctum+tenant | ✅ | — | — | — |
+| 39 | POST | `/nodes/deviceinfo` (batch) | sanctum+tenant | ✅ | — | — | — |
+| 40 | PATCH | `/nodes/{id}/deviceinfo` | sanctum+tenant | ✅ | ✅ | — | — |
+| 41 | POST | `/nodes/{id}/operator` | sanctum+tenant | ✅ | — | — | — |
+| 42 | GET | `/nodes/{id}/status` (v2) | sanctum+tenant | — | — | — | — |
+| 43 | GET | `/services/indexes` | sanctum+tenant | ✅ | ✅* | ✅ | ✅ |
+| 44 | — | （原 `GET /zones/services` 裸列表）**back 未注册裸 `/services`**，无对应端点 | — | — | — | — | — |
+| 45 | GET | `/services/my` | sanctum+tenant | ✅ | — | — | — |
+| 46 | GET | `/services/public` | sanctum+tenant | ✅ | — | — | — |
+| 47 | GET | `/services/friends` | sanctum+tenant | ✅ | — | — | — |
+| 48 | GET | `/services/anonymous` | sanctum+tenant | ✅ | — | — | — |
+| 49 | GET | `/services/show/{id}` | sanctum+tenant | ✅ | — | — | — |
+| 50 | POST | `/services/create` | sanctum+tenant | ✅ | — | — | — |
+| 51 | PUT | `/services/update/{id}` | sanctum+tenant | ✅ | — | — | — |
+| 52 | DELETE | `/services/delete/{id}` | sanctum+tenant | ✅ | — | — | — |
+| 53 | POST | `/services/share/{id}` | sanctum+tenant | ✅ | — | — | — |
+| 54 | GET | `/route/data` | sanctum+tenant | ✅ | — | — | — |
+| 55 | GET | `/route/active` | sanctum+tenant | ✅ | — | — | — |
+| 56 | GET | `/route/connections/{type}` | sanctum+tenant | ✅ | — | — | — |
+| 57 | GET | `/route/friend-nodes` | sanctum+tenant | ✅ | — | — | — |
+| 58 | POST | `/route/connect/{nodeId}` | sanctum+tenant | ✅ | — | — | — |
+| 59 | POST | `/route/accept-request/{id}` | sanctum+tenant | ✅ | — | — | — |
+| 60 | POST | `/route/reject-request/{id}` | sanctum+tenant | ✅ | — | — | — |
+| 61 | DELETE | `/route/{id}` | sanctum+tenant | ✅ | — | — | — |
+| 62 | POST | `/route/send-request` | sanctum+tenant | ✅ | — | — | — |
+| 63 | GET | `/route/node/{id}` | sanctum+tenant | — | ✅* | ✅ | ✅ |
 | 64 | POST | `/monitor/heartbeat` | hmac | — | ✅ | ✅ | — |
 | 65 | PATCH | `/monitor/commands/{id}/result` | hmac | — | ✅ | — | — |
-| 66+ | | 社交/通知/IP池等 | sanctum+zone | ✅ | — | — | — |
+| 66+ | | 社交/通知/IP池等 | sanctum+tenant | ✅ | — | — | — |
 
 > `✅*` = 仅作为 config-bundle 失败的降级路径
 > `✅†` = lua 已实现 config-bundle 调用（强制 v2 路径），含 404 时 fallback 到分散请求
