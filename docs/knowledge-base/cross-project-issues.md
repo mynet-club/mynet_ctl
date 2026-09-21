@@ -47,6 +47,45 @@
 
 ---
 
+### 🟠 P1 — 控制面落地时发现的阻断项（2026-09-22 记录，发现即记）
+
+> 来源：控制面任务链第 4/5 单元落地过程中撞出来的。**记录在前、处置在后**，
+> 避免"当场只修了主问题、周边缺陷随上下文一起丢掉"。
+
+#### CPI-1. 节点启停/重启功能整体不可用（命名空间漂移残留）
+- **ID**：CPI-1
+- **位置**：[mynet_back/app/Modules/Monitor/Domain/Services/NodeOperatorDomainService.php:5](../../../mynet_back-integration/app/Modules/Monitor/Domain/Services/NodeOperatorDomainService.php)
+- **现状**：`use App\Models\{MonitorRtCmd, Node, User};` —— 该命名空间下只有
+  `AuditLog / DatabaseNotification / Tenant / TenantUser / User`，**没有 `Node`、没有 `MonitorRtCmd`**
+- **证据**：实测调用 `NodeOperatorDomainService::executeAction()` 直接抛
+  `Error: Class "App\Models\Node" not found`（同文件 :61）→ 后台"启动/停止/重启节点"三个动作全部不可用
+- **修复动作**：改用真实位置 `App\Modules\VPN\Models\Node`、`App\Modules\Monitor\Models\MonitorRtCmd`
+- **归属**：属 [mynet-back-namespace-drift.md](mynet-back-namespace-drift.md) 那一类的**残留项**（T42 未清干净）
+- **优先级**：高（用户可见功能直接 500）
+
+#### CPI-2. back 下发的重启命令名 agent 不认识
+- **ID**：CPI-2
+- **位置**：`NodeOperatorDomainService::ACTION_COMMAND_MAP`（`restart => 'mynet.reboot'`）、
+  [NodeRebootService](../../../mynet_back-integration/app/Modules/VPN/Services/NodeRebootService.php)（`'command' => 'mynet.reboot'`）
+- **现状**：back 用 `mynet.reboot`，而 agent 的 `conf/command.{linux,openwrt}.json` 里只有
+  **`mynet.restart`**，没有 `mynet.reboot`
+- **影响**：agent 的 `CommandExecutor` 严格按 conf 匹配，未定义即返回"未识别的命令" →
+  **"重启节点"这个动作永远不生效**（且只在节点日志里留一行错误）
+- **修复动作**：back 侧统一改为 `mynet.restart`（或 agent conf 补别名，取其一，不要两套）
+- **优先级**：高（功能静默失效，最难排查）
+
+#### CPI-3. `App\Services\NodeRebootService` 三处引用不存在的类
+- **ID**：CPI-3
+- **位置**：[RouteRequestDomainService.php:513](../../../mynet_back-integration/app/Modules/VPN/Domain/Services/RouteRequestDomainService.php)、
+  [NodeDomainService.php:219](../../../mynet_back-integration/app/Modules/VPN/Domain/Services/NodeDomainService.php)、
+  [SocialDomainService.php:226](../../../mynet_back-integration/app/Modules/Social/Domain/Services/SocialDomainService.php)
+- **现状**：`app(\App\Services\NodeRebootService::class)`，真类是
+  `App\Modules\VPN\Services\NodeRebootService`
+- **影响**：路由请求审批、节点域、社交域里任何走到"需要重启节点"的分支都会 fatal
+- **优先级**：高（同一类漂移，一起清）
+
+---
+
 ## 📐 架构设计决策（非 bug，易被误判）
 
 #### mynet_gui 生产 VITE_API_BASE_URL=https://my.mynet.club（同源反代）
@@ -70,6 +109,63 @@
 #### 7. mynet_client 注释残留 openwrt 引用
 - **状态**：✅ 已修复（2026-05 审计中清理）
 - **位置**：`src/service/manager.js`、`src/service/platform/darwin.js`、`pack.sh`、`src/service/platform/index.js`
+
+---
+
+### 🟡 P2 — 控制面相关（2026-09-22 记录）
+
+#### CPI-4. back 的命令词汇与 agent 的 conf 大面积不一致
+- **ID**：CPI-4
+- **现状**：两侧词汇表对不上（agent 侧真值 = `conf/command.{linux,openwrt}.json`）
+  | back 声明/会下发 | agent conf 里有吗 |
+  |---|---|
+  | `mynet.node.update` | ✅ |
+  | `mynet.start` / `mynet.stop` | ✅ |
+  | `plugin.proxy.start` / `plugin.proxy.stop` | ✅ |
+  | **`mynet.reboot`** | ❌ 只有 `mynet.restart`（见 CPI-2） |
+  | `mynet.boot` / `mynet.shutdown` | ❌ 应是 `mynet.start` / `mynet.stop` |
+  | `mynet.regenConfig` / `mynet.reloadConfigs` | ❌ 无（重载配置由 `mynet.node.update` 链承担） |
+  | `plugin.proxy.reload` | ❌ 只有 `plugin.proxy.restart` |
+  | `upload-log` | ❌ |
+- **位置**：back 侧词汇散在 [MonitorRtCmd](../../../mynet_back-integration/app/Modules/Monitor/Models/MonitorRtCmd.php)（`getCommandName` / `getAvailableCommands`）、`NodeOperatorDomainService`、`NodeRebootService`
+- **影响**：后台展示的"可选命令"与实际能生效的命令不是同一套；点了不生效且无提示
+- **修复动作**：以 agent 的 conf 为唯一真值来源，让 back 的命令白名单从这里派生（或至少做一次人工对齐）；**不要两边各维护一份**
+- **优先级**：中高（CPI-2 是它的一个具体后果）
+
+#### CPI-5. 命令输出没有回传给 back
+- **ID**：CPI-5
+- **位置**：[command/executor.go](../../../mynet_agent-integration/internal/daemon/command/executor.go)
+- **现状**：`Execute()` 成功时把 `result.Result` 硬写成 `"命令执行成功"`；`executeFromMapping()`
+  抓到的 stdout 只进本地日志，`CommandResult` 拿不到
+- **影响**：back 侧命令记录里永远只有一句"命令执行成功"，看不到真实输出；
+  `upload-log` 这类以输出为结果的功能会失去意义
+- **证据**：真环境端到端实测，back 落库 `result = "命令执行成功"`，而节点日志里
+  `[CommandMapping] 执行成功: e2e-ok 6329822596533071`（真实 stdout 只在本地）
+- **优先级**：中
+
+#### CPI-6. 节点面路由的 `throttle:api` 按 IP 限流（待确认）
+- **ID**：CPI-6
+- **位置**：[VPN/Routes/api.php](../../../mynet_back-integration/app/Modules/VPN/Routes/api.php) monitor 组
+- **现状**：摘 `auth:sanctum` 时保留了 `throttle:api`；Sanctum 下限流键是用户，现在没有用户，
+  退化为按 IP
+- **风险（待验证）**：NAT 后多个节点共用出口 IP 时可能互相挤占配额；默认 60/min 对
+  5 分钟一次的心跳尚有余量，但节点数多、或命令轮询密集时需要重新评估
+- **优先级**：中（需实测确认实际键与阈值后再定）
+
+#### CPI-7. 命令 ID 经 float64 往返
+- **ID**：CPI-7
+- **现状**：agent 的 `monitor.Command.ID` 是 `interface{}`，JSON 数字解码成 float64；
+  `Execute()` 再 `strconv.FormatInt(int64(v))` 转回字符串
+- **当前安全性**：全局 ID 上限 `2^53-1 = 9007199254740991`，**恰好是 float64 精确整数上限**，
+  所以当前不会丢精度（实测回调 ID 正确）
+- **风险**：一旦 ID 生成范围越过 2^53 就会静默串号。建议 `Command.ID` 改 `json.Number` 或 string
+- **优先级**：低（记在案，避免以后扩大 ID 范围时踩）
+
+#### CPI-8. 心跳仍未收敛到网关中继
+- **ID**：CPI-8
+- **现状**：控制面（事件/取命令/回报）已全部经网关中继，但**心跳本身仍直连 back**
+- **影响**：back 节点接口还不能真正收内网（spec/control-plane.md §6.3 第 3/4 步的剩余部分）
+- **优先级**：中（gateway 已具备能力，缺的是切换与验证）
 
 ---
 
@@ -103,6 +199,17 @@
 | 2026-05 | mynet_lua 下载 URL `download.mynet.club` → `ctl.mynet.club/d` | 本次治理 |
 | 2026-05 | mynet_back `.env.production` SESSION_DOMAIN/SANCTUM 域名 dsplat → mynet.club | 本次治理 |
 | 2026-05 | mynet_back `.env.production` VITE_REVERB_HOST 一致性修正 | 本次治理 |
+| 2026-09-22 | back: monitor 路由被模块级 `auth:sanctum` 覆盖 → 节点无 token 全 401（含心跳） | `836adc52` |
+| 2026-09-22 | back: 请求体 gzip 从未被解压 → 真实心跳（必然 >1KB）验证阶段 422 | `836adc52` |
+| 2026-09-22 | back: `Services/NodeMonitorDomainService` 空壳遮蔽 `Domain/Services/` 真实现 → 带 node_monitor 的心跳必 500 | `836adc52` |
+| 2026-09-22 | back: 节点通道无租户上下文，`TenantScope` fail-closed（`WHERE 1=0`）→ 节点状态永不落库 | `8c40ff72` |
+| 2026-09-22 | back: `node_monitor_snapshots` 同秒唯一键 + `create()` → 第二次心跳回滚整事务 | `8c40ff72` |
+| 2026-09-22 | back: `monitor_rt_cmds` PK 重命名残留（`where('id')` / `->id` / `'creator'` / `'id'=>uuid`）→ 心跳/回调/指令历史全 500、配置变更命令静默丢失 | `c82a30f7` |
+| 2026-09-22 | back: `NodeConfigService` 的 `params` 双重编码 → 节点收到字符串而非对象 | `c82a30f7` |
+| 2026-09-22 | agent: 网关中继可被节点用 `X-Node-Id` 头冒充别的节点 | `b7aceeb` |
+| 2026-09-22 | agent: gatewayclient 事件合并竞态 → 并发时事件永久丢失 | `d495bd8` |
+| 2026-09-22 | agent: gatewayclient 取消 ctx 不生效 → SIGTERM 后卡满 180s 读超时 | `d495bd8` |
+| 2026-09-22 | 响应性联动断裂（事件系统删除后节点上线不再触发对端 route.refresh） | `8c40ff72` |
 
 ---
 
@@ -111,8 +218,17 @@
 ```
 发现跨项目偏差 / 规范冲突
   ↓
-1. 在「待修复」加条目（背景 / 影响 / 位置 / 修复建议 / 优先级）
-2. 链接相关 spec / 代码位置
-3. 修复完成后移到「已修复」表
+0. ★ 先记录，再处理。发现当场就写进本文件「待修复」——不要先动手修、
+   更不要把没修的留在脑子里或对话里（上下文一丢就没了）
+1. 在「待修复」加条目：ID / 位置 / 现状 / 证据 / 影响 / 修复建议 / 优先级
+2. 链接相关 spec / 代码位置；同类问题交叉引用已有文档（如
+   mynet-back-namespace-drift.md），不要重复记账
+3. 修复完成后移到「已修复」表，commit message 里带上条目 ID
 4. 必要时更新 spec/* 或 conventions.md
 ```
+
+**ID 约定**：`CPI-<n>`（Cross-Project Issue 序号）。新建条目取当前最大值 +1，
+只在"待修复 / 暂缓"里分配；修好后 ID 随条目一起进「已修复」表，便于 commit 引用。
+
+**反例（应当避免）**：先在代码里把主问题修掉，顺手发现的周边缺陷只在对话里说一句 ——
+下一轮换个上下文就找不回来了。本轮（2026-09-22）那些 CPI 条目就是在补这个课。
