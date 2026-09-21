@@ -59,6 +59,30 @@ flowchart TB
 **归属**：`mynet_back`
 **职责**：好友关系、连接生命周期、密钥管理、授权/撤销——完全不含驱动术语。
 
+### 1.0 身份模型：back 是 User 逻辑，不是 Operator 逻辑 ⚠️
+
+框架有两套身份，**不可混用**：
+
+| 身份 | 语义 | 关联 | 典型中间件 |
+|---|---|---|---|
+| **`User`** | 租户用户 | `tenant_users` | `auth:sanctum`、`tenant.ensure` |
+| **`Operator`** | 平台运营，可跨租户 | `operator_tenants` | `tenant.permission`、`VerifyOperatorTenant` |
+
+`CheckPermission`（别名 `tenant.permission`）的文档标题即「Operator 直连团队模式」，
+**平台 admin 域仅 `scope=platform` 的 Operator 可进**，普通 User 会被 403。
+
+**back 全程是 User 逻辑**：节点/连接/密钥挂在 `users.user_id`；
+后台管理员是带 `role`（`super_admin`/`admin`/`tenant_admin`）的 User，不是平台运营；
+全仓不引用 `Operator`。
+
+已实测确认边界成立：`tenant.permission` 门禁 **190 条**已挂载路由，**全部属 vendor 模块**，
+back 自有 **0 条**。`bootstrap/app.php` 中 `tenant.permission` / `rbac.permission` / `mcp.auth`
+三个别名是为**框架 vendor 模块**注册的，必须保留，**但不得挂到 back 自有路由上**。
+
+> 对本设计的影响：L2～L7 的一切「授权」都基于 `Connection`/`ConnectionGrant` 业务授权，
+> **不依赖**框架的 Operator/RBAC 门禁。不要因为 scrm-platform 在其模块路由上使用
+> `VerifyOperatorTenant` 就照搬——scrm 是面向运营的平台，back 不是。
+
 ### 1.1 核心对象
 
 ```
