@@ -290,3 +290,118 @@
 **修复路线（第 5 步验收）应相应扩展**：除 `php artisan route:list` 出现 VPN 模块路由外，
 还需用 `composer dump-autoload` + 全量类加载探测（或 `class_exists` 扫描 A~F 全集）
 来确认无遗漏 —— **仅靠 `use` 层扫描不足以下结论**。
+
+---
+
+## 9. 参考范式：scrm-platform（同框架创建的项目，实测）
+
+> 依据：`/Users/arthur/Devel/WorkSpaceAI/framework/scrm-platform`（用户指定的参考项目）
+> 同一套框架（`dsplat/multi-tenant-saas` + 各 module 包，同样 `dev-main`）
+
+### 9.1 参考项目的做法（520 个文件，路径↔namespace **0 错位**）
+
+| 维度 | 参考项目（scrm-platform） | mynet_back（现状） |
+|---|---|---|
+| **composer psr-4** | 仅 `App\ => app/`（+ Database 映射） | `App\ => app/` **+ `Modules\ => app/Modules/`**（双根） |
+| **模块类 namespace** | `App\Modules\X\...`（443 个文件，全部如此） | 混杂：多数 `Modules\VPN\...`，少数错写 `App\Models` |
+| **文件位置** | `app/Modules/X/...`（与 namespace 严格镜像） | 同为 `app/Modules/X/...`，但 namespace 不统一 |
+| **`use` 写法** | `use App\Modules\X\...`（完整、唯一） | 混杂：`App\Models\X` / `Modules\VPN\X` 并存 |
+| **框架类引用** | 直接 `use MultiTenantSaas\...`（vendor 真实 ns），**零改写、零别名桥** | 有 `App\Models\Tenant extends BaseTenant` 这类别名，以及指向不存在 ns 的 `use` |
+| **模块注册** | `App\Providers\ModuleServiceProvider` **约定式扫描** `app/Modules/*/`，拼 `'App\Modules\{Name}\{Name}ServiceProvider'` | `App\Services\AppModuleRegistry extends MultiTenantSaas\Services\ModuleRegistry`（**该 ns 在 vendor 中不存在**）+ `module.json` 清单 |
+| **class_alias** | 无（grep 零命中） | 无（同） |
+| **业务模块目录** | `app/Modules/<模块>/{Models,Http/Controllers,Services,Routes,Database/migrations}` | `app/Modules/<模块>/{Models,Services,Domain,Controllers,...}`（形状相近） |
+
+### 9.2 根因诊断：**双 PSR-4 根**
+
+back 的 `Modules\ => app/Modules/` 是**混乱的源头**——它让**同一份文件同时拥有两个合法 namespace**：
+
+```
+app/Modules/VPN/Models/Node.php
+  ├─ 可合法声明为  Modules\VPN\Models      （靠 Modules\ => app/Modules/）
+  └─ 可合法声明为  App\Modules\VPN\Models  （靠 App\ => app/）
+  └─ 甚至可合法声明为 App\Models\...        ❌ 不行（路径不匹配）
+```
+
+参考项目**刻意只留一个根**（`App\`），因此 namespace **唯一确定**，写错就立刻 PSR-4 不自洽。
+
+### 9.3 目标范式（本次决策：**改 namespace，不挪文件**）
+
+```text
+composer psr-4  只保留  App\ => app/        ← 删掉 Modules\ => app/Modules/
+
+文件            app/Modules/VPN/Models/Node.php
+namespace       App\Modules\VPN\Models      ← 路径完整映射
+use             App\Modules\VPN\Models\Node
+
+框架类          直接 use MultiTenantSaas\...（不改写、不建别名桥）
+```
+
+这一条规则**同时解决 A 类与 B 类**：
+
+| 类 | 现状 | 目标 |
+|---|---|---|
+| A 漂移 | 文件 `Modules\VPN\Models`，`use App\Models\SystemEvent` | 文件 → `App\Modules\VPN\Models`；`use` → `App\Modules\VPN\Models\SystemEvent` |
+| B 错位 | 文件声明 `App\Models`，住在 `app/Modules/Monitor/Models/` | 文件 → `App\Modules\Monitor\Models` |
+
+**这是机械改写**（`Modules\` → `App\Modules\` 前缀，以及错写 `App\Models\X` → `App\Modules\<模块>\Models\X`），不是重新架构。
+
+> ⚠️ 参考项目**不用 ModuleRegistry**，而是约定式扫描。back 若要对齐范式，模块注册机制也应改为
+> `App\Providers\ModuleServiceProvider`（扫描 `app/Modules/*/` → 拼 `App\Modules\{Name}\{Name}ServiceProvider`）。
+> 这是**架构变更**，与命名空间改写可分两步走；但**至少要先修掉 `AppModuleRegistry` 引用的不存在 ns**，
+> 否则模块发现永远不工作。
+
+### 9.4 ⚠️ C3 严重性修正 + 一个地雷
+
+实测：三个 handler 文件的 namespace 是 **`Modules\VPN\Handlers\Event\Notification`**，
+而 `config/events.php` 写的是 **`App\Handlers\Event\Notification\...`**（错的）。
+
+`EventManager.php:181` 有 `class_exists($handlerClass)` 守卫 → 解析失败时**记 warning 并 continue**，
+**不是 fatal**。故现状是：**通知功能静默无效**，不是应用崩溃。
+
+**但这里埋着一个地雷**：
+
+```
+现状：config 写错 FQCN → class_exists=false → 跳过（静默无效，不崩）
+若只改 config 的 FQCN → class_exists=true → 自动加载 handler 文件
+                     → 文件里 extends App\Handlers\BaseHandler（不存在）
+                     → 💥 当场 fatal
+```
+
+**只改一半，会把「静默无效」变成「崩溃」。** 做命名空间机械改写时，
+必须**同时**处理：`BaseHandler` 是否存在 / 3 个 `Notification` 类是否存在 /
+handler 的 `extends` 指向 / config 的 FQCN。**四者要一次改齐。**
+
+同时注意：即使 `BaseHandler` 等补齐，`use App\Models\Route`（handler 里的）也指向漂移位置，
+同属 A 类，机械改写时须一并覆盖。
+
+### 9.5 由此确定的修复路线（修订）
+
+```
+第 0 步  修 AppModuleRegistry 的 ns 引用（或按参考范式换成约定式 ModuleServiceProvider）
+         → 这是「模块能被发现」的前提，不做则后面全部无法验证
+
+第 1 步  C 类真缺失（10 个）：按参考范式分类处理
+         - 框架类（Permission/Role/SystemSetting）→ use 改为 MultiTenantSaas\Modules\... 真实 ns
+         - 改名类（Gnb/VpnConfigDomainService）→ 人工确认语义后改 use
+         - 确实不存在（BaseHandler/3 Notifications/RolePermission）→ 见 §9.4，四件事一次改齐
+
+第 2 步  A 类（39 类 / 89 处）+ B 类（22 文件）：机械改写到 App\Modules\X\...
+         可脚本化，但**每条改完须 class_exists 验证**
+
+第 3 步  composer.json 删掉 Modules\ => app/Modules/ → composer dump-autoload
+
+第 4 步  内联 FQCN（D 类约 19 处）+ 裸 extends（E 类 2 处）+ 大小写（F 类 9+）
+
+第 5 步  验收：php artisan route:list 出现 VPN 模块路由（当前 0 条）
+         + class_exists 扫描 A~F 全集，无遗漏
+```
+
+---
+
+## 10. 等待决策
+
+- (a) **v3 迁移状态**：是否在进行中？（决定我是「等你」还是「按证据推进」）
+- (b) ~~B 类按包选 (a) 还是 (b)~~ → **已由参考项目确定**：改 namespace 为 `App\Modules\X\...`，不挪文件
+- (c) **模块注册机制**：照参考范式换成 `App\Providers\ModuleServiceProvider` 约定扫描，
+       还是仅修 `AppModuleRegistry` 的 ns 引用让它能用？（前者更彻底，后者更小步）
+- (d) **C3 的 5 个不存在类**：新建 / 删调用方 / 暂不处理（现状是静默无效，不阻塞启动）
