@@ -63,17 +63,6 @@
 - **归属**：属 [mynet-back-namespace-drift.md](mynet-back-namespace-drift.md) 那一类的**残留项**（T42 未清干净）
 - **优先级**：高（用户可见功能直接 500）
 
-#### CPI-2. back 下发的重启命令名 agent 不认识
-- **ID**：CPI-2
-- **位置**：`NodeOperatorDomainService::ACTION_COMMAND_MAP`（`restart => 'mynet.reboot'`）、
-  [NodeRebootService](../../../mynet_back-integration/app/Modules/VPN/Services/NodeRebootService.php)（`'command' => 'mynet.reboot'`）
-- **现状**：back 用 `mynet.reboot`，而 agent 的 `conf/command.{linux,openwrt}.json` 里只有
-  **`mynet.restart`**，没有 `mynet.reboot`
-- **影响**：agent 的 `CommandExecutor` 严格按 conf 匹配，未定义即返回"未识别的命令" →
-  **"重启节点"这个动作永远不生效**（且只在节点日志里留一行错误）
-- **修复动作**：back 侧统一改为 `mynet.restart`（或 agent conf 补别名，取其一，不要两套）
-- **优先级**：高（功能静默失效，最难排查）
-
 #### CPI-3. `App\Services\NodeRebootService` 三处引用不存在的类
 - **ID**：CPI-3
 - **位置**：[RouteRequestDomainService.php:513](../../../mynet_back-integration/app/Modules/VPN/Domain/Services/RouteRequestDomainService.php)、
@@ -113,24 +102,6 @@
 ---
 
 ### 🟡 P2 — 控制面相关（2026-09-22 记录）
-
-#### CPI-4. back 的命令词汇与 agent 的 conf 大面积不一致
-- **ID**：CPI-4
-- **现状**：两侧词汇表对不上（agent 侧真值 = `conf/command.{linux,openwrt}.json`）
-  | back 声明/会下发 | agent conf 里有吗 |
-  |---|---|
-  | `mynet.node.update` | ✅ |
-  | `mynet.start` / `mynet.stop` | ✅ |
-  | `plugin.proxy.start` / `plugin.proxy.stop` | ✅ |
-  | **`mynet.reboot`** | ❌ 只有 `mynet.restart`（见 CPI-2） |
-  | `mynet.boot` / `mynet.shutdown` | ❌ 应是 `mynet.start` / `mynet.stop` |
-  | `mynet.regenConfig` / `mynet.reloadConfigs` | ❌ 无（重载配置由 `mynet.node.update` 链承担） |
-  | `plugin.proxy.reload` | ❌ 只有 `plugin.proxy.restart` |
-  | `upload-log` | ❌ |
-- **位置**：back 侧词汇散在 [MonitorRtCmd](../../../mynet_back-integration/app/Modules/Monitor/Models/MonitorRtCmd.php)（`getCommandName` / `getAvailableCommands`）、`NodeOperatorDomainService`、`NodeRebootService`
-- **影响**：后台展示的"可选命令"与实际能生效的命令不是同一套；点了不生效且无提示
-- **修复动作**：以 agent 的 conf 为唯一真值来源，让 back 的命令白名单从这里派生（或至少做一次人工对齐）；**不要两边各维护一份**
-- **优先级**：中高（CPI-2 是它的一个具体后果）
 
 #### CPI-5. 命令输出没有回传给 back
 - **ID**：CPI-5
@@ -210,6 +181,10 @@
 | 2026-09-22 | agent: gatewayclient 事件合并竞态 → 并发时事件永久丢失 | `d495bd8` |
 | 2026-09-22 | agent: gatewayclient 取消 ctx 不生效 → SIGTERM 后卡满 180s 读超时 | `d495bd8` |
 | 2026-09-22 | 响应性联动断裂（事件系统删除后节点上线不再触发对端 route.refresh） | `8c40ff72` |
+| 2026-09-22 | **CPI-1** 节点启停/重启后台功能整体不可用（`App\Models\Node` 不存在） | `c10aaa45` |
+| 2026-09-22 | **CPI-3** `App\Services\NodeRebootService` 三处悬空引用 | `c10aaa45` |
+| 2026-09-22 | **CPI-2** back 下发 `mynet.reboot`、agent 只有 `mynet.restart` → 重启静默失效 | `24570da3` |
+| 2026-09-22 | **CPI-4** back 命令词汇整体漂移（mynet.boot/shutdown/regenConfig/reloadConfigs/plugin.proxy.reload/upload-log） | `24570da3` |
 
 ---
 
@@ -232,3 +207,8 @@
 
 **反例（应当避免）**：先在代码里把主问题修掉，顺手发现的周边缺陷只在对话里说一句 ——
 下一轮换个上下文就找不回来了。本轮（2026-09-22）那些 CPI 条目就是在补这个课。
+
+**自动校验（已有）**：`scripts/check-command-vocabulary.php` —— 比对 back 声明的远程命令
+与 agent `conf/command.*.json` 的真值，back 单方面声明的命令直接以退出码 1 阻断。
+这是 CPI-2 / CPI-4 的防复发手段：命令名写错的后果是"节点侧静默失效、back 侧看不出来"，
+只靠人眼迟早再漂一次。改了任一侧命令词汇就顺手跑一遍。
