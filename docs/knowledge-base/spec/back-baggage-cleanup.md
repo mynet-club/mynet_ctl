@@ -1,7 +1,7 @@
 # SPEC: mynet_back 历史包袱清理
 
 > 更新：2026-09-21 | 适用：`mynet_back`
-> 状态：**第一、二、三阶段已完成**；第四阶段（化妆性清理）待做
+> 状态：**系列任务已完成**（含 tests/Schema 生成器）；剩余项均需用户决策
 > 依据：本文件全部结论均来自实测（`ClassLoader::findFile` / `information_schema` / PHP fatal），非推断
 
 ---
@@ -11,12 +11,13 @@
 | 阶段 | 状态 | 关键结果 | 提交 |
 |---|---|---|---|
 | 一 · 打通关键路径 | ✅ | `MonitorRtCmd` 可加载；心跳链 6 个类可实例化；外键违规 0 | `1a550529` |
-| 二 · 消除不可解析引用 | ✅ | **31 → 4**；新建 `RolePermission`/`SocialConnectionId`；修 13 处漂移；删 3 个死文件 | `1c87dc9a` |
-| 三 · events 系统 | ✅ | **17 个 handler 全部静默失效 → 11 个可解析且可实例化**；删 2 个无实现的 event 定义 | `3674b1a9` |
-| 四 · 化妆性清理 | ✅ 3/4 | 删 19 个死 import；发现器改名 `ModuleDiscoveryServiceProvider`；遗留 dump 归档至 `docs/legacy/` | `c79f1ac8` |
-| — `tests/Schema` 重构 | ⬜ | 24 个模块描述的是**第三套 schema**，与 dump 和真实库都不符；改为从真实库导出 | 另立任务 |
+| T40 · Monitor 缺表 | ✅ | **8 个死文件删除**（不建表——无活消费者） | `c0ac992d` |
+| 二 · 消除不可解析引用 | ✅ | **31 → 4**；新建 `RolePermission`/`SocialConnectionId`；修 13 处漂移 | `1c87dc9a` |
+| 三 · events 系统 | ✅ | **17 个 handler 全部静默失效 → 11 个可解析且可实例化** | `3674b1a9` |
+| 四 · 化妆性清理 | ✅ | 删 19 个死 import；发现器改名；遗留 dump 归档 | `c79f1ac8` |
+| 五 · tests/Schema | ✅ | 生成器 + VpnModule 从真实库重导（15 表，SQLite 15/15） | `92b6c53d` |
 
-**当前不可解析引用仅 4 个**，全部是刻意保留的 Notification 地雷（见 §2.3）。
+**唯一遗留的不可解析引用 = 4 个刻意保留的 Notification 地雷**（见 §2.3）。
 
 ### 已完成的两项"别建表，该删代码"
 
