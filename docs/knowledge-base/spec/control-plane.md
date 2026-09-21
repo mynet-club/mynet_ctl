@@ -2,7 +2,7 @@
 
 > 更新：2026-09-21
 > 适用：`mynet_agent`（`mynetd` + `mynet_gateway`）、`mynet_back`、`mynet_gui` / `mynet_ui`
-> 依赖：[`driver-abstraction.md`](driver-abstraction.md)、[`local-api.md`](local-api.md)、[`unified-platform-architecture.md`](unified-platform-architecture.md)
+> 依赖：[`node-keying.md`](node-keying.md)、[`driver-abstraction.md`](driver-abstraction.md)、[`local-api.md`](local-api.md)、[`unified-platform-architecture.md`](unified-platform-architecture.md)
 > 状态：**设计稿**（gateway 未实现；本文档是实现前的契约 SSOT）
 
 ---
@@ -54,7 +54,7 @@ mynetd ═══════ WebSocket ═══════> gateway ── 内
 
 | 面 | 面向 | 接口 | 行为 |
 |----|------|------|------|
-| **对外** | mynetd | `WS /v1/node/connect` | Ed25519 challenge-response 握手；建立长连接 |
+| **对外** | mynetd | `WS /v1/node/connect` | **Ed25519 challenge-response** 握手（目标方案，见 [`node-keying.md`](node-keying.md) §5）；建立长连接 |
 | **对内** | mynet_back | `POST /v1/notify` | 命令入队 / generation 变更时调用；向目标节点推通知 |
 | **查询** | mynet_back | `GET /v1/presence/{node_id}` | 节点是否在线（连接注册表） |
 | **中继** | mynetd ↔ back | WS ↔ 内网 HTTP | mynetd 发 `fetch` → gateway 转 back → 回传响应；**不解析载荷** |
@@ -63,15 +63,21 @@ mynetd ═══════ WebSocket ═══════> gateway ── 内
 
 **握手（对内 gateway 侧）**
 
+> ⚠️ **不要照搬心跳现有的 HMAC 方案**。心跳现状是 `HMAC-SHA256(公钥, METHOD|path|ts|body)`
+> ——公钥被当共享秘密用，且 back 侧尚未校验，强度不足（详见 [`node-keying.md`](node-keying.md) §4）。
+> gateway 作为唯一鉴权边界，采用**真非对称**方案：
+
 ```
-C: WS /v1/node/connect?node_id=<id>&ts=<unix>&nonce=<hex>&sig=<hex>
-   sig = Ed25519(private_key, "mynet-gateway-v1\n{node_id}\n{ts}\n{nonce}")
+G: -> {"type":"challenge","nonce":"<hex32>","ts":<unix>}
+C: -> sig = ed25519_sign(challenge_bytes, 本节点私钥)     // GNB 格式 ed25519
+   WS /v1/node/connect?node_id=<id>&ts=<unix>&nonce=<hex>&sig=<hex>
+G: 校验 ed25519_verify(sig, challenge_bytes, node_keys.public_key)
 S: {"ok":true,"data":{"session_id":"...","server_time":...}}
-   或 {"ok":false,"error":{"code":"unauthorized|stale_ts|bad_sig",...}}
+   或 {"ok":false,"error":{"code":"unauthorized|stale_ts|bad_sig|replayed",...}}
 ```
 
-- `ts` 偏差 > 300s → `stale_ts`（防重放）
-- `nonce` 在 gateway 侧短时去重（如 5 分钟窗口）
+- 私钥永不出节点；公钥可公开存储，泄露不影响认证强度
+- `ts` 偏差 > 300s → `stale_ts`（防重放）；`nonce` 在 gateway 侧短时去重（如 5 分钟窗口）
 - 节点公钥来源：back 下发的 `node_keys.public_key`，gateway 启动/定期同步到内存
 
 **推送（gateway → mynetd）**
@@ -273,18 +279,19 @@ GET /api/v1/relay?path=<back-api-path>
 
 | # | 缺口 | 影响 |
 |---|------|------|
-| 1 | **鉴权是空壳**：`NodeHeartbeatAuthMiddleware` 只有 `// TODO: Implement Ed25519 signature verification`，直接放行 | 节点通道无认证；agent 已签名，back 未验 |
+| 1 | **鉴权是空壳**：`NodeHeartbeatAuthMiddleware` 只有 `// TODO: Implement Ed25519 signature verification`，直接放行 | 节点通道无认证。⚠️ 补注：agent 实际签的是 **HMAC-SHA256**（密钥 = GNB 派生的公钥），**不是** ed25519 签名——见 [`node-keying.md`](node-keying.md) §4 |
 | 2 | **响应性联动断了**：事件系统删除后，节点上线不再触发对端 `route.refresh` | 拓扑变化不能自愈 |
 | 3 | 命令时延最坏 5 分钟 | 配置变更/紧急撤销不及时 |
 
 ### 6.3 迁移路径
 
-1. **补心跳验签**（不依赖 gateway）：back 实现 Ed25519 验签，读 `node_keys.public_key`；按 `vpn_type` 区分算法（GNB=Ed25519，WireGuard=X25519）
+1. **补心跳验签**（不依赖 gateway）：back 按**现状方案**实现——`HMAC-SHA256(node_keys.public_key, METHOD|path|timestamp|body)` → base64，与 `X-Node-Signature` 比对（格式见 [`plugins.md`](plugins.md)）。⚠️ 此方案强度有限（公钥被当共享秘密用），只作为**堵洞的过渡**，不值得强化
 2. **补响应性联动**：`processMonitorData` 检测状态跃迁 → 为对端入队 `route.refresh`（先在 back 侧闭环，不依赖 gateway）
-3. **gateway 上线**：心跳改经 gateway 中继（§2.2）；通知把命令时延从「最坏 5 分钟」降到秒级
+3. **gateway 上线**：心跳改经 gateway 中继（§2.2）；握手改用 **Ed25519 challenge-response**（[`node-keying.md`](node-keying.md) §5），把控制面鉴权换成真非对称；通知把命令时延从「最坏 5 分钟」降到秒级
 4. **back 节点接口收内网**：确认无直连流量后关闭公网暴露
 
 > 步骤 1、2 与 gateway **无依赖**，可先行；3、4 是 gateway 落地后的收敛。
+> HMAC 方案只在 1→3 的窗口期存在，gateway 上线后自然退役。
 
 ---
 
@@ -345,5 +352,6 @@ GET /api/v1/relay?path=<back-api-path>
 - [ ] gateway 列表的签发与热更新机制（谁有权改、如何防篡改）
 - [ ] presence 归属查询在多 gateway 下的一致性策略（广播 vs 定向，§3.3）
 - [ ] overlay 入口的地址规划（gateway 在 MyNet 网段内的固定 IP 段）
-- [ ] 心跳验签的算法协商细节（gnb Ed25519 / wg X25519 的签名格式）
+- [ ] gateway challenge 参数（nonce 长度、ts 窗口、重放缓存 TTL）——见 [`node-keying.md`](node-keying.md) §8
+- [ ] 控制面身份密钥是否独立于驱动密钥（建议独立，避免 wg/gnb 混用）——见 [`node-keying.md`](node-keying.md) §6
 - [ ] GUI `relay` 域的路径白名单具体清单
