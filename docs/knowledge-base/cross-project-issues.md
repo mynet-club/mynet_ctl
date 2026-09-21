@@ -103,17 +103,6 @@
 
 ### 🟡 P2 — 控制面相关（2026-09-22 记录）
 
-#### CPI-5. 命令输出没有回传给 back
-- **ID**：CPI-5
-- **位置**：[command/executor.go](../../../mynet_agent-integration/internal/daemon/command/executor.go)
-- **现状**：`Execute()` 成功时把 `result.Result` 硬写成 `"命令执行成功"`；`executeFromMapping()`
-  抓到的 stdout 只进本地日志，`CommandResult` 拿不到
-- **影响**：back 侧命令记录里永远只有一句"命令执行成功"，看不到真实输出；
-  `upload-log` 这类以输出为结果的功能会失去意义
-- **证据**：真环境端到端实测，back 落库 `result = "命令执行成功"`，而节点日志里
-  `[CommandMapping] 执行成功: e2e-ok 6329822596533071`（真实 stdout 只在本地）
-- **优先级**：中
-
 #### CPI-6. 节点面路由的 `throttle:api` 按 IP 限流（待确认）
 - **ID**：CPI-6
 - **位置**：[VPN/Routes/api.php](../../../mynet_back-integration/app/Modules/VPN/Routes/api.php) monitor 组
@@ -185,6 +174,7 @@
 | 2026-09-22 | **CPI-3** `App\Services\NodeRebootService` 三处悬空引用 | `c10aaa45` |
 | 2026-09-22 | **CPI-2** back 下发 `mynet.reboot`、agent 只有 `mynet.restart` → 重启静默失效 | `24570da3` |
 | 2026-09-22 | **CPI-4** back 命令词汇整体漂移（mynet.boot/shutdown/regenConfig/reloadConfigs/plugin.proxy.reload/upload-log） | `24570da3` |
+| 2026-09-22 | **CPI-5** 命令输出没回传 back（`Execute` 把 result 硬写成"命令执行成功"） | `b407e91` |
 
 ---
 
