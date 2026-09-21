@@ -51,6 +51,22 @@ Go 侧等价实现：`mynet_agent/internal/utils/gnb_ed25519.go` 的 `GenerateGN
 - 拿到 GNB 私钥**无法反推 seed**（`CreateGNBFromExistingScalar` 里 `Seed: nil` 就是这个原因）
 - 与 stdlib ed25519 互操作时必须显式转换（`ConvertStandardToGNB`）
 
+⚠️ **clamp 位置陷阱（实测踩到）**：`keypair.c` 是**就地 clamp 后存储**——
+`private_key[0] &= 248; [31] &= 63; [31] |= 64` 改的就是要落盘的那份。
+但 agent 的 `GenerateGNBKeyPairFromSeed` 里：
+
+| 字段 | 内容 |
+|------|------|
+| `PrivateKey`（64B，`ToHex()` 导出的就是它） | **未 clamp** 的 `SHA512(seed)` |
+| `ProcessedPrivateKey`（32B） | clamp 后的标量 |
+
+即**该 helper 的 `PrivateKey` 字段与 GNB 落盘格式不是同一个东西**。
+后果：拿 `PrivateKey` 直接当标量用会算出**错误的签名**（`S` 不对，`R` 还是对的，
+所以现象很隐蔽）。
+
+→ 因此 `SignGNB` 内部**显式 clamp**（幂等，对两种输入都正确），
+不要假定调用方给的私钥已 clamp。定位该问题的判据：`R`（签名前 32B）一致但 `S` 不一致。
+
 ### 1.3 公钥派生（心跳/HMAC 用的就是这一步）
 
 ```go
@@ -107,7 +123,10 @@ R' = h·(−A) + S·B           // ge_double_scalarmult_vartime
 
 **对本项目的影响**：
 - **`mynet_gateway` 只做验签** → 可**纯 stdlib（`crypto/ed25519`）、零外部依赖**，正好契合「极致轻量」
-- **`mynetd`（签名侧）** 需要按 `sign.c` 自行实现签名，或把 GNB 私钥转成 stdlib 布局；现有 `internal/utils/gnb_ed25519.go` 已覆盖**密钥派生**，缺的是 **sign**
+- **`mynetd`（签名侧）** 需要按 `sign.c` 自行实现签名 —— ✅ **已实现**：
+  `mynet_agent/internal/utils/gnb_ed25519_sign.go` 的 `SignGNB` / `SignGNBWithPublicKey`。
+  正确性由 `TestSignGNB_MatchesStdlib` 锁定：同一 seed 下与 Go stdlib 的
+  `ed25519.Sign` **逐字节相同**（32 组随机 seed），因为它们本就是同一套 RFC 8032 算式。
 - 这也是为什么 gateway 不需要引入任何 crypto 库，而 agent 侧要补一个签名函数
 
 ---
