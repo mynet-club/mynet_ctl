@@ -304,23 +304,35 @@ GET /api/v1/relay?path=<back-api-path>
 | back | `HeartbeatRequest` 校验 → `NodeStatusService::recordHeartbeat` + `NodeMonitorService::processMonitorData` → 取 `monitor_rt_cmds` → 响应 |
 | 命令来源 | `NodeConfigService` 在配置变更时创建 `node_refresh` 等命令 ✅ |
 
-### 6.2 缺口
+### 6.2 缺口（含落地状态）
 
-| # | 缺口 | 影响 |
-|---|------|------|
-| 1 | **鉴权是空壳**：`NodeHeartbeatAuthMiddleware` 只有 `// TODO: Implement Ed25519 signature verification`，直接放行 | 节点通道无认证。⚠️ 补注：agent 实际签的是 **HMAC-SHA256**（密钥 = GNB 派生的公钥），**不是** ed25519 签名——见 [`node-keying.md`](node-keying.md) §4 |
-| 2 | **响应性联动断了**：事件系统删除后，节点上线不再触发对端 `route.refresh` | 拓扑变化不能自愈 |
-| 3 | 命令时延最坏 5 分钟 | 配置变更/紧急撤销不及时 |
+| # | 缺口 | 影响 | 状态 |
+|---|------|------|------|
+| 1 | **鉴权是空壳**：`NodeHeartbeatAuthMiddleware` 只有 `// TODO: Implement Ed25519 signature verification`，直接放行 | 节点通道无认证。⚠️ agent 实际签的是 **HMAC-SHA256**（密钥 = GNB 派生的公钥），**不是** ed25519 签名——见 [`node-keying.md`](node-keying.md) §4 | ✅ 已按现状方案实现（过渡）；gateway 上线后退役 |
+| 1b | 节点面 monitor 路由被模块级 `auth:sanctum` 覆盖，节点无 token → **任何 monitor 调用都在到达验签中间件之前 401** | 节点通道整体不可用（含心跳） | ✅ 已用 `withoutMiddleware('auth:sanctum')` 只摘该组 |
+| 1c | **请求体 gzip 从未被解压**（全仓无 `gzdecode`），而真实心跳必然 >1KB 故必然 gzip | 心跳在表单验证阶段就 422 | ✅ 已加 `InflateNodeRequestBody`，排在验签之前 |
+| 1d | 节点通道没有租户上下文，而 `TenantScope` 是 **fail-closed**（无租户 → `WHERE 1=0`） | `Node::where('node_id',…)` 查不到 → **状态永远同步不进去**，node_monitor 处理全空转 | ✅ 验签后按**节点自身租户**建立请求上下文 |
+| 2 | **响应性联动断了**：事件系统删除后，节点上线不再触发对端 `route.refresh` | 拓扑变化不能自愈 | ✅ 已补回（见 §6.3 第 2 步） |
+| 3 | 命令时延最坏 5 分钟 | 配置变更/紧急撤销不及时 | ✅ gateway 通知路径已通，实测秒级 |
 
 ### 6.3 迁移路径
 
-1. **补心跳验签**（不依赖 gateway）：back 按**现状方案**实现——`HMAC-SHA256(node_keys.public_key, METHOD|path|timestamp|body)` → base64，与 `X-Node-Signature` 比对（格式见 [`plugins.md`](plugins.md)）。⚠️ 此方案强度有限（公钥被当共享秘密用），只作为**堵洞的过渡**，不值得强化
-2. **补响应性联动**：`processMonitorData` 检测状态跃迁 → 为对端入队 `route.refresh`（先在 back 侧闭环，不依赖 gateway）
-3. **gateway 上线**：心跳改经 gateway 中继（§2.2）；握手改用 **Ed25519 challenge-response**（[`node-keying.md`](node-keying.md) §5），把控制面鉴权换成真非对称；通知把命令时延从「最坏 5 分钟」降到秒级
-4. **back 节点接口收内网**：确认无直连流量后关闭公网暴露
+1. ✅ **补心跳验签**（不依赖 gateway）：`NodeHeartbeatAuthMiddleware` 按**现状方案**实现——`HMAC-SHA256(base64_decode(node_keys.public_key), METHOD|path|timestamp|body)` → base64，与 `X-Node-Signature` 比对（格式见 [`plugins.md`](plugins.md)），另加 300s 时间戳窗口（签名里带 ts 却不设窗口 = 签名永不过期）。
+   两处必须与 Go 对齐：签名体是「先置 `node_monitor=nil` 再 Marshal」的那份，重编码需 `JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE`；其余端点直接用**原始字节**（命令回报的 `result` 含 `<>&`，Go 会转义而 PHP 不会）。⚠️ 方案强度有限（公钥被当共享秘密用），只作为**堵洞的过渡**，不值得强化
+2. ✅ **补响应性联动**：`NodeMonitorService::processMonitorData` 检测状态跃迁（`nodes.node_status` 真的变了）→ `RelatedNodeRouteRefresher` 为对端（`routes.target_node_id` 指向本节点、且 `node_status >= 启用` 的那些 `node_id`）入队 `mynet.route.update`。
+   语义沿用被删除事件系统里的 `RefreshRelatedNodeRoutesHandler`。**入队放在 `DB::commit()` 之后**：命令入队会经网关立刻推事件，而节点是另一个进程、看不到未提交的行
+3. 🔶 **gateway 上线**（部分）：节点已建立到 gateway 的 WS 长连接、Ed25519 challenge-response 握手、事件推送、经中继回源都已落地并**真环境端到端跑通**；但**心跳本身仍走直连**，未收敛到中继
+4. ⬜ **back 节点接口收内网**：确认无直连流量后关闭公网暴露
 
 > 步骤 1、2 与 gateway **无依赖**，可先行；3、4 是 gateway 落地后的收敛。
 > HMAC 方案只在 1→3 的窗口期存在，gateway 上线后自然退役。
+
+> 补充（落地时发现的既有缺陷，不属本节缺口但会掩盖它们）：
+> `Monitor/Services/NodeMonitorDomainService` 是个 8 行空壳，真实现同名地放在
+> `Monitor/Domain/Services/` 下，两个消费者在同一个命名空间里不带限定名引用它
+> → 注入的是空壳，带 `node_monitor` 的心跳必 500。
+> `node_monitor_snapshots` 上 `UNIQUE(node_id, snapshot_at)` 而 `snapshot_at` 精度是秒，
+> 原实现用 `create()`：同一秒的第二次心跳撞唯一键，把整个事务连**状态同步**一起回滚。
 
 ---
 

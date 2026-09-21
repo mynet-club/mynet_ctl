@@ -220,14 +220,20 @@ HMAC 密钥 = **节点公钥**。而公钥：
 
 ### 4.5 back 侧现状
 
-`NodeHeartbeatAuthMiddleware` 仍是空壳：
+✅ **已实现**（2026-09）：`App\Modules\VPN\Middleware\NodeHeartbeatAuthMiddleware` 按 §4.1 的方案校验，
+即 `HMAC-SHA256(base64_decode(node_keys.public_key), METHOD|path|timestamp|body)` → base64，
+比对 `X-Node-Signature`；另有 300s 时间戳窗口。
 
-```php
-// TODO: Implement Ed25519 signature verification
-return $next($request);
-```
+落地时容易踩的三点：
 
-即**当前未做任何校验**，agent 在签、back 不验。这是 `control-plane.md` §6.2 缺口 #1。
+1. **`node_keys.public_key` 存的是 base64（44 字符 = 32 字节）**，不是 hex——HMAC 密钥要 `base64_decode` 之后用。
+2. **签名体与发送体不是同一份**：agent 签心跳时是「先置 `node_monitor = nil` 再 `json.Marshal`」，
+   所以要先去掉 `node_monitor` 再重编码；重编码参数必须与 Go 的 `encoding/json` 对齐
+   （`JSON_UNESCAPED_SLASHES` + `JSON_UNESCAPED_UNICODE`，否则 `/` 与中文会不匹配）。
+   其余端点签的就是发送体本身，应直接用**原始字节**、绝不重编码——
+   命令回报的 `result` 里可能含 `<` `>` `&`，Go 会转义成 `\u003c` 而 PHP 不会。
+3. 该中间件所在的路由组还曾被模块级 `auth:sanctum` 覆盖、且请求体 gzip 从未被解压，
+   两者都会让请求在到达验签之前就失败——见 `control-plane.md` §6.2 缺口 1b/1c。
 
 ---
 
