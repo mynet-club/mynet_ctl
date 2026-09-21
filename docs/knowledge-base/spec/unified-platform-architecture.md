@@ -59,29 +59,42 @@ flowchart TB
 **归属**：`mynet_back`
 **职责**：好友关系、连接生命周期、密钥管理、授权/撤销——完全不含驱动术语。
 
-### 1.0 身份模型：back 是 User 逻辑，不是 Operator 逻辑 ⚠️
+### 1.0 身份模型：admin / operator[tenant] / user 三重层 ⚠️
 
-框架有两套身份，**不可混用**：
+框架把**访问面**分成三层，身份类型只有两个（`User` / `Operator`），但**只有 Operator 有角色与 RBAC**：
 
-| 身份 | 语义 | 关联 | 典型中间件 |
-|---|---|---|---|
-| **`User`** | 租户用户 | `tenant_users` | `auth:sanctum`、`tenant.ensure` |
-| **`Operator`** | 平台运营，可跨租户 | `operator_tenants` | `tenant.permission`、`VerifyOperatorTenant` |
+| 层 | 语义 | 身份 | 角色 / 权限 | 域 `domain_type` | 典型门禁 |
+|---|---|---|---|---|---|
+| **① admin** | **平台** | `Operator` 且 `scope='platform'` | RBAC 平台权限（`platform.*`） | `admin` | `tenant.permission`、`rbac.permission:platform.*` |
+| **② operator[tenant]** | 租户运营 | `Operator`，经 `operator_tenants.role_id` 绑定 | **有 role** → RBAC 租户权限 | `console` | `tenant.permission`（仅 `tenant_admin` 角色可进） |
+| **③ user** | **用户消费层** | `User`，经 `tenant_users` 关联 | **没有角色、没有权限概念** | `api` / `app` | `auth:sanctum`、`tenant.ensure` |
 
-`CheckPermission`（别名 `tenant.permission`）的文档标题即「Operator 直连团队模式」，
-**平台 admin 域仅 `scope=platform` 的 Operator 可进**，普通 User 会被 403。
+依据（框架源码，非推断）：
+- `CheckPermission` docblock：「平台 admin 后台仅 `scope=platform` 的 Operator 可访问；
+  团队 console 后台仅 tenant_admin 角色 Operator 可访问；
+  团队前台 /app 由 **User（经 tenant_users 关联，不拥有角色）** 或 Operator（经 operator_tenants）访问」
+- `RbacService` docblock：「角色仅属于 Operator，经 `operator_tenants.role_id` 关联，RBAC 只作用于 Operator；
+  **User 不拥有角色（tenant_users 无 role_id 字段），永远无 RBAC 权限**」——`check()` 对非 Operator 直接 `return false`
+- `checkConsoleAccess()`：User 走 console 一律 `tenant_admin_only` 403
+- 平台 admin 路由落在框架 `platform`/`operator` 模块的 `Routes/admin.php`（挂 `rbac.permission:platform.*`），
+  由 `adm.mynet.club` 那个 SPA 承接——**不在 back**
 
-**back 全程是 User 逻辑**：节点/连接/密钥挂在 `users.user_id`；
-后台管理员是带 `role`（`super_admin`/`admin`/`tenant_admin`）的 User，不是平台运营；
-全仓不引用 `Operator`。
+**back 的实现全部在 ③ user 层**：节点/连接/密钥/好友挂在 `users.user_id`，全仓不引用 `Operator`。
+user 层**本就没有 role 与 permission 概念**，因此 back 不需要 RBAC，也不该出现
+「带 role 的 User 管理员」——admin 是平台层（Operator），不是 User。
 
-已实测确认边界成立：`tenant.permission` 门禁 **190 条**已挂载路由，**全部属 vendor 模块**，
+已实测确认边界成立：`tenant.permission` 门禁挂载的路由**全部属 vendor 模块**，
 back 自有 **0 条**。`bootstrap/app.php` 中 `tenant.permission` / `rbac.permission` / `mcp.auth`
 三个别名是为**框架 vendor 模块**注册的，必须保留，**但不得挂到 back 自有路由上**。
 
 > 对本设计的影响：L2～L7 的一切「授权」都基于 `Connection`/`ConnectionGrant` 业务授权，
 > **不依赖**框架的 Operator/RBAC 门禁。不要因为 scrm-platform 在其模块路由上使用
 > `VerifyOperatorTenant` 就照搬——scrm 是面向运营的平台，back 不是。
+
+> **层错位警示**：back 曾有的 `routes/admin.php` + `AdminMiddleware` + `users.role`
+> 是在 user 层里凭空造了一个「admin」，框架模型中没有这一层。平台后台属于
+> ①admin（框架 platform/operator 模块 + `adm.mynet.club` SPA），不属于 back。
+> RBAC 三表（`permissions`/`roles`/`role_permissions`）同理——那是 ②operator[tenant] 的资产。
 
 ### 1.1 核心对象
 

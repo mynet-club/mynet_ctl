@@ -4,8 +4,13 @@
 > 状态：**包袱清理系列 + 四项待决项 + 两项新发现（RBAC 拆除 / 迁移归属）均已完成**
 > 依据：本文件全部结论均来自实测（`ClassLoader::findFile` / `information_schema` / PHP fatal），非推断
 >
-> **项目定位（用户两次强调）**：back 是**用户消费层**，不做 RBAC，不做权限控制。
-> 框架的 `tenant.permission` / `rbac.permission` 仅服务 vendor 模块，back 自有路由不得挂载。
+> **项目定位（用户明确）**：框架身份分三层——
+> ① **admin = 平台**（`Operator.scope='platform'`）·
+> ② **operator[tenant] = 租户运营**（**只有 Operator 有 role，才有 RBAC**）·
+> ③ **user = 用户消费层**（`User` 经 `tenant_users` 关联，**没有角色、没有权限概念**）。
+> **back 的实现全部在 ③ user 层**，因此不需要 RBAC，也不该出现「带 role 的 User 管理员」。
+> 平台后台属于 ①，落在框架 platform/operator 模块 + `adm.mynet.club` SPA，不在 back。
+> 详见 `unified-platform-architecture.md` §1.0。
 
 ---
 
