@@ -86,6 +86,30 @@ S       = hram · private_key[0..31] + r      ; signature[32..63]
 
 验签用**对端公钥**：`ed25519_verify(sig, &data, len, src_node->public_key)`。验签失败即丢弃（`lite_mode` 下跳过验签，密钥置零）。
 
+### 2.1 与 Go stdlib 的互操作性（**gateway 零依赖的依据**）
+
+`libs/ed25519/verify.c` 实现的就是标准 RFC 8032 验签方程：
+
+```
+h  = SHA512(R || A || M) mod L
+R' = h·(−A) + S·B           // ge_double_scalarmult_vartime
+判定 R' == R
+```
+
+（另有 `signature[63] & 224` 的高位检查与 `ge_frombytes_negate_vartime` 的公钥解压校验。）
+
+**结论**：
+
+| 侧 | 能否直接用 Go stdlib | 原因 |
+|----|---------------------|------|
+| **验签** | ✅ **可以**，`crypto/ed25519.Verify(pub, msg, sig)` 直接互通 | 公钥是标准的压缩 Edwards 点编码，签名是标准 `R‖S`，方程同 RFC 8032 |
+| **签名** | ❌ 不可以直接用 `ed25519.Sign` | 私钥**存储格式**非标准：GNB 存的是 `SHA512(seed)`（§1.2），而 stdlib 要 `seed‖SHA512(seed)`；且 nonce 用 `private_key[32..63]` |
+
+**对本项目的影响**：
+- **`mynet_gateway` 只做验签** → 可**纯 stdlib（`crypto/ed25519`）、零外部依赖**，正好契合「极致轻量」
+- **`mynetd`（签名侧）** 需要按 `sign.c` 自行实现签名，或把 GNB 私钥转成 stdlib 布局；现有 `internal/utils/gnb_ed25519.go` 已覆盖**密钥派生**，缺的是 **sign**
+- 这也是为什么 gateway 不需要引入任何 crypto 库，而 agent 侧要补一个签名函数
+
 ---
 
 ## 3. GNB 数据面：`ed25519_key_exchange` —— 「Ed25519 后又做的那个操作」
