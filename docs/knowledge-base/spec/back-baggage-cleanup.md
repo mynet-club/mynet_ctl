@@ -1,7 +1,7 @@
 # SPEC: mynet_back 历史包袱清理
 
 > 更新：2026-09-21 | 适用：`mynet_back`
-> 状态：**执行中**（第一阶段）
+> 状态：**第一阶段已完成**（`1a550529`）；第二阶段待做
 > 依据：本文件全部结论均来自实测（`ClassLoader::findFile` / `information_schema` / PHP fatal），非推断
 
 ---
@@ -13,6 +13,25 @@
 原因：`MonitorRtCmd` 加载即 fatal，而它被 `NodeHeartbeatController` / `NodeActionController` /
 `MonitorCommandService` 引用 —— 而**节点配置分发正是走心跳命令链**（back → heartbeat →
 `node.refresh` / `route.refresh`）。所以它不是"清理"，是 WG 的**前置**。
+
+### 第一阶段执行结果 ✅
+
+| 项 | 结果 |
+|---|---|
+| `MonitorRtCmd` 类加载 | ✅ 可加载，PK=`rt_cmd_id`，keyType=int |
+| `HasGlobalId` 生成 | ✅ 实测 `rt_cmd_id=5466397989490496`（16 位） |
+| 关键路径类实例化 | ✅ `NodeHeartbeatController`/`NodeActionController`/`NodeConfigService`/`NodeRebootService`/`MonitorCommandService`/`NodeOperatorDomainService` |
+| `monitor_rt_cmds` 主键 | ✅ `rt_cmd_id bigint unsigned`（UUID `id` 列已删） |
+| 外键违规 | ✅ 全库 104 个外键 **0 违规**（修复了先前清理遗漏造成的 503+6 行悬空） |
+| `route:list` | ✅ 仍 1090 |
+| 残留 `App\Models\MonitorRtCmd` | ✅ 0（6 处内联 FQCN 已改） |
+
+**待决**：`notifications` 表（app 迁移 `2026_06_25_000002` 用 Laravel 默认 `$table->uuid('id')`）
+仍是 `char(36)`；而 `in_app_notifications` 已用 `in_app_notification_id bigint unsigned` + `HasGlobalId` ✅。
+改 `notifications` 需覆盖 Laravel 的 `DatabaseNotification`（它 `$keyType='string'` 且生成 UUID）——
+属独立决策。
+
+
 
 ```mermaid
 flowchart LR
