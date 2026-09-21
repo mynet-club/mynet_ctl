@@ -13,7 +13,8 @@
 | 一 · 打通关键路径 | ✅ | `MonitorRtCmd` 可加载；心跳链 6 个类可实例化；外键违规 0 | `1a550529` |
 | 二 · 消除不可解析引用 | ✅ | **31 → 4**；新建 `RolePermission`/`SocialConnectionId`；修 13 处漂移；删 3 个死文件 | `1c87dc9a` |
 | 三 · events 系统 | ✅ | **17 个 handler 全部静默失效 → 11 个可解析且可实例化**；删 2 个无实现的 event 定义 | `3674b1a9` |
-| 四 · 化妆性清理 | ⬜ | 见 §2.4 | — |
+| 四 · 化妆性清理 | ✅ 3/4 | 删 19 个死 import；发现器改名 `ModuleDiscoveryServiceProvider`；遗留 dump 归档至 `docs/legacy/` | `c79f1ac8` |
+| — `tests/Schema` 重构 | ⬜ | 24 个模块描述的是**第三套 schema**，与 dump 和真实库都不符；改为从真实库导出 | 另立任务 |
 
 **当前不可解析引用仅 4 个**，全部是刻意保留的 Notification 地雷（见 §2.3）。
 
