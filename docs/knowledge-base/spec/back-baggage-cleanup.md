@@ -1,8 +1,11 @@
 # SPEC: mynet_back 历史包袱清理
 
 > 更新：2026-09-21 | 适用：`mynet_back`
-> 状态：**包袱清理系列 + 四项待决项均已完成**；`RoutePermissionMiddleware` 为新增待决项
+> 状态：**包袱清理系列 + 四项待决项 + 两项新发现（RBAC 拆除 / 迁移归属）均已完成**
 > 依据：本文件全部结论均来自实测（`ClassLoader::findFile` / `information_schema` / PHP fatal），非推断
+>
+> **项目定位（用户两次强调）**：back 是**用户消费层**，不做 RBAC，不做权限控制。
+> 框架的 `tenant.permission` / `rbac.permission` 仅服务 vendor 模块，back 自有路由不得挂载。
 
 ---
 
@@ -28,16 +31,34 @@
 | T49 | tests/Schema 其余 22 个 | 全部从真实库重导（保留 `customers` 测试夹具；丢弃 3 张幽灵表） | `aac3284f` |
 | — | 幽灵表模型 | 删 `NodeMetric`/`SocialAccount`（各 0 引用） | `956dda3f` |
 
-**新增待决项（本批扫模型时发现，未处置）**：
+### 七 · 新发现问题（用户拍板后执行）
 
-`App\Modules\VPN\Models\RoutePermission` 的落表 `route_permissions` **不存在且无任何迁移**，
-但 `routes/admin.php:64` 把 `route.permission` 中间件挂在**整个 admin 组**上：
+| # | 问题 | 处置 | 提交 |
+|---|---|---|---|
+| T50 | `RoutePermissionMiddleware` 生产地雷 | **整套 RBAC/权限子系统拆除**：back 是用户消费层，不需要 RBAC 与权限控制 | `bac13e43` |
+| T51 | 框架迁移 vs app 迁移重复建表 | **app 自持 schema**；删两个问题迁移；vendor pending 不跑 | `29053ab9` |
 
-- `RoutePermissionMiddleware` 有 local/debug 旁路（当前 `APP_ENV=local` 故可用）；
-- **生产环境**会走到 `RoutePermission::getRoutePermission()` → 查不存在的表 → SQL 错误；
-- 即使表存在，`$user->hasPermission()` 也不成立——`hasPermission` 只定义在框架的 `Role` 上，`User` 没有该方法。所以生产下**所有 admin 路由**会 500。
+**T50 实测结论与处置**：
 
-即：该中间件在开发环境被旁路掩盖了，属**生产专有的地雷**。处置方向需决策（建表 + `route:sync-permissions` 命令 / 改接框架 RBAC / 从 admin 组摘掉）。
+| 环节 | 实测 | 处置 |
+|---|---|---|
+| `RoutePermission` → `route_permissions` | 表不存在、无迁移、无数据；中间件挂在**整个 admin 组**上 | 删除模型 + 中间件 + admin/API 路由 |
+| `AdminMiddleware` | 读 `$user->user_role`（**属性不存在**，列叫 `role`）→ 恒取 `'user'` → 对所有人 403（被 local/debug 旁路掩盖） | 改用 `$user->role`，保留粗粒度 admin 校验 |
+| `BaseAdminController` | 调 `$currentAdmin->getPermissions()`（User 上无此方法） | 移除视图 `permissions` 注入 |
+| `UserDomainService::getUserPermissions` | 空实现返回 `[]`；`updateUserPermissions` 空实现返回 `true` | 删除 |
+| 框架 `RbacService` | 文档明写「User 不拥有角色，永远无 RBAC 权限」；对非 `Operator` 恒 `false`；`operator_tenants` 表本就不存在 | **不可改接**，排除该方向 |
+| `permissions`/`roles`/`role_permissions` | back **自己**的迁移建的；`tenant_users.role_id` 全 NULL，用户→角色从未接上 | drop 三表 + `tenant_users.role_id` 列 |
+| `platform_user` | 用户拍板「没有 platform_user」 | 不进 admin 白名单；角色表随 RBAC 一并删除 |
+
+**T51 实测结论与处置**：发现 174 个迁移文件，Ran=131，Pending=43。
+- vendor 侧 pending（`framework_core` + 各模块）**不跑**——`framework_core` 要建的 18 张表里 13 张已由 app 迁移建好，直接 `migrate` 会 "table already exists"
+- back 的迁移只跑 `--path=database/migrations`
+- 已删：`2026_07_13_121224_create_personal_access_tokens_table`（与已 Ran 的同表重复，表已存在 25 行）
+- 已删：`2026_07_13_121223_create_agent_conversations_table`（`laravel/ai` 脚手架，主键 `string('id',36)` 违反全局 ID 约定；表已由 `2026_06_29_000003/000004` 用正确形态建好）
+- **保留**：`2026_07_13_121223_create_health_tables`——`spatie/laravel-health` **已安装且已配置**（`config/health.php` + admin health-check 路由），先前「未使用该包」的判断是错的
+
+**当前验证基线**：`route:list` = **1066**（拆除 24 条权限/角色路由；此前的 1090 基线已随子系统移除而调整）· `php -l` 全过 · 外键 **101** 个 **0 违规**。
+备份：`storage/backups/mynet_back_new-20260921-124514-pre-rbac-removal.sql`。
 
 **唯一遗留的不可解析引用 = 4 个刻意保留的 Notification 地雷**（见 §2.3）。
 
