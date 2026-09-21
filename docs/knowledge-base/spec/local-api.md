@@ -1,9 +1,25 @@
 # SPEC: 本机能力面（local-api）
 
-> 更新：2026-09-21 | 来源：`mynet_agent/docs/API.md`（接口稿 v0）
+> 更新：2026-09-22 | 来源：`mynet_agent/docs/API.md`（接口稿 v0）
 > 适用：**mynet_agent**（唯一实现）；`mynet_ui`、`mynet_openwrt`（壳，只调不改）
 > 状态：**契约 SSOT**（跨仓引用此处；实现细节仍以 `mynet_agent/docs/API.md` 为最新）
 > 关联：[`control-plane.md`](control-plane.md)（GUI 接入模型与 `relay` 域）
+>
+> **实现进度**（2026-09-22 起，落在 `mynet_agent/internal/localapi`）：
+>
+> | 域 | 状态 | 说明 |
+> |----|------|------|
+> | status | ✅ 已实现 | `gnb{running,pid,node_id,vpn_type,tun_iface,hot_restart}` + `agent{version,pid}`；`hot_restart` 如实报 `false`（驱动未声明该能力）。**`proxy` 子对象尚未实现**（见 proxy 行） |
+> | service | ⚠️ 端点就位 | `start/stop/reload` 已按契约接线，但**驱动尚未实现 `VPNDriver.Reload()`/生命周期接口**，故如实返回稳定错误码 `unsupported`。按 [`driver-abstraction.md`](driver-abstraction.md) 这属 S3/S5 的工作；驱动实现后本机 API 一行不用改 |
+> | config | ✅ sync/refresh | 复用 `NodeRefreshService` + `RouteRefreshService`（即心跳命令链里 `mynet.node.update`/`mynet.route.update` 的落地实现）。**`address` 未覆盖**；且该路径写的是渲染后的 gnb 配置，按分层终应收敛到 `VPNDriver.WriteConfig(bundle)` |
+> | proxy | ⬜ 未实现 | 落点未定：契约要求写 `proxy on|off` 到 node.conf，而渲染器目前**不输出这一行**（`BundleFlags.Proxy` 未被使用）。要么让驱动从 bundle 渲染，要么另定标志位——属需决策项 |
+> | nodes / zones | ⬜ 未实现 | 「列表」属本机态可做；「切换当前节点」要改 `mynet.conf` 并重载，且 zones 属**平台态**（应经 `relay` 域），需先厘清边界 |
+> | peers | ✅ 已实现 | 复用驱动的 `GetAllPeers` / `GetNetworkSummary`（即 `gnb_ctl -s` 的解析结果），不重复解析 |
+> | logs | ✅ 已实现 | 读日志环形缓冲（与写往文件/控制台的是同一份格式化行） |
+>
+> 传输：HTTP 已实现（`127.0.0.1:<port>`，token 0600 鉴权，写操作强制 POST）。
+> **ubus 传输未实现**——按本文件 §1 的「同一能力面，两种传输，一份实现」，
+> 能力逻辑已在传输无关的 `localapi.Service` 里，ubus 只是再加一层薄适配。
 
 ---
 
@@ -132,6 +148,11 @@ callback：`PATCH .../commands/{id}/result`（以 back 为准）。
 
 ## 7. 待定（实现前确认）
 
-1. HTTP 端口默认值与 local token 落盘路径（由 `mynet_desktop` 打包约定）
-2. ubus 方法名大小写统一（OpenWrt 惯用 `mynet.service.reload`）
-3. WebUI 静态资源由 mynetd embed，还是桌面 embed、OpenWrt 走 LuCI 壳
+1. ~~HTTP 端口默认值与 local token 落盘路径~~ → **已临时定**：为避免阻塞实现，取了明确
+   默认值并全部允许配置覆盖（`mynetd.json` 的 `local_api.listen` = `127.0.0.1:8720`、
+   `local_api.token_file` = `<MYNET_HOME>/var/run/local-api.token`）。`mynet_desktop`
+   不在当前工作区、无法咨询；打包侧有约定后**改配置即可，不必改代码**
+2. ubus 方法名大小写统一（OpenWrt 惯用 `mynet.service.reload`）——**仍待定**：
+   ubus 传输尚未实现，等 OpenWrt 侧接入时一并定
+3. WebUI 静态资源由 mynetd embed，还是桌面 embed、OpenWrt 走 LuCI 壳——**仍待定**：
+   属壳的交付形态，不影响能力面本身（§6 已明确不做反代）
