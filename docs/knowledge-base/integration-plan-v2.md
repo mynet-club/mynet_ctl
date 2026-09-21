@@ -136,12 +136,12 @@ flowchart TB
 
 | # | 泄漏点 | 位置 | 收敛动作 |
 |---|--------|------|----------|
-| L1 | 配置包生成 gnb 原生格式 | `back` config-bundle（`node.conf`/`address.conf`/`route.conf`） | 抽象为 **driver-agnostic bundle**，driver 侧做适配 |
+| L1 | 配置包生成 gnb 原生格式 | `back` config-bundle（`node.conf`/`address.conf`/`route.conf`） | 拆为公共 envelope/network intent + **driver-specific intent**；driver 与 OS 网络协调器分别执行 |
 | L2 | 热重启机制 | `agent` `gnb_ctl -w core.flag=2` + `gnb.map` | 收进 `VPNDriver.Reload()` |
 | L3 | 分发产品名 | `ctl` manifest 的 `gnb` 条目 | 产品表补 `wireguard`，命名走 `conventions.md` |
 | L4 | 文档/spec 格式定义 | `spec/data-models.md` §4/§9 | 拆分为「抽象层」+「gnb adapter」两节 |
 
-**产物**：`spec/driver-abstraction.md`（抽象 bundle schema + driver 接口 + WG 映射表 + 落地步骤）。
+**产物**：`spec/driver-abstraction.md`（公共 envelope + GNB/WG 专属 intent + driver/network 接口 + 落地步骤）。
 
 **依赖**：无（设计先行）；实现阶段依赖 W3 的 back 契约稳定。
 
@@ -167,7 +167,7 @@ flowchart TB
 
 **产物**：`back-upshift-design.md`（状态归属矩阵 + 上移/下沉判据 + 与 W2 的接口 + 反模式 + 落地清单）。
 
-**依赖**：与 W2 强相关（back 产出的 bundle 必须 driver-agnostic）。
+**依赖**：与 W2 强相关（back 产出的配置必须按公共意图与驱动专属意图分层，不能下发原生文本，也不能伪装成完全通用字段）。
 
 ---
 

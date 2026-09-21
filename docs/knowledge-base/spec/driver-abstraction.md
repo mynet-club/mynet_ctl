@@ -42,140 +42,242 @@ VPNDriverFactory = { CreateDriver, DetectDriver }
 
 ---
 
-## 3. 设计：两层
+## 3. 设计修正：公共控制面 + 驱动专属意图
+
+> 2026-09-21 深读 `mynet_gnb` 源码、补丁文档与本机 WireGuard Tools 后，
+> **撤销原来的“一个扁平 VPNBundle 覆盖两种驱动”设计**。原设计把 GNB route
+> 机械等同为 WireGuard AllowedIPs，语义错误。
 
 ```mermaid
 flowchart LR
-  BACK["mynet_back<br/>业务权威"]
-  ABS["抽象 bundle<br/>driver-agnostic"]
-  subgraph AG["mynet_agent"]
-    FAC["VPNDriverFactory"]
-    GNB["GnbDriver"]
-    WG["WireGuardDriver"]
-  end
-  NAT["原生配置"]
+  BACK["mynet_back<br/>业务与拓扑权威"]
+  ENV["BundleEnvelope<br/>版本 / 节点 / 驱动 / generation"]
+  GINT["GnbIntent<br/>route / discovery / forwarding / keys"]
+  WINT["WireGuardIntent<br/>interface / peers / cryptokey routing"]
+  NINT["NetworkIntent<br/>addresses / FIB / rules / firewall"]
+  AGENT["mynet_agent<br/>校验 + 原子协调"]
+  GNB["GnbDriver"]
+  WG["WireGuardDriver"]
+  NET["NetworkReconciler"]
 
-  BACK -->|生成| ABS
-  ABS --> FAC
-  FAC --> GNB
-  FAC --> WG
-  GNB --> NAT
-  WG --> NAT
+  BACK --> ENV
+  ENV --> GINT
+  ENV --> WINT
+  ENV --> NINT
+  GINT --> AGENT
+  WINT --> AGENT
+  NINT --> AGENT
+  AGENT --> GNB
+  AGENT --> WG
+  AGENT --> NET
 ```
 
-- **抽象层**：`VPNBundle` —— back 只产出它，不含任何 gnb/wg 语法。
-- **适配层**：每个 driver 把 `VPNBundle` 翻译成原生配置并管理生命周期。
-
-### 3.1 抽象 bundle（driver-agnostic）
-
-back 的 `config-bundle` 收敛为**与驱动无关**的结构：
+### 3.1 可以共用的只有外壳
 
 ```json
 {
+  "schema_version": 2,
+  "generation": "opaque-stable-version",
   "driver": "gnb",
   "node": {
-    "id": "3722810996882027",
+    "id": "business-node-id",
     "interface": "gnb_tun_178",
-    "listen_port": 9016,
     "mtu": 1450
   },
-  "peers": [
-    {
-      "id": "8283289760467957",
-      "public_key": "a49e4acf...",
-      "endpoint": null,
-      "allowed_ips": ["10.182.236.0/24", "192.168.0.0/24"]
-    }
-  ],
-  "routes": [
-    { "node_id": "3722810996882027", "network": "10.182.236.0", "netmask": "255.255.255.0" }
-  ],
-  "keys": {
-    "self": { "private": "48973280...", "public": "e9ca457c..." },
-    "peers": { "8283289760467957": "a49e4acf..." }
+  "network": {
+    "addresses": ["10.182.236.178/24"],
+    "routes": [],
+    "rules": []
   },
-  "flags": { "proxy": "off" },
-  "discovery": { "index_servers": ["52.221.22.241:9016", "idx.mynet.club:9016"] }
+  "gnb": {},
+  "wireguard": null
 }
 ```
 
-> **注意 `discovery` 字段**：gnb 的 P2P 索引发现**没有** wireguard 的 1:1 等价物。
-> 抽象层保留该字段（可选），但**不得假设所有驱动都支持** —— driver 能力用 §3.2 的 `Capabilities()` 声明。
+公共层只表达：业务节点、接口意图、操作系统网络状态和契约版本。`node.id` 是
+**业务标识**；不得宣称它等同 WireGuard 公钥身份。
 
-### 3.2 扩展后的驱动接口
+### 3.2 GNB 专属意图
 
-在现有 `VPNDriver`（读）基础上补**写与生命周期**：
+GNB 有四种彼此独立的身份/位置：
+
+| 概念 | 真实语义 | 来源 |
+|---|---|---|
+| `nodeid/uuid64` | 逻辑节点主键 | `node.conf` / `route.conf` |
+| Ed25519 key | 安全身份；与对端做 key exchange | `security/`、`ed25519/` |
+| TUN IP/网段 | 虚拟路由身份 | `route.conf` |
+| WAN endpoint | 动态传输位置，可随 NAT 变化 | index push、DETECT、PING/PONG、DNS、cache |
+
+建议的 `gnb` 块：
+
+```json
+{
+  "gnb": {
+    "identity": {
+      "node_id": "3722810996882027",
+      "private_key_ref": "secret://...",
+      "public_key": "64-hex",
+      "peer_public_keys": {"peer-id": "64-hex"}
+    },
+    "listeners": ["0.0.0.0:9016"],
+    "routes": [
+      {"node_id": "peer-id", "prefix": "192.168.0.0/24", "source": "lan"}
+    ],
+    "discovery": {
+      "index_servers": ["52.221.22.241:9016"],
+      "static_nodes": [],
+      "forward_nodes": []
+    },
+    "forwarding": {
+      "direct": true,
+      "standard": true,
+      "unified": "auto",
+      "proxy": false,
+      "relay_routes": []
+    },
+    "options": {
+      "multi_socket": true,
+      "safe_index": true,
+      "passcode_ref": null
+    }
+  }
+}
+```
+
+关键约束：
+
+1. `route.conf` 不只是普通 FIB：它同时创建节点、绑定虚拟 IP/网段、构成准入/准出
+   白名单，并可定义节点环和 relay 路径。
+2. `address.conf` 只能给 `route.conf` 已创建的节点附加角色和初始 endpoint。
+3. index 类似 tracker：注册/查询 NAT 后 endpoint；普通数据面仍优先 P2P。
+4. P2P 失败后可 Standard Forwarding、显式 Relay 或 Unified Forwarding；中继保持
+   GNB payload 的端到端保护，不等同 WireGuard hub。
+5. `proxy on` 是本仓 P2 补丁能力：准出无 route 时兜底到 f 节点、准入跳过白名单。
+   **必须由目标二进制 build capabilities 声明，不能只看 driver 名推断。**
+
+### 3.3 WireGuard 专属意图
+
+WireGuard 的协议身份是 Curve25519 静态公钥，Endpoint 只是可变的传输位置。
+认证包会让内核学习最新 Endpoint（roaming），这不是成员发现或 NAT 打洞协议。
+
+```json
+{
+  "wireguard": {
+    "interface": {
+      "private_key_ref": "secret://...",
+      "public_key": "base64-32-byte-key",
+      "addresses": ["10.20.0.2/32", "fd00:20::2/128"],
+      "listen_port": 51820,
+      "fwmark": null
+    },
+    "peers": [
+      {
+        "id": "business-peer-id",
+        "public_key": "base64-32-byte-key",
+        "preshared_key_ref": null,
+        "bootstrap_endpoint": "vpn.example.com:51820",
+        "allowed_ips": ["10.20.0.1/32", "192.168.10.0/24"],
+        "persistent_keepalive_seconds": 25
+      }
+    ],
+    "routing": {
+      "mode": "managed",
+      "table": "auto"
+    }
+  }
+}
+```
+
+关键约束：
+
+1. `AllowedIPs` 是**双向 cryptokey routing**：出站按目的前缀选公钥；入站只接受
+   该公钥声明前缀内的源地址。它不是普通系统路由，也不等同 GNB route。
+2. Interface Address、MTU、系统 route/rule/firewall 不属于 `wg setconf/syncconf`
+   管理范围，必须由 `NetworkReconciler` 独立协调。
+3. `PersistentKeepalive` 是 per-peer NAT 映射保活，不是发现、中继或健康检查。
+4. `bootstrap_endpoint` 是初始提示；运行时 learned endpoint 只进 Status，不回写期望配置。
+5. peer 删除必须从内核设备删除；公钥变化等价于删除旧 peer、新增新 peer。
+6. 同接口 AllowedIPs 精确重复必须拒绝，重叠默认拒绝或显式告警。
+7. WireGuard 没有 GNB index、打洞、transparent forward/relay、proxy 的等价功能。
+
+### 3.4 不允许再做的一一映射
+
+| 错误映射 | 为什么错 |
+|---|---|
+| `node.id` → WireGuard 公钥指纹 | 业务 ID 与协议身份生命周期不同 |
+| GNB `route.conf` → WG `AllowedIPs` | 后者还承担入站源地址授权，且是最长前缀 cryptokey routing |
+| GNB index → WG Endpoint | index 是 rendezvous/地址目录；Endpoint 只是某 peer 的初始位置 |
+| GNB proxy/relay → WG hub | WG hub 会解密并重新加密两条独立会话，不是透明端到端 relay |
+| GNB Ed25519 hex → WG key | WG 使用 Curve25519、32 字节 Base64；格式和算法均不同 |
+| GNB 热重启 → `wg syncconf` | syncconf 仅同步 WG 协议状态，不同步地址/FIB/rule/firewall |
+| `{network,netmask}` 通用路由 | 对 IPv6 不自然，也无法表达 table/metric/policy |
+
+### 3.5 驱动接口与能力必须拆细
+
+`WriteConfig()` 应升级为“验证并协调一个 driver-specific intent”，而非假定所有字段通用。
 
 ```
-VPNDriver  (现有读方法保持)
-  + Capabilities() DriverCaps        // 声明是否支持 hot_reload / discovery / proxy
-  + WriteConfig(b *VPNBundle) error  // 抽象 bundle → 原生配置（磁盘）
+VPNDriver
+  + Capabilities() DriverCaps
+  + Validate(envelope) error
+  + Apply(envelope) error
   + Start() error
   + Stop() error
-  + Reload() error                   // 优先热重启，回落冷启
-  + Status() (*DriverStatus, error)  // 进程/tun/版本
+  + Reload() error
+  + Status() (*DriverStatus, error)
 ```
 
-**每个泄漏点的归位**：
+`DriverCaps` 至少拆为：
 
-| 泄漏点 | 归位到 |
-|--------|--------|
-| L1 配置格式 | `driver.WriteConfig(bundle)`（back 只产抽象 bundle） |
-| L2 热重启 | `driver.Reload()`（gnb 实现内含 `gnb_ctl`） |
-| L3 产品名 | `conventions.md` 产品表补 `wireguard`；ctl manifest 按产品分发 |
-| L4 格式定义 | 本文件（抽象层） + `data-models.md` 只留「gnb adapter」节 |
+- `peer_hot_update`
+- `interface_crypto_hot_update`
+- `network_state_reconcile`
+- `endpoint_roaming`
+- `endpoint_discovery`
+- `nat_traversal`
+- `transparent_relay`
+- `driver_proxy`
+- `dynamic_dns_refresh`
+- `custom_key_upload`
 
-### 3.3 概念映射表（gnb ↔ wireguard）
-
-| 抽象概念 | gnb 实现 | wireguard 实现 |
-|----------|----------|----------------|
-| `node.id` | 16 位 `nodeid` | 公钥指纹（base64→id） |
-| `node.listen_port` | `node.conf: listen` | `[Interface] ListenPort` |
-| `node.interface` | `node.conf: ifname`（`gnb_tun_*`） | `wg0` 等设备名 |
-| `node.mtu` | `node.conf: mtu` | `[Interface] MTU` |
-| `keys.self.private` | `security/{id}.private`（128 hex） | `[Interface] PrivateKey` |
-| `keys.peers[id]` | `ed25519/{id}.public`（64 hex） | `[Peer] PublicKey` |
-| `routes[]` | `route.conf`：`{node_id}\|{net}\|{mask}` | `[Peer] AllowedIPs` |
-| `discovery.index_servers` | `address.conf`：`i\|0\|ip\|port` | ⚠️ **无等价**（需 Endpoint/中继） |
-| `flags.proxy` | `node.conf: proxy on` | ⚠️ 无等价（走路由策略层） |
-| 热重启 | `gnb_ctl -w core.flag=2` | `wg syncconf <if> <(wg-quick strip ...)` |
-| 运行时对端表 | `gnb.map` | `wg show <if> dump` |
-
-> **两个 ⚠️ 是真正的语义缺口**：gnb 是 P2P + 索引发现 + 内建 proxy 标志；
-> wireguard 是显式 Endpoint 的点对点。抽象层必须让这些成为**驱动能力差异**，而非假设。
+单个 `hot_reload/discovery/proxy` 布尔值会给调用方过度承诺。
 
 ---
 
-## 4. 现状落差（2026-09-21 对 mynet_agent 实测）⚠️
+## 4. 代码实测后的真实现状
 
-本节写于侦察**之后**。上文 §1-§3 的部分假设与代码实际不符，落地前必须知道：
+| # | 实测 | 影响 |
+|---|---|---|
+| **D1** | `mynet_gnb/packages/p1-hot-restart-v2` 已实现并实测 `SIGHUP` / `gnb_ctl -w core.flag=2`，PID 不变并继承 TUN 与 UDP sockets；P2 实现 `proxy on`；CI 发版按 P1→P2→P3 应用补丁 | agent 不能再写“热重启不存在”。但能力取决于**实际发布二进制是否带补丁**，须探测版本/build capability |
+| **D2** | agent 已有 `VPNBundle`、`GNBDriver.WriteConfig` 和测试，但生产调用为 0；config-bundle 也没有 agent client | 新链是死代码，不能宣称 S6 完成 |
+| **D3** | 当前生产链仍是 `node.refresh` / `route.refresh` 分散拉取文本、分别写盘、冷重启；`address.conf` 无运行时刷新 | 迁移必须建立原子 bundle、generation、last-known-good，不能直接接上新写入者 |
+| **D4** | `node.conf` 至少 3 个写入者；`route.conf` 至少 2 个；keys 也有多写者，last-writer-wins | 先收敛配置写入权，再接 bundle |
+| **D5** | GNBRunner 有实现但生产零调用；应用层 StartNode 是返回 nil 的占位；系统服务/命令链/PID 文件并存 | 生命周期没有唯一权威 |
+| **D6** | ctl `ConfigPackService` 消费旧 `files/keys.ed25519/keys.security`，且请求 `/api/v2`；back 当前模块路由是 `/api/v1` | 新旧契约尚未贯通，成功响应也可能产空 ZIP |
+| **D7** | back route 数据混合 `node_ip/vpn_ip/lan_ip/wan_ip/endpoint_ip`；旧 GNB renderer 一律写固定 `/24` | 不能机械生成 WG AllowedIPs；也需修正 GNB route 数据模型 |
+| **D8** | `mynet_gnb/src` 本身含一条可疑热重启路径；生产发布语义来自 CI 打补丁后的产物 | 测试必须针对发布二进制，不可只读源码树推断 |
 
-| # | 原假设 | 实测 | 影响 |
-|---|--------|------|------|
-| **D1** | 热重启已存在（`gnb_ctl -b gnb.map -w core.flag=2`） | **代码里根本不存在**。全仓（含非 Go）搜不到 `gnb_ctl -w` / `core.flag`。仅 `cmd/mynetd/main.go:152,174` 的 SIGHUP 用于重载 **daemon 自身 config**，与 gnb 无关 | `Reload()` 无现成实现可搬；首版只能冷重启，热重启需单独立项并**先验证目标 gnb 版本支持** |
-| **D2** | 只有一个 driver 待扩展 | `GNBDriver` 仅**只读**（`internal/infrastructure/gnb_driver.go`，走 `gnb_ctl -s -b gnb.map`）；工厂对 wireguard 直接返回 `"TODO v0.10.0"`（`vpn_driver_factory.go:26-31`）；`driver/wireguard/` 是**空目录** | `WriteConfig/Start/Stop` **无承接者**，需从零散代码收敛 |
-| **D3** | VPN 类型抽象单一 | **三套常量并存**：`domain.VPNDriverType` / `node.VPNTypeWireGuard` / `common.NodeTypeWireGuard`（另有 `config.WG`） | 不先统一，driver 分派必然漂移 |
-| **D4** | conf 路径集中、生命周期单点 | `driver/gnb/conf/{nodeID}` 硬编码散落 **~10 个文件**；gnb 生命周期有**三条并存**：`GNBRunner`(PID 文件) / `Manager`(内存 PID) / 系统服务(systemd·launchd·procd) | `Start/Stop` 统一需先指定唯一权威，否则行为分叉 |
-
-> 另有落盘敏感点：`security/*.private` 为 0600，搬迁**不得改变文件模式**。
+密钥与落盘仍需遵守：GNB `security/*.private` 0600；WireGuard private key/PSK 不得
+进入命令行、日志或普通状态 dump。
 
 ---
 
-## 5. 落地步骤（修订）
-
-**原则：先立接口、划边界（行为零变化），再逐步收敛。不要一步到位。**
+## 5. 修订后的落地顺序
 
 | 步 | 动作 | 出口判据 |
-|----|------|----------|
-| **S1** | 只加接口与类型：`Capabilities()/WriteConfig()/Start()/Stop()/Reload()/Status()` + `DriverCaps` + `VPNBundle`，**不做实现搬迁** | 编译通过，行为零变化 |
-| **S2** | 统一 VPN 类型常量（D3）→ 单一来源，旧常量标 `deprecated` | 三套收敛为一 |
-| **S3** | 把现有 gnb 行为**逐项**搬进 `GnbDriver`：只读（已在）→ `WriteConfig` → `Start/Stop` → `Reload`(冷启) | 每搬一项可独立验证行为不变 |
-| **S4** | 指定 gnb 生命周期的**唯一权威**（D4），其余两条改为委托 | 全系统只有一处启动 gnb |
-| **S5** | `Reload()` 热重启（D1）：**先验证**目标 gnb 版本是否支持 `gnb_ctl -w core.flag=2`；不支持则维持冷启 | 有验证记录 + 回落路径 |
-| **S6** | back 改产抽象 bundle（见 `back-upshift-design.md` §5）；ctl 注册 `wireguard` 产品位 | 契约与产品位就位 |
-| **S7** | `WireGuardDriver` 实现（D2），能力差异用 `Capabilities()` 声明 | 缺项优雅降级 |
+|---|---|---|
+| **R0** | 冻结当前生产链；撤销错误的扁平 VPNBundle 草案 | back/agent/ctl 不再宣称 S6 完成 |
+| **R1** | 建立发布二进制 capability 探测：GNB P1/P2/P3、WG tools/kernel 特性 | 能力来自实测而非 driver 名 |
+| **R2** | 定义 `BundleEnvelope + NetworkIntent + GnbIntent + WireGuardIntent` schema v2 | JSON Schema + 双端 fixture 可互解 |
+| **R3** | 修正 back 业务模型：区分 interface address、advertised prefix、WAN/endpoint、peer relationship、relay/topology、key algorithm | 不再从混合 route 列表猜语义 |
+| **R4** | agent 建原子 Apply：stage→validate→write→reload→health-check→commit/rollback；保存 generation 与 last-known-good | 任一步失败不留下半套配置 |
+| **R5** | 收敛配置写入权与生命周期权威；旧 node/route refresh 改为委托 Apply | 每种文件只有一个写入者 |
+| **R6** | 实现 GNB adapter，完整保留 node.conf 选项、route 节点环/relay、address 角色、keys、P1/P2 能力 | 与现生产链行为对照通过 |
+| **R7** | 实现 WireGuard crypto reconciler + Linux NetworkReconciler | `wg syncconf` 与 address/FIB/rule/firewall 分开验证 |
+| **R8** | 接 back API/ETag/cache；ctl 安装包复用同一 schema | 在线更新、离线启动、安装包三条链一致 |
+| **R9** | 逐步关闭旧分散端点和多写者 | 无 last-writer-wins |
 
-**风险**：S3/S4 触碰 gnb 生命周期，是高风险区——动手前需建立可验证的行为基线（或至少人工核对清单）。
+在 R2–R6 完成前，不应继续实现 `WireGuardDriver`；否则会把错误抽象固化进代码。
 
 ---
 

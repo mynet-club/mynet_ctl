@@ -66,14 +66,19 @@
 
 ## 5. 与 W2（driver 抽象）的接口
 
-back 上移后产出的配置**必须是 driver-agnostic 的 `VPNBundle`**，而不是 gnb 原生文本。
+back 上移后产出的配置不能是 gnb 原生文本，也不能是假装完全通用的扁平结构。
 
 ```
 [错误] back ──"nodeid ...\nifname gnb_tun_178\n..."──▶ agent
-[正确] back ──VPNBundle{node,peers,routes,keys}──▶ agent ──driver.WriteConfig()──▶ 原生
+[错误] back ──FlatBundle{routes→AllowedIPs, discovery→Endpoint}──▶ agent
+[正确] back ──Envelope{network, gnb-intent | wireguard-intent}──▶ agent
+              └─ agent 分别执行 driver adapter 与 OS NetworkReconciler
 ```
 
-否则「上移」只是把 gnb 耦合从客户端搬到了 back，与 W2 目标冲突。
+GNB 的 route/index/NAT 穿透/forward/relay/proxy 与 WireGuard 的
+cryptokey routing/Endpoint roaming/keepalive 不同，必须用 driver-specific intent 表达；
+公共层只保存业务节点、接口意图、网络状态和 generation。完整契约见
+`spec/driver-abstraction.md` §3。
 
 ---
 
