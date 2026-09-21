@@ -124,6 +124,41 @@
 **本轮基线**：`route:list` = **1054** · `php -l` 全过 · 外键 **101** 个 **0 违规** ·
 消费者控制器与领域服务全部可实例化。
 
+### 十 · T54 消费者层 HTTP 黄金路径跑通（提交 `f59511a8`）
+
+用户选定「HTTP 黄金路径冒烟」。走真实 HTTP Kernel，按框架契约带 `X-Tenant-ID` + Bearer token。
+
+**结果：全链路 2xx**
+```
+框架 register(A,B) → nodes/create(A,B) → nodes/keys(wireguard, A,B)
+→ social/friend-request A→B → social/data(B 见 pending)
+→ friend-request/accept B → friends=1
+→ route/send-request A→B → route/accept-request B
+→ nodes/config-bundle → route/data
+```
+库内 `node_keys` / `friendships` / `routes` / `node_route_requests` 由 API 自己写入。
+
+**冒烟暴露的 6 类真实缺陷**（静态检查均未发现）：
+
+| # | 缺陷 | 修法 |
+|---|---|---|
+| 1 | `queue.default=database` 但 `jobs`/`failed_jobs`/`job_batches` 不存在 → 框架注册 `dispatch()` 直接 500 | 补队列基础设施迁移（Laravel 框架表，自增 id，与 cache/sessions 同类豁免） |
+| 2 | `users.tenant_id` 列缺失；框架 `User::$fillable` 含该列，且 Sanctum 按 `tokenable_type` 解析到**框架基类**（无 tenant_users 回落）→ 租户收敛的业务调用全部失败 | 补列 + 从 tenant_users 回填 |
+| 3 | ~75 处代码引用 `\App\Models\{Node,Route,NodeIP,IPPool,Service}` —— **全都不存在**，真实类在 `App\Modules\VPN\Models\` | 批量改正 73 处 |
+| 4 | `RouteController::sendRequest` 把 `intval($tenantId)` 传给要求 `TenantId` 值对象的域方法 | 改 `TenantId::fromInt()` |
+| 5 | `$model->id` 用于全局 ID 模型（`FriendRequest` PK=`friend_request_id` 等）→ 返回 null，客户端拿不到 accept 用的 id；`NodeRouteRequestModel` 缺 `isPending()` | 24 处改 `getKey()`；模型补状态方法 |
+| 6 | `!==` 严格比较 DB 值与值对象 int（PDO 有时返回字符串）→ 正当收件人被拒 | 21 处左侧加 `(int)`；好友 accept 租户解析改 input→header→user |
+
+**两条框架契约（不是 bug，是设计）**：
+1. **客户端必须声明租户**：`IdentifyTenant` 对 User token 只在模型有 `current_tenant_id`
+   时才解析，否则 `TenantScope` fail-closed（`WHERE 1=0`）。标准做法带 `?tenant_id=` 或
+   `X-Tenant-ID`，框架再校验归属。
+2. 带 `X-Tenant-ID` 注册时，框架会**自动创建 `tenant_users`**。
+
+**GNB 密钥生成依赖原生扩展 `gnb_ed25519`**（源自 `gnb_src`），本环境未加载；**WireGuard 路径走 sodium，正常**——也正好是架构主线方向（S6/S7）。
+
+**T54 基线**：`route:list` = **1054** · `php -l` 全过 · 外键 **101** 个 **0 违规** · 黄金路径全 2xx。
+
 **唯一遗留的不可解析引用 = 4 个刻意保留的 Notification 地雷**（见 §2.3）。
 
 ### 已完成的两项"别建表，该删代码"
