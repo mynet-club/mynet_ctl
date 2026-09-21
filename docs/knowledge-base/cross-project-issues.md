@@ -83,6 +83,48 @@
 
 ---
 
+### 🟡 P2 — 本机能力面落地时发现的前置（2026-09-22 记录）
+
+> 本轮在把 `spec/local-api.md`（本机能力面）落地到 mynetd 时撞出来的。
+> 原则同前：**先记录、再处理**；需要决策的不猜。
+
+#### CPI-9. `proxy` 标志的落点未定，proxy 域因此落不了地
+- **ID**：CPI-9
+- **位置**：`local-api.md` §3 proxy 行；[gnb_config_render.go](../../../mynet_agent-integration/internal/infrastructure/gnb_config_render.go) 的 `renderNodeConf`
+- **现状**：契约要求 `proxy.enable` 写 `proxy on`（gnb_native）到 node.conf，
+  但**渲染器目前不输出这一行**——`domain.BundleFlags.Proxy` 字段存在却从未被使用
+  （`renderNodeConf` 只写 nodeid/ifname/listen/mtu/daemon off）。所以磁盘上根本没有这个标志可读可写
+- **两条路各自的问题**：
+  a) 按分层让**驱动**从 bundle 渲染该行（与 `BundleFlags.Proxy` 的设计意图一致）——
+     但需要"读回当前 bundle 再改标志位"的路径，现在没有
+  b) 本机 API 直接改 node.conf——把 gnb 的文件格式耦合进 API 层，
+     与 `driver-abstraction.md` 的分层相悖
+- **倾向**：a)；但这是驱动层的设计决定，不在本机 API 这一轮里替它定
+- **优先级**：中（proxy 是 GUI 的常用开关）
+
+#### CPI-10. `nodes / zones` 域的边界未厘清
+- **ID**：CPI-10
+- **位置**：`local-api.md` §3 的 `nodes / zones` 行
+- **现状**：一行里混了三种东西，归属不同
+  - 本机节点**列表** → 本机态，可直接做
+  - **切换当前节点** → 要改 `mynet.conf` 的 NodeID 并重载，属本机配置写入
+  - **zones** → 平台态（back 上的 zone 列表），按 §0 应走 `relay` 域经网关中继
+- **影响**：不厘清就会把平台态数据塞进本机 API，破坏 §0 的信任边界
+- **优先级**：中
+
+#### CPI-11. `service.*` 依赖驱动实现生命周期接口（非缺陷，是排期依赖）
+- **ID**：CPI-11
+- **现状**：本机 API 的 `service.start/stop/reload` 端点已按契约接线，但
+  `domain.VPNLifecycleDriver`（Start/Stop/Reload/Capabilities/WriteConfig/Status）
+  **尚无任何实现**——`GNBDriver` 有 Capabilities/WriteConfig/Status，缺 Start/Stop/Reload，
+  实测不满足该接口（与 `driver-abstraction.md` 的 S1 阶段一致）
+- **本机 API 的做法**：类型断言取能力，取不到返回稳定错误码 `unsupported`，
+  错误信息里点明属 S3/S5 的工作；**不**代驱动展开 gnb 机制（契约明确禁止）
+- **解锁条件**：驱动实现该接口后，本机 API 一行不用改
+- **优先级**：记在案（不是本机 API 的债，是驱动层排期）
+
+---
+
 ### 🟡 P2 — 控制面相关（2026-09-22 记录）
 
 > CPI-7 为唯一遗留（低优先级：当前 ID 上限恰好等于 float64 精确整数上限，安全）。
@@ -144,6 +186,9 @@
 | 2026-09-22 | **CPI-5** 命令输出没回传 back（`Execute` 把 result 硬写成"命令执行成功"） | `b407e91` |
 | 2026-09-22 | **CPI-6** 节点通道 limit 按 IP 60/分（中继后即 300 节点打满）→ 改按已验签节点 180/分 | `fb97a776` |
 | 2026-09-22 | **CPI-8** 心跳未收敛到中继 → `relay_heartbeat`（默认开）让心跳也走网关 | `9a3d4e8` |
+| 2026-09-22 | 本机能力面骨架落地（信封/token 鉴权/HTTP/传输无关 Service 层） | `ee5467e` |
+| 2026-09-22 | 本机能力面 service/config 两域 | `28afbb5` |
+| 2026-09-22 | 本机能力面 peers 域 | `790edbd` |
 
 ---
 
