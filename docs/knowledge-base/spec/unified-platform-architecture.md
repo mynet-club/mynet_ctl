@@ -185,13 +185,33 @@ ConnectionGrant:    active → revoked (终态)
 | 新对象 | 现有 back 模型 | 现有 agent 行为 |
 |--------|---------------|----------------|
 | `NodeIdentity` | `nodes` 表 | — |
-| `Friendship` | `Social\*` 模块（friend_requests/friendships） | — |
+| `Friendship` | `friendships`/`friend_requests` 表（仅有 migration，无 Eloquent 模型，由 SocialController 直接操作） | — |
 | `ConnectionRequest` | `routes` 表（`status=pending`） | — |
 | `Connection` | `routes` 表（`status=enabled`） | `route.refresh` 触发 |
 | `ConnectionGrant` | 无独立模型（隐含在 `node_ips`） | `route.conf` 中的网段 |
 | `KeyExchange` | `node_keys` 表 | `ed25519/` 或 WG peer |
 
-**当前缺失**：`ConnectionGrant`、`KeyExchange.algorithm`、`KeyExchange.key_version`、`KeyExchange.status` 均不存在。
+**当前缺失**：
+- `ConnectionGrant`：无独立表
+- `KeyExchange.algorithm`/`key_version`/`status`：`node_keys` 表不存在这些列
+- `Connection.status` 的 `suspended`/`revoked`：`routes.status` 仅 0/1/2/3（disabled/enabled/pending/rejected），需扩展或映射
+- `ConnectionRequest` 与 `Connection` 共用 `routes` 单表：过渡期通过 status 区分，后续可拆分
+
+**Status 映射**（routes.status → 新模型）：
+
+| routes.status | 含义 | ConnectionRequest.status | Connection.status |
+|---------------|------|-------------------------|-------------------|
+| 0 (DISABLED)  | 禁用 | — | suspended |
+| 1 (ENABLED)   | 启用 | — | active |
+| 2 (PENDING)   | 待审批 | pending | — |
+| 3 (REJECTED)  | 拒绝 | rejected | — |
+| (新增 4)      | 撤销 | revoked | revoked |
+
+**与现有 agent 代码的关系**：
+- 现有 `internal/domain/vpn_driver.go` 的 `VPNDriver`（只读接口）保持不变
+- 现有 `internal/domain/vpn_bundle.go` 的 `VPNBundle` 将被 `BundleEnvelope` 取代（阶段 2-3）
+- 现有 `internal/domain/vpn_driver_factory.go` 的工厂模式保持，但创建的 driver 实现 `ConfigDriver` 而非仅 `VPNDriver`
+- `internal/tools/firewall|routing` 中的多写者将在阶段 7.5 收敛到 NetworkBackend
 
 ### 1.5 出口判据
 
@@ -247,10 +267,17 @@ TransportPlanner  // 纯函数，输入业务连接 + 能力表 → 输出拓扑
 TransportPlan
   connection_id     int
   mode              string
-  active_path       DirectPlan | ProxyPlan | RelayPlan
+  active_path       DirectPlan | ProxyPlan | RelayPlan | null   // null 当 mode=disabled
   fallback_path     ProxyPlan | RelayPlan | null
   driver_hints      array   // 供 L5 使用的业务提示（不含原生语法）
 ```
+
+> **类型约定**：`node_id` 在业务模型中为 `int`，在 BundleEnvelope/JSON 中统一为 `string`
+> （跨语言兼容，避免 PHP int 与 Go int64 精度差异）。
+
+> **`driver_hints` 槽位**：Envelope 的 `connections[]` 中每个连接条目包含
+> `active_path`/`fallback_path`，`driver_hints` 的内容由 L5 Driver 在 Apply 时
+> 根据 TransportPlan 自行推导，不需要在 Envelope 中单独传输。
 
 ```
 DirectPlan
@@ -280,20 +307,49 @@ namespace App\Modules\VPN\Domain\Services;
 
 interface TransportPlannerDomainService
 {
-    /** 为一个 Connection 计算传输计划 */
+    /**
+     * 为一个 Connection 计算传输计划。
+     * @param Connection $connection     业务连接
+     * @param ConnectionGrant[] $grants  该连接的所有授权
+     * @param NodeCapability $sourceCap  发起节点的能力
+     * @param NodeCapability $targetCap  目标节点的能力
+     * @param NodeCapability|null $proxyCap  指定代理节点的能力（mode=proxy/auto 时必传）
+     */
     public function plan(
         Connection $connection,
-        array $grants,               // ConnectionGrant[]
+        array $grants,
+        NodeCapability $sourceCap,
+        NodeCapability $targetCap,
+        ?NodeCapability $proxyCap = null,
     ): TransportPlan;
 
-    /** 为一组 Connections 批量计算（配置生成时使用） */
+    /**
+     * 为一个节点的所有 Connections 批量计算。
+     * @param NodeCapability $selfCap  本节点能力
+     * @param array<NodeCapability> $peerCaps  所有对端节点能力（keyed by node_id）
+     * @param array<NodeCapability> $proxyCaps 所有候选代理节点能力（keyed by node_id）
+     */
     public function planAll(
         int $nodeId,
         array $connections,
         array $grants,
+        NodeCapability $selfCap,
+        array $peerCaps,
+        array $proxyCaps,
     ): array;  // TransportPlan[]
 }
 ```
+
+**NodeCapability 推导数据源**（back 侧）：
+
+| 字段 | 来源 |
+|------|------|
+| `can_accept_inbound` | `nodes.node_status` 在 [1,2] 且最近心跳 < 阈值 |
+| `has_public_endpoint` | `node_ips` 中存在 `ip_type=wan_ip` 或 `endpoint_ip` |
+| `can_proxy` | `nodes.node_type` 包含 PROXY/GATEWAY 位（位掩码 4/64） |
+| `can_relay` | `nodes.node_type` 包含 RELAY/MASTER 位（位掩码 2/8） |
+| `supports_ipv6` | `node_ips` 中存在 IPv6 地址 |
+| `region` | `nodes.node_remarks` 或独立 region 字段（待定） |
 
 ### 2.4 `auto` 模式的业务语义
 
@@ -340,12 +396,18 @@ interface TransportPlannerDomainService
       "connection_id": 123,
       "target_node_id": "1002",
       "transport_mode": "auto",
+      "transport_policy": {
+        "allow_direct": true,
+        "fallback_to_proxy": true,
+        "proxy_node_id": "9001",
+        "keepalive_seconds": 25
+      },
       "active_path": { "...": "DirectPlan" },
       "fallback_path": { "...": "ProxyPlan" }
     }
   ],
   "network": {
-    "addresses": ["10.20.0.2/32"],
+    "addresses": ["10.20.0.1/24"],
     "routes": [
       { "prefix": "192.168.20.0/24", "via_node_id": "1002", "type": "unicast" }
     ],
@@ -413,7 +475,7 @@ interface TransportPlannerDomainService
     "interface": {
       "private_key_ref": "secret://node_keys/1001/private",
       "public_key": "base64-32-byte",
-      "addresses": ["10.20.0.2/32"],
+      "addresses": ["10.20.0.1/24"],
       "listen_port": 51820,
       "fwmark": null,
       "mtu": 1420,
@@ -425,7 +487,7 @@ interface TransportPlannerDomainService
         "business_node_id": "1002",
         "public_key": "base64-32-byte",
         "preshared_key_ref": null,
-        "bootstrap_endpoint": "1.2.3.4:51820",
+        "bootstrap_endpoint": "203.0.113.2:51820",
         "allowed_ips": ["10.20.0.2/32", "192.168.20.0/24"],
         "persistent_keepalive_seconds": 25
       }
@@ -457,7 +519,39 @@ interface TransportPlannerDomainService
   agent: /var/lib/mynet/bundle/{generation}.json + last-known-good.json
 ```
 
-### 3.5 兼容策略
+### 3.5 秘密引用解析
+
+`secret://` URI 是 Envelope 中私钥/PSK 的引用格式，不包含明文。
+
+```
+格式: secret://{source}/{id}/{field}
+
+已知 source:
+  node_keys    back 的 node_keys 表
+    示例: secret://node_keys/1001/private
+    解析: back 在生成 Envelope 时将明文写入 Envelope 的内联字段
+
+解析时机:
+  back 生成 Envelope 时：
+    1. 读取 secret:// 引用
+    2. 从对应数据源获取明文
+    3. 将明文写入 Envelope 的 driver-specific intent 字段
+       GNB: gnb.identity.private_key
+       WG:  wireguard.interface.private_key
+       WG:  wireguard.peers[].preshared_key
+    4. Envelope 中仅保留明文字段，secret:// 引用不下发给 agent
+
+agent 侧:
+  agent 收到的 Envelope 已包含明文私钥（在 driver-specific intent 中）
+  agent 不需要解析 secret:// — 该引用仅存在于 back 内部生成流程
+
+迁移路径:
+  当前 vpn_bundle.go 的 BundleKeys.Self.Private 是明文字段
+  阶段 2 实现 BundleEnvelope 生成器时：
+    - Envelope 的 driver intent 中保留明文 private_key（与当前行为一致）
+    - secret:// 引用仅用于 back 内部生成流程的可追溯性
+    - 后续阶段可将 agent 侧改为 secret_ref 模式（agent 自行从安全存储读取）
+```
 
 | 场景 | 处理 |
 |------|------|
@@ -533,8 +627,8 @@ flowchart LR
     V -->|"error"| E["报错, 保留 current"]
     V -->|"ok"| ST["Stage 到临时目录"]
     ST --> DA["driver.Apply(env)"]
-    DA -->|"error"| RB["Rollback → last-known-good"]
-    DA -->|"ok"| NA["network.Apply(env.network)"]
+    DA -->|"error"| RB["Rollback: CleanupGeneration(old) → restore last-known-good"]
+    DA -->|"ok"| NA["network.Apply(env)"]
     NA -->|"error"| RB
     NA -->|"ok"| RL["driver.Reload()"]
     RL -->|"error"| RB
@@ -763,6 +857,16 @@ type NetworkBackend interface {
     // Platform 返回平台标识: "linux"|"openwrt"|"darwin"|"windows"
     Platform() string
 
+    // Apply 一次性协调 Envelope 中的全部 NetworkIntent
+    // 内部按序调用 EnsureInterface → SetAddresses → ReconcileRoutes
+    //   → ReconcileRules → EnableForwarding → ReconcileFirewall → ReconcileNat
+    // 任一步失败即返回错误，调用方负责 CleanupGeneration
+    Apply(env *BundleEnvelope) error
+
+    // CleanupGeneration 清理指定 generation 的所有网络状态
+    // 幂等：多次调用无副作用
+    CleanupGeneration(generation string) error
+
     // EnsureInterface 创建或更新网络接口
     EnsureInterface(spec InterfaceSpec) error
 
@@ -783,9 +887,6 @@ type NetworkBackend interface {
 
     // ReconcileNat 协调 NAT/MASQUERADE 规则
     ReconcileNat(specs []NatSpec) error
-
-    // CleanupGeneration 清理指定 generation 的所有网络状态
-    CleanupGeneration(generation string) error
 }
 
 // InterfaceSpec 接口规格
@@ -937,6 +1038,14 @@ type NetworkHealth struct {
 ```go
 package observability
 
+// TransportPolicy 从 Envelope connections[].transport_policy 反序列化
+type TransportPolicy struct {
+    AllowDirect      bool   `json:"allow_direct"`
+    FallbackToProxy  bool   `json:"fallback_to_proxy"`
+    ProxyNodeID      string `json:"proxy_node_id,omitempty"`
+    KeepaliveSeconds int    `json:"keepalive_seconds,omitempty"`
+}
+
 // FailoverState 当前连接的故障切换状态
 type FailoverState string
 
@@ -959,13 +1068,16 @@ type FailoverStateMachine struct {
 }
 
 // Evaluate 根据观测状态决定是否需要切换
-// 返回: 是否需要 Apply 新配置 + 新的 TransportPlan 路径
+// 输入: connection 的 transport_policy（来自 Envelope）+ 当前观测 + 当前故障切换状态
+// 返回: 是否需要 Apply 新配置 + 新的路径 + 新状态
 func (m *FailoverStateMachine) Evaluate(
     connectionID int,
-    desired    TransportPlan,
+    policy     TransportPolicy,     // 来自 Envelope connections[].transport_policy
+    activePath DirectPlan|ProxyPlan|RelayPlan,
+    fallbackPath ProxyPlan|RelayPlan|null,
     observed   ObservedPeer,
     current    FailoverState,
-) (needsApply bool, newPath DirectPlan|ProxyPlan, newState FailoverState)
+) (needsApply bool, newPath DirectPlan|ProxyPlan|RelayPlan, newState FailoverState)
 ```
 
 ### 7.4 状态转换图
@@ -1052,6 +1164,7 @@ back 消费:
 | 1.6 | 实现 `KeyExchangeDomainService` | back | 单元测试通过 |
 | 1.7 | 现有 `routes` 表写入适配（RouteStatus→ConnectionStatus 映射） | back | 不破坏现有 API |
 | 1.8 | 现有 `node_keys` 读取适配（自动填充 algorithm/status） | back | 不破坏现有 API |
+| 1.9 | 实现 `NodeCapability` 推导逻辑（从 nodes+node_ips 推导） | back | 单元测试覆盖 6 个字段 |
 
 **依赖**：无（当前生产链不受影响）
 **回滚策略**：migration down；新 Domain Service 不接入现有调用链
@@ -1064,11 +1177,11 @@ back 消费:
 | 2.1 | 定义 BundleEnvelope JSON Schema | ctl spec | Schema 文件可校验 fixtures |
 | 2.2 | 创建 PHP/Go 共享 fixtures（至少 6 个场景） | ctl spec | 双端解码一致 |
 | 2.3 | 定义 `TransportPlannerDomainService` 接口 | back | 接口签名冻结 |
-| 2.4 | 实现 TransportPlanner（纯函数） | back | 单元测试覆盖 5 种 mode |
-| 2.5 | 实现 BundleEnvelope 生成器 | back | 从 Connection+Grant 生成 Envelope |
+| 2.4 | 实现 TransportPlanner（纯函数，依赖 1.9 的 NodeCapability） | back | 单元测试覆盖 5 种 mode |
+| 2.5 | 实现 BundleEnvelope 生成器 | back | 从 Connection+Grant+TransportPlan 生成 Envelope |
 | 2.6 | 实现 `config_revisions` 表 + ETag | back | API 可返回 Envelope |
 
-**依赖**：阶段 1 的 Connection/Grant 对象
+**依赖**：阶段 1 的 Connection/Grant 对象 + NodeCapability（步骤 1.9）
 **回滚策略**：新 API 未接入现有调用链，可安全下线
 **风险**：fixtures 要覆盖 GNB 和 WG 两种 driver 的 Envelope
 
@@ -1107,13 +1220,12 @@ back 消费:
 
 | 步骤 | 动作 | 负责仓 | 出口判据 |
 |------|------|--------|---------|
-| 5.1 | 实现 NodeCapability 推导逻辑 | back | 从 nodes+node_ips 推导 |
-| 5.2 | 实现 FailoverStateMachine（Go） | agent | 状态转换测试 |
-| 5.3 | 实现 ObservedState 采集（agent heartbeat） | agent | heartbeat 包含观测数据 |
-| 5.4 | back 存储 node_observations | back | 可查询 |
-| 5.5 | auto 模式集成测试（GNB 场景） | agent | direct→proxy 切换测试 |
+| 5.1 | 实现 FailoverStateMachine（Go） | agent | 状态转换测试 |
+| 5.2 | 实现 ObservedState 采集（agent heartbeat） | agent | heartbeat 包含观测数据 |
+| 5.3 | back 存储 node_observations | back | 可查询 |
+| 5.4 | auto 模式集成测试（GNB 场景） | agent | direct→proxy 切换测试 |
 
-**依赖**：阶段 4 的 GNB Driver
+**依赖**：阶段 4 的 GNB Driver + 阶段 1.9 的 NodeCapability
 **回滚策略**：观测数据不影响 Apply 流程，可安全下线
 **风险**：auto 模式集成测试需要可模拟 direct 失败的环境
 
@@ -1174,6 +1286,10 @@ flowchart LR
 | auto 模式复杂度 | 阶段 5/6 故障切换逻辑可能覆盖不足 | 先实现 GNB auto（GNB 有内建 fallback），WG auto 后补 |
 | 私钥安全 | 配置文件/日志泄露 | secret_ref 机制；私钥永不写入 apply_journal |
 | 并发 Apply | 两个 Apply 同时写文件 | 文件锁 + generation 比较 |
+| PHP↔Go schema 漂移 | 双端 fixtures 通过但生产数据不兼容 | 阶段 2.2 的 fixtures 必须来自真实 back 输出，而非手工构造 |
+| Grant 任意 CIDR vs GNB 限制 | GNB 仅支持 /8/16/24/32，业务层 Grant 可能声明 /27 | TransportPlanner 在生成 GNB route 时检查 CIDR 兼容性，不兼容时降级或警告 |
+| Fetch 端点鉴权 | agent 拉取 Envelope 时的认证/租户隔离 | 复用现有 HMAC/心跳鉴权机制，Envelope 端点不新增认证方式 |
+| node_observations 建表 | 阶段 5.3 缺少 migration | 阶段 5 开始前确认 migration 已创建 |
 
 ### 8.5 测试策略总览
 
