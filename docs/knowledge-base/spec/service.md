@@ -1,5 +1,11 @@
 # SPEC: 服务启停（Service）
 
+> ⚠️ **本文件描述的是已冻结的旧线（`mynet_lua` / `mynet_client`），不是当前的实现依据。**
+> 冻结策略见 [`../integration-plan-v2.md`](../integration-plan-v2.md) §2.2；
+> 本目录（`spec/README.md`）声明的唯一实现是 **`mynet_agent`（`mynetd`）**。
+> **目标线对应**：目标线把启停/重载**收敛到驱动层**（[`driver-abstraction.md`](driver-abstraction.md) 的 `VPNDriver.Reload()` 等），本机只表达意图（[`local-api.md`](local-api.md) §3 service 域、§4 热重启语义）。下述「三层模型 / preStart hooks / PID 文件」等步骤是旧线的做法
+
+
 > 更新：2026-05 | 适用：mynet_lua / mynet_client
 
 ---

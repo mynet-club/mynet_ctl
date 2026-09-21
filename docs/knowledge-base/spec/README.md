@@ -25,20 +25,27 @@
 
 ## 文件索引
 
-| 文件 | 操作域 |
-|------|--------|
-| [control-plane.md](control-plane.md) | **控制面与传输**：gateway 通道、多点部署、借 node 访问、GUI 接入、心跳链路、proxy 下架 |
-| [node-keying.md](node-keying.md) | **节点密钥与鉴权**：GNB ed25519 密钥派生 / `ed25519_key_exchange` DH / 心跳 HMAC 现状 / gateway 鉴权方案 |
-| [unified-platform-architecture.md](unified-platform-architecture.md) | 统一平台架构 L1~L7 与实施计划（业务与驱动分层） |
-| [driver-abstraction.md](driver-abstraction.md) | VPN Driver 抽象层：公共控制面 + 驱动专属 intent（gnb / wireguard） |
-| [local-api.md](local-api.md) | 本机能力面：mynetd HTTP/ubus 契约（GUI/OpenWrt 壳只调不改） |
-| [auth.md](auth.md) | 登录 / 登出 / Token 刷新 |
-| [wizard.md](wizard.md) | 安装向导：首次配置、Zone/节点选择、配置同步 |
-| [service.md](service.md) | 服务三层启停（GNB 进程 → 路由注入 → 防火墙） |
-| [proxy.md](proxy.md) | ⚠️ **已冻结（旧线）** 代理分流操作契约；新线见 control-plane.md §7 |
-| [plugins.md](plugins.md) | 插件生命周期（heartbeat、updater、proxy）；心跳 HMAC 签名细节 |
-| [data-models.md](data-models.md) | 所有数据结构（JSON/conf 格式，唯一定义处） |
-| [debug-env.md](debug-env.md) | macOS 本地调试环境：vm（OpenWrt）/ vml（Debian+client） |
+| 文件 | 操作域 | 适用线 |
+|------|--------|--------|
+| [control-plane.md](control-plane.md) | **控制面与传输**：gateway 通道、多点部署、借 node 访问、GUI 接入、心跳链路、proxy 下架 | 目标线 |
+| [node-keying.md](node-keying.md) | **节点密钥与鉴权**：GNB ed25519 密钥派生 / `ed25519_key_exchange` DH / 心跳 HMAC 现状 / gateway 鉴权方案 | 目标线 |
+| [unified-platform-architecture.md](unified-platform-architecture.md) | 统一平台架构 L1~L7 与实施计划（业务与驱动分层） | 目标线 |
+| [driver-abstraction.md](driver-abstraction.md) | VPN Driver 抽象层：公共控制面 + 驱动专属 intent（gnb / wireguard） | 目标线 |
+| [local-api.md](local-api.md) | 本机能力面：mynetd HTTP/ubus 契约（GUI/OpenWrt 壳只调不改） | 目标线 |
+| [data-models.md](data-models.md) | 所有数据结构（JSON/conf 格式，唯一定义处） | 目标线 |
+| [auth.md](auth.md) | 登录 / 登出 / Token 刷新 | ⚠️ **冻结（旧线）** |
+| [wizard.md](wizard.md) | 安装向导：首次配置、Zone/节点选择、配置同步 | ⚠️ **冻结（旧线）** |
+| [service.md](service.md) | 服务三层启停（GNB 进程 → 路由注入 → 防火墙） | ⚠️ **冻结（旧线）** |
+| [proxy.md](proxy.md) | 代理分流操作契约 | ⚠️ **冻结（旧线）**，新线见 control-plane.md §7 |
+| [plugins.md](plugins.md) | 插件生命周期（heartbeat、updater、proxy）；心跳 HMAC 签名细节 | ⚠️ **冻结（旧线）** |
+| [debug-env.md](debug-env.md) | macOS 本地调试环境：vm（OpenWrt）/ vml（Debian+client） | ⚠️ **冻结（旧线）** |
+
+> ⚠️ 标注「冻结（旧线）」的文件描述的是 `mynet_lua` / `mynet_client` 的行为，
+> **不是当前实现的依据**——它们保留下来只为归档与对照。每个文件顶部都写明了目标线的
+> 对应契约在哪。冻结策略见 [`../integration-plan-v2.md`](../integration-plan-v2.md) §2.2。
+>
+> 这层标注是必须的：本索引声明唯一实现是 `mynet_agent`，而此前翻到 `service.md`
+> 之类会读到一个已经没人维护的旧线做法，照着实现就会做出旧形态。
 
 ### back 侧专项（实现进度类）
 

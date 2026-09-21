@@ -1,5 +1,11 @@
 # SPEC: 代理分流（Proxy）
 
+> ⚠️ **本文件描述的是已冻结的旧线（`mynet_lua` / `mynet_client`），不是当前的实现依据。**
+> 冻结策略见 [`../integration-plan-v2.md`](../integration-plan-v2.md) §2.2；
+> 本目录（`spec/README.md`）声明的唯一实现是 **`mynet_agent`（`mynetd`）**。
+> **目标线对应**：**proxy 在目标线整体下架**：能力归宿见 [`control-plane.md`](control-plane.md) §7
+
+
 > 更新：2026-09-21 | 适用：mynet_lua / mynet_client
 > 状态：**已冻结（旧线）** —— mynet_lua / mynet_client 线不再演进
 >

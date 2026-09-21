@@ -1,5 +1,11 @@
 # SPEC: 安装向导（Wizard）
 
+> ⚠️ **本文件描述的是已冻结的旧线（`mynet_lua` / `mynet_client`），不是当前的实现依据。**
+> 冻结策略见 [`../integration-plan-v2.md`](../integration-plan-v2.md) §2.2；
+> 本目录（`spec/README.md`）声明的唯一实现是 **`mynet_agent`（`mynetd`）**。
+> **目标线对应**：目标线的安装与首次配置由 **`mynet_desktop`**（桌面）与 **`mynet_openwrt`**（路由器壳）承担（见 [`README.md`](README.md) 的角色表）；两者不在本工作区
+
+
 > 更新：2026-05 | 适用：mynet_lua / mynet_client
 
 ---
