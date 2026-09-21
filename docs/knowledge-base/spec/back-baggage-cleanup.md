@@ -89,6 +89,41 @@
 
 **更新后基线**：`route:list` = **1065** · `php -l` 全过 · 外键 **101** 个 **0 违规** · `User` 上已无 `isAdmin`/`isSuperAdmin`。
 
+### 九 · T53 身份生命周期交回框架
+
+> **用户明确**：「用户注册那些, 邮件激活那些, 都交给框架, 我们只关心业务」
+> 「我们先不需要管平台和租户, 我们只看消费者. 把这一层跑通」
+
+框架 auth 模块已提供完整身份生命周期（26 条 `api/v1/auth/*`）：
+`login` / `register` / `forgot-password` / `reset-password` / `verify-email` /
+`resend-verification` / `me` / `logout` / `password` / `profile` + MFA/SSO/SMS/联系人绑定。
+
+| 删除项 | 说明 | 提交 |
+|---|---|---|
+| `BusinessAuthController` + 两组 auth 路由 | 11 个端点，框架全覆盖 | `b8c7b973` |
+| `AccountVerification{Domain}Service` | 激活链路 | 同上 |
+| `PasswordReset{Domain}Service` | 重置链路 | 同上 |
+| `EmailVerificationCodeService` | 验证码 | 同上 |
+| `PasswordManagementService` | 0 引用；框架有 `PUT /auth/password` | 同上 |
+| `UserService::registerUser` / `UserDomainService::registerUser` | 用户创建归框架；邀请码驱动的租户分配属租户层，后事 | 同上 |
+| `InvitationDomainService::notify()` | 通知归框架；邀请奖励与好友关系逻辑保留 | 同上 |
+
+**删除动机（实测）**：事件系统拆除后邮件路径已无发送方；且唯一残留的 `->notify()`
+指向不存在的 `App\Notifications\NewUserRegistered`——那条路径**必然 fatal**。
+框架本就有完整实现，back 这份是既重复又跑不通的副本。
+
+**消费者层现状（back 只剩业务）**：
+- **109 条业务路由**：nodes / route / ippools / services / social / notifications /
+  users / ids / tenants / mynet stats / monitor 心跳
+- **身份路由 26 条**：全部来自框架 `api/v1/auth/*`
+- 业务域服务齐备：`RouteRequestDomainService`（连接请求）/ `RouteDomainService`
+  （连接+授权，`relay_mode`/`target_network`/`target_mask` 即授权语义）/
+  `NodeKeyDomainService`（三种密钥生成+撤销+router keys）/ `NodeCapabilityResolver`
+  / `SocialDomainService`（好友）/ `IPPoolDomainService` 等，**全部可被容器实例化**
+
+**本轮基线**：`route:list` = **1054** · `php -l` 全过 · 外键 **101** 个 **0 违规** ·
+消费者控制器与领域服务全部可实例化。
+
 **唯一遗留的不可解析引用 = 4 个刻意保留的 Notification 地雷**（见 §2.3）。
 
 ### 已完成的两项"别建表，该删代码"

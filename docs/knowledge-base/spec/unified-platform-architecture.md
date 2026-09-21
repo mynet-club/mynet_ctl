@@ -88,6 +88,15 @@ user 层**本就没有 role 与 permission 概念**，因此 back 不需要 RBAC
 > 业务域里名字叫 `role` 的字段（如 `participants.role`、`agents.role`、消息 `role`）
 > 不是鉴权角色，不受此规则约束。
 
+> **第二条硬规则（用户明确）**：**用户注册、邮箱激活、密码重置等身份生命周期
+> 一律交给框架**；back **只关心业务**。框架 auth 模块已提供完整面
+> （`api/v1/auth/{login,register,forgot-password,reset-password,verify-email,
+> resend-verification,me,logout,password,profile}` + MFA/SSO/SMS/联系人绑定），
+> back 不得再自建一份。
+
+> **第三条（用户明确）**：**先不碰平台与租户，只把消费者层跑通**。
+> admin/operator[tenant] 那些是后事。
+
 已实测确认边界成立：`tenant.permission` 门禁挂载的路由**全部属 vendor 模块**，
 back 自有 **0 条**。`bootstrap/app.php` 中 `tenant.permission` / `rbac.permission` / `mcp.auth`
 三个别名是为**框架 vendor 模块**注册的，必须保留，**但不得挂到 back 自有路由上**。
