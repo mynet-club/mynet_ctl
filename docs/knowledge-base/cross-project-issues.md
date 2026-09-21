@@ -170,6 +170,13 @@
 - **已修**：`mynet.gnb.refresh.address`（补 `refresh-address` 实现，全仓此前零实现）；
   `mynet.wg.refresh.{address,route}` 由"unknown command/flag"改为**明确报"暂不支持 wireguard"**
   （不再是"看不懂的失败"，但 wg 支持仍属驱动层工作）
+- **已修（2026-09-22）**：`mynet.gnb.refresh.address` 补上 `refresh-address` 实现
+  （monitor.GetIndexServices + daemon/address 服务 + CLI 子命令），
+  `refresh-routes`/`refresh-address` 接受 `--vpn-type` 且非 gnb 明确报错；
+  `config.sync` 因此按契约覆盖了 node/route/**address**。
+  对真 back 实测通过（取渲染结果 → 写 driver/gnb/conf/<nodeID>/address.conf，退出码 0）
+- **仍待决**：`plugin.proxy.*`（proxy 正下架，需定退役节奏）、openwrt 的
+  `mynet.{start,stop,restart}`（需 `mynet_openwrt` 才能判定）
 - **优先级**：中高（声明即承诺；且挡住 config.sync 的完整实现）
 
 #### CPI-10. `nodes / zones` 域的边界未厘清
@@ -282,7 +289,12 @@
 **反例（应当避免）**：先在代码里把主问题修掉，顺手发现的周边缺陷只在对话里说一句 ——
 下一轮换个上下文就找不回来了。本轮（2026-09-22）那些 CPI 条目就是在补这个课。
 
-**自动校验（已有）**：`scripts/check-command-vocabulary.php` —— 比对 back 声明的远程命令
-与 agent `conf/command.*.json` 的真值，back 单方面声明的命令直接以退出码 1 阻断。
+**自动校验（已有）**：
+- `scripts/check-command-vocabulary.php` —— 比对 back 声明的远程命令与 agent
+  `conf/command.*.json` 的真值，back 单方面声明的命令以退出码 1 阻断
+- `scripts/check-command-invocations.php` —— 反方向：真跑 agent CLI 的 `--help`，
+  核对 `conf/command.*.json` 里**每条调用**（子命令是否存在、参数是否被接受）。
+  已知未决项逐条列在脚本里（带台账 ID）并每次运行都打印，新出现的不一致才 exit 1
+  —— 这样既不会漏，也不会因为"永远失败"而被忽略
 这是 CPI-2 / CPI-4 的防复发手段：命令名写错的后果是"节点侧静默失效、back 侧看不出来"，
 只靠人眼迟早再漂一次。改了任一侧命令词汇就顺手跑一遍。

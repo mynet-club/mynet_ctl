@@ -11,7 +11,7 @@
 > |----|------|------|
 > | status | ✅ 已实现 | `gnb{running,pid,node_id,vpn_type,tun_iface,hot_restart}` + `agent{version,pid}`；`hot_restart` 如实报 `false`（驱动未声明该能力）。**`proxy` 子对象尚未实现**（见 proxy 行） |
 > | service | ⚠️ 端点就位 | `start/stop/reload` 已按契约接线，但**驱动尚未实现 `VPNDriver.Reload()`/生命周期接口**，故如实返回稳定错误码 `unsupported`。按 [`driver-abstraction.md`](driver-abstraction.md) 这属 S3/S5 的工作；驱动实现后本机 API 一行不用改 |
-> | config | ✅ sync/refresh | 复用 `NodeRefreshService` + `RouteRefreshService`（即心跳命令链里 `mynet.node.update`/`mynet.route.update` 的落地实现）。**`address` 未覆盖**；且该路径写的是渲染后的 gnb 配置，按分层终应收敛到 `VPNDriver.WriteConfig(bundle)` |
+> | config | ✅ sync/refresh | 复用 `NodeRefreshService` + `RouteRefreshService` + `AddressRefreshService`（即心跳命令链里 `mynet.node.update`/`mynet.route.update` 的落地实现）——**node / route / address 三者都已覆盖**，符合 §3 的「拉 node/route/address + keys」。该路径写的是渲染后的 gnb 配置，按分层终应收敛到 `VPNDriver.WriteConfig(bundle)` |
 > | proxy | ⬜ 未实现 | 落点未定：契约要求写 `proxy on|off` 到 node.conf，而渲染器目前**不输出这一行**（`BundleFlags.Proxy` 未被使用）。要么让驱动从 bundle 渲染，要么另定标志位——属需决策项 |
 > | nodes / zones | ⬜ 未实现 | 「列表」属本机态可做；「切换当前节点」要改 `mynet.conf` 并重载，且 zones 属**平台态**（应经 `relay` 域），需先厘清边界 |
 > | peers | ✅ 已实现 | 复用驱动的 `GetAllPeers` / `GetNetworkSummary`（即 `gnb_ctl -s` 的解析结果），不重复解析 |
