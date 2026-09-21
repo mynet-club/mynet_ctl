@@ -102,6 +102,17 @@
 - **倾向**：a)；但这是驱动层的设计决定，不在本机 API 这一轮里替它定
 - **优先级**：中（proxy 是 GUI 的常用开关）
 
+#### CPI-14. `daemon/logger` 在 `Init()` 之前调用会**直接 panic**（地雷）
+- **ID**：CPI-14
+- **位置**：[logger.go](../../../mynet_agent-integration/internal/daemon/logger/logger.go)（`debugLogger` 等包级变量在 `Init` 前为 nil）
+- **实测**：`mynet refresh-address --auto` → SIGSEGV：
+  `config.loadCommandMappings` → `logger.Error` → `log.(*Logger).Output` 空指针
+- **触发条件**：任何走 `config.LoadConfig()` 且目标环境缺 `conf/command.*.json` 的 CLI 路径
+  （`LoadConfig` 会在找不到命令映射时记一行 error，而 CLI 从不调用 `logger.Init`）
+- **影响**：不是"少一条日志"，而是**进程崩溃**；`refresh-routes` 等既有命令同样受影响
+- **修复方向**：给 logger 一个**可用的默认状态**（包 init 时按 stderr/stdout + INFO 装配，
+  与 `Init(level, "")` 的"仅控制台"分支一致），`Init` 再按需重配
+
 #### CPI-12. relay 域缺 node→back 的用户层鉴权链路（契约未规定）
 - **ID**：CPI-12
 - **位置**：`control-plane.md` §5.3（relay 域契约）
@@ -134,6 +145,14 @@
 - **修复方向**：补 `refresh-address` 实现（back 已有 `/monitor/index-services` 与
   `api.GetIndexServicesRendered`），并让 `refresh-routes` 显式接受/拒绝 `--vpn-type`
   （**不支持就报错，不能静默按 gnb 处理**）
+- **补充（同日复查 conf 全部调用后发现更多同类）**：
+  | 声明的命令 | 实际执行 | 结果 |
+  |---|---|---|
+  | `plugin.proxy.start` / `.stop` / `.restart` | `bin/mynet_proxy start\|stop\|restart` | **该 CLI 没有这些子命令**（只有 apply / apply-routes / clean / ipconfig / refresh / setup / status）→ 未知命令（两个平台文件都有） |
+  | openwrt 的 `mynet.start` / `.stop` / `.restart` | `mynet start\|stop\|restart` | 本仓 CLI 无这些子命令。**注意**：与 linux 的 `scripts/mynetd start` 不同——openwrt 可能由打包提供 shell 包装器，`mynet_openwrt` 不在工作区，**无法判定真伪，不擅自改** |
+- **已修**：`mynet.gnb.refresh.address`（补 `refresh-address` 实现，全仓此前零实现）；
+  `mynet.wg.refresh.{address,route}` 由"unknown command/flag"改为**明确报"暂不支持 wireguard"**
+  （不再是"看不懂的失败"，但 wg 支持仍属驱动层工作）
 - **优先级**：中高（声明即承诺；且挡住 config.sync 的完整实现）
 
 #### CPI-10. `nodes / zones` 域的边界未厘清
