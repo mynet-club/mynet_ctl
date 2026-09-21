@@ -83,6 +83,11 @@ flowchart TB
 user 层**本就没有 role 与 permission 概念**，因此 back 不需要 RBAC，也不该出现
 「带 role 的 User 管理员」——admin 是平台层（Operator），不是 User。
 
+> **硬规则（用户明确）**：**一套代码里三重角色都在**，但
+> **所有角色与权限一律由框架实现**；back 侧任何与之冲突的自建实现**直接删掉**。
+> 业务域里名字叫 `role` 的字段（如 `participants.role`、`agents.role`、消息 `role`）
+> 不是鉴权角色，不受此规则约束。
+
 已实测确认边界成立：`tenant.permission` 门禁挂载的路由**全部属 vendor 模块**，
 back 自有 **0 条**。`bootstrap/app.php` 中 `tenant.permission` / `rbac.permission` / `mcp.auth`
 三个别名是为**框架 vendor 模块**注册的，必须保留，**但不得挂到 back 自有路由上**。

@@ -65,6 +65,30 @@
 **当前验证基线**：`route:list` = **1066**（拆除 24 条权限/角色路由；此前的 1090 基线已随子系统移除而调整）· `php -l` 全过 · 外键 **101** 个 **0 违规**。
 备份：`storage/backups/mynet_back_new-20260921-124514-pre-rbac-removal.sql`。
 
+### 八 · T52 身份模型落地（用户明确硬规则）
+
+> **一套代码三重角色都在**；**所有角色与权限一律由框架实现**；
+> back 侧任何与之冲突的自建实现**直接删掉**。
+> 业务域字段（`participants.role`/`agents.role`/消息 `role`）不是鉴权角色，保留。
+
+框架模型（`CheckPermission` / `RbacService` 源码，非推断）：
+① **admin = 平台**（`Operator.scope='platform'`）·
+② **operator[tenant]**（`operator_tenants.role_id`，**只有 Operator 有 role**）·
+③ **user = 用户消费层**（`User` ← `tenant_users`，**无角色、无权限概念**）。
+**back 全部在 ③**。
+
+| 删除项 | 说明 | 提交 |
+|---|---|---|
+| `User::isAdmin()`/`isSuperAdmin()` 及全部调用方 | user 层无角色判定 | `c9dac8d2` |
+| `AdminMiddleware` + `admin.access` 别名 | `routes/admin.php` 改挂框架 `tenant.permission`（与 `ModuleServiceProvider` 给 `Routes/admin.php` 的门禁一致） | 同上 |
+| `AuthorizesTenantAccess` / `config/admin_operations.php` | 0 调用方 / 唯一消费者已随中间件删除 | 同上 |
+| 6 个领域服务里的 `isAdmin()` 租户旁路 | 「管理员看全量」不存在——user 层一律按 `users.tenant_id` 收敛 | 同上 |
+| DTO/Resource/校验/blade/前端 store 里的角色字段 | `user_role`/`is_admin`/`isSuperAdmin` 全清 | 同上 |
+| `Admin\UserController::bulkUpdate` + 路由 | 调用的 `bulkUpdateUserStatus` 在两个 UserService 上都不存在 | 同上 |
+| `users.role` / `tenant_users.role` 两列 | 框架 Auth `User::$fillable` 无 role，此两列是 back 自加 | 同上 |
+
+**更新后基线**：`route:list` = **1065** · `php -l` 全过 · 外键 **101** 个 **0 违规** · `User` 上已无 `isAdmin`/`isSuperAdmin`。
+
 **唯一遗留的不可解析引用 = 4 个刻意保留的 Notification 地雷**（见 §2.3）。
 
 ### 已完成的两项"别建表，该删代码"
