@@ -102,15 +102,44 @@ G:  {"type":"fetch_result","req_id":"…","status":304,"headers":{...},"body":"<
 
 **心跳中继**同理：mynetd 的 heartbeat POST 经 gateway 转 back，back 响应的 `commands[]` 原样回传。
 
-### 2.3 mynetd 收到通知后的行为
+### 2.3 mynetd 收到通知后的行为：**event → handler**（不是 runOnce）
 
-```
-on notify(work_available):
-  若本地正在 apply → 记 pending，apply 完再触发
-  否则 → 触发一次 RunOnce（复用现有：Fetch+ETag → Validate → Apply → HealthCheck/Rollback）
+❌ **错误形态**：通知 → 跑一次完整心跳（`RunOnce`）。
+心跳是「采集系统指标 → 上传遥测 → 取命令 → 执行」，把它挂在通知上意味着
+收到 `generation_changed` 也要上传一遍遥测——浪费且语义混乱。
+
+✅ **正确形态**：通知携带**具体事件**，节点按事件分派到**专用 handler**，
+每个 handler 只做该事件真正需要的最小动作。
+
+| event | handler | 只做这件事 |
+|-------|---------|-----------|
+| `command_queued` | `ExecuteCommandsHandler` | 取待执行命令并执行（**不含遥测采集**） |
+| `bundle_changed` | `ApplyBundleHandler` | Fetch+ETag → Validate → Apply → HealthCheck/Rollback（L4 流程） |
+| `route_changed` | `RefreshRoutesHandler` | 重新生成 route 配置并 reload |
+| `service.*` | `ServiceHandler` | 起停 / 重载对应服务 |
+
+**心跳的职责退回原处**：周期性遥测 + **通知丢失时的兜底**
+（漏了一条通知，下次心跳仍会取到命令）。二者不再互相绑定。
+
+#### 报文
+
+```json
+{ "type": "event", "node_id": "…", "event": "command_queued", "data": { "command_id": "…" } }
+{ "type": "event", "node_id": "…", "event": "bundle_changed", "data": { "generation": "gen-42" } }
+{ "type": "event", "node_id": "…", "event": "route_changed",  "data": {} }
 ```
 
-通知只表示「有活儿」，**具体内容以拉取结果为准**。通知丢失无害——下次心跳或下次变更会再触发。
+- `event` 是**稳定标识符**（handler 注册表的键），不是自由文本
+- `data` 只带定位信息（id / generation），**不带业务载荷**——真实内容仍由节点按
+  Fetch+ETag 从 back 拉取
+- 节点侧维护 `map[event]Handler`；**未注册的 event 记 warning 并忽略**，
+  不阻断其他事件（向前兼容：back 加了新事件，旧节点不会崩）
+
+#### 并发与幂等
+
+- 同一节点的 handler 串行执行（或按事件类型串行），避免 `ApplyBundle` 并发跑两份
+- 执行期间再来通知 → 记 pending，当前动作结束后**合并成一次**再跑（去重）
+- 所有 handler 必须**幂等**：重复触发只是重复一次拉取，不产生副作用差异
 
 ### 2.4 容量目标（2G 内存节点）
 
