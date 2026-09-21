@@ -405,3 +405,101 @@ handler 的 `extends` 指向 / config 的 FQCN。**四者要一次改齐。**
 - (c) **模块注册机制**：照参考范式换成 `App\Providers\ModuleServiceProvider` 约定扫描，
        还是仅修 `AppModuleRegistry` 的 ns 引用让它能用？（前者更彻底，后者更小步）
 - (d) **C3 的 5 个不存在类**：新建 / 删调用方 / 暂不处理（现状是静默无效，不阻塞启动）
+
+---
+
+## 11. 执行结果（2026-09-21，第 2、3 步已完成）
+
+分支 `mynet_back-integration` / `feat/integration-api-fixes`。**两个提交**：
+
+| 提交 | 内容 |
+|---|---|
+| `e02125f9` | 命名空间统一到 `App\Modules\X\...`（236 文件，+690/−689） |
+| `8b4c1c3f` | 删掉 `composer.json` 的第二 PSR-4 根（1 行） |
+
+### 11.1 验收：失败点前移到了终点
+
+```
+修复前   route:list → 模块 bootstrapping 阶段 fatal，零输出
+第 0 步  route:list → 卡在 App\Services\MonitorRtCmdService does not exist
+第 2 步  route:list → 卡在容器解析 NodeOperatorDomainService（缺 import）
+修完后   route:list → 退出码 0，1090 条路由
+         其中 VPN 模块 12 条 api/v1/monitor + 37 条 api/v1/auth（修复前 0 条）
+```
+
+这条链的形状与第 5 步预告一致，**逐一前移而非一次性通过**——每一步都换来
+一个更靠后的失败点，直到没有失败点。
+
+### 11.2 ⚠️ 机械改写引入了 4 类缺陷（务必记住的教训）
+
+改写由 `/tmp/ns_rewrite.py` 与 `/tmp/ns_rewrite2.py` 完成。两个脚本的
+第(4)步都是 **无锚点** 替换：
+
+```python
+out, n = re.subn(r'\\Modules\\', r'\\App\\Modules\\', out)   # 匹配整篇文件的任意位置
+```
+
+`\Modules\` 不只出现在命名空间边界。它同时命中了：
+
+| # | 缺陷 | 数量 | 后果 |
+|---|---|---|---|
+| 1 | `MultiTenantSaas\Modules\` → `MultiTenantSaas\App\Modules\` | 16 处 / 16 文件 | 框架类全部不可解析 → fatal |
+| 2 | PHP 字符串 `'App\\Modules\\'` → `'App\\App\Modules\\'` | 1 处 | 模块发现器拼出不存在的 FQCN，**4 个模块静默跳过**（只记 warning）——正是第 0 步刚消灭的症状，被重新引入 |
+| 3 | docblock `@transformerModel` / `@package` 被加上前导 `\` | 15 处 | **无消费方，功能无害**（已核实全仓无读取方），但风格不一致 |
+| 4 | `bootstrap/app.php` 的 4 处裸 `\Modules\VPN\Middleware\Admin\*` | 4 处 | 脚本只遍历 `app/`，**app/ 之外根本不在视野内** |
+
+**教训（与本项目此前累积的方法论同源）**：扫描工具的视野 ≠ 事实全集。
+这次漏掉的恰好是「app/ 之外的引用」和「字符串字面量里的命名空间」。
+改写前若先跑一遍「列出全部 `\Modules\` 出现位置并分类」，4 类缺陷都能预先看到。
+
+### 11.3 归因：哪些是我造成的，哪些本来就坏
+
+用 `git diff --stat` 区分「脚本碰过的文件」与「没碰过的文件」：
+
+- **脚本造成的**：11.2 的 4 类，共 36 处。已全部修复（`/tmp/ns_repair.py`，
+  每条规则带 `命中数 == 期望数` 断言，落盘后复查残留 = 0）。
+  证据：修复后 12 个文件**精确回到 HEAD 状态**（纯逆变换），
+  与「改写只污染了这些文件」的预期完全吻合。
+- **本来就坏的**（脚本未碰，或碰了但不是这段）：
+  - `app/Http/Controllers/Admin/BaseAdminController.php` —— 脚本 `git diff` 为空，
+    其 `\Illuminate\Validation\ValidationException` 本就是全限定写法（正确）。
+  - `app/Domain/Exceptions/ServiceConfigurationException.php` —— 有 `use DomainException;`，
+    解析到全局 `\DomainException`，**合法**。本文档 §8.3 判定的「裸 extends → 级联 fatal」
+    经复核**不成立**。
+  - `NodeOperatorService.php` 构造函数类型提示 `NodeOperatorDomainService` 无 import
+    —— HEAD 下（ns 为 `App\Services\Monitor`）同样不解析，属先存在缺陷。
+
+### 11.4 本次未处理（明确边界）
+
+| 事项 | 为什么没做 |
+|---|---|
+| `config/events.php` 的 30 处 `App\Handlers\Event\*` | 命中地雷 §9.4。现状是 `class_exists` 守卫 → 静默无效；一旦只改 config 就会变成 fatal。**四要素（BaseHandler / 3 个 Notification / handler 的 extends / config FQCN）必须一次改齐**，且需要产品决策「通知功能是否要恢复」 |
+| `App\Handlers\BaseHandler`、`App\Notifications\{NodeStatus,RouteStatus,System}Notification` | 同属 §9.4 四要素，属 C3 待决策项 |
+| 先存在的缺失类：`App\Models\{NodeService,ServiceMetric,RolePermission}`、`App\Domain\Services\{Gnb,Vpn}ConfigDomainService`、`App\Modules\VPN\Domain\ValueObjects\SocialConnectionId`、`App\Http\Controllers\Admin\{Dashboard,Social}Controller`、`MultiTenantSaas\Services\Tool\*`（seeders） | 与本批改写无关，是既有债务。`NodeService` / `ServiceMetric` 各有 **2 个同名类**（Monitor 与 VPN 各一），脚本的 `resolve()` 因此保守地保持原样——这是对的，但需要人工决定引用哪一个 |
+| `app/Modules/VPN/tests/` 的 8 个测试引用 `MultiTenantSaas\Tests\TestCase` | 框架里没有这个基类，测试基线本身缺失 |
+| `Routes/` vs `routes/` 大小写 | 框架约定是 `Routes/`（大写），back 用 `routes/`（小写）。macOS 大小写不敏感所以本地正常，**Linux 生产会失败** |
+
+### 11.5 方法论修正：静态分析器在本项目不可信
+
+本批尝试过两轮自建静态分析（PHP 按名字解析规则全量解析类引用），**两次都被
+自己的抽查推翻**：
+
+| 误报来源 | 例 |
+|---|---|
+| 分组 use 语法 `use Illuminate\Http\{Request, JsonResponse};` | `NodeActionController` 的 `Request` 被报缺失 |
+| 全限定 catch `catch (\Illuminate\Validation\ValidationException $e)` | `BaseAdminController` 的 `ValidationException` 被报缺失 |
+| 类体内 trait use `use HasFactory;` 被当成顶层 import | `FriendRequest` 的 `HasFactory` 被报缺失 |
+
+抽查 3 个文件**全是误报**。结论：本项目里，`ClassLoader::findFile()` 只能作为
+**缩小范围**的辅助，**唯一可靠的验证是运行时**（`php artisan route:list`、
+容器解析、`class_exists`）。后续不要再用自建正则分析器下结论。
+
+### 11.6 第 4、5 步还剩什么
+
+- **E 类**：经复核不成立（见 11.3），无需处理。
+- **F 类大小写**：`Modules\VPN\Models\IDPool` 声明在 `IdPool.php`；8 个测试目录
+  小写 `tests/`。需在 **Linux 上验证**（本机 macOS 掩盖）。
+- **D 类内联 FQCN**：本批已由脚本第(4)步覆盖（部分为真实修复，如
+  `MonitorHistoryService` 里 8 处 `Modules\VPN\Models\*` → `\App\Modules\VPN\Models\*`）。
+- **验收补充**：VPN 路由已注册，但**控制器能否真正应答**尚未验证（需要可用的
+  DB 与租户上下文）。这是 S6 改产 VPNBundle 之前的最后一个未知量。
