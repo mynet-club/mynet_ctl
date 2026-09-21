@@ -3,6 +3,28 @@
 > 更新：2026-09-21 | 来源：`mynet_agent/docs/API.md`（接口稿 v0）
 > 适用：**mynet_agent**（唯一实现）；`mynet_ui`、`mynet_openwrt`（壳，只调不改）
 > 状态：**契约 SSOT**（跨仓引用此处；实现细节仍以 `mynet_agent/docs/API.md` 为最新）
+> 关联：[`control-plane.md`](control-plane.md)（GUI 接入模型与 `relay` 域）
+
+---
+
+## 0. GUI 接入模型（控制面视角）
+
+**GUI 只跟本机 mynetd 说话**，浏览器不持有 back 凭据、不直连 back/gateway：
+
+```
+浏览器 ──> 127.0.0.1:<port>/api/v1/... ──> mynetd
+                                            │
+                              本机态 ────────┤ mynetd 直接答
+                              平台态 ────────┴─> WS → gateway → back（中继）
+```
+
+| 查询类型 | 数据来源 | 处理方 |
+|---------|---------|--------|
+| **本机态** | gnb/wg 进程、tun、本机配置、proxy 开关、日志 | mynetd 直接答（本文档 §3 能力面） |
+| **平台态** | back 上的节点列表、路由、好友、统计 | mynetd 经 gateway 中继（`relay` 域，见 `control-plane.md` §5.3） |
+
+> GUI 的信任边界止于本机。平台态数据只是「本机代理去取回来的东西」。
+> `relay` 域只放行 back 的**用户层业务接口**，禁止 relay 到 `admin/*` 与身份生命周期接口。
 
 ---
 

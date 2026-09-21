@@ -52,6 +52,26 @@ flowchart TB
     L4 <--> L7
 ```
 
+### 0.1 传输与控制面（横切，不改变业务分层）
+
+L1~L7 是**业务与驱动**分层；节点与 back 之间**怎么连**由
+[`control-plane.md`](control-plane.md) 单独定义：
+
+```
+mynetd ══WebSocket══> mynet-gateway ──内网 HTTP──> mynet_back
+                              ↑
+                    节点面唯一入口；back 对节点不可达
+```
+
+| 约束 | 说明 |
+|------|------|
+| back 仍是唯一业务权威 | gateway 只做鉴权 / 连接 / presence / **字节中继**，不解析业务载荷 |
+| L3/L4 语义不变 | `Fetch(nodeID, etag)` 仍成立，只是经 gateway 中继；ETag / checksum / last-known-good 回滚原样保留 |
+| `mynet_gnb` 不被触碰 | gateway 对的是 `mynetd`，不是 gnb 进程 |
+| GUI 只谈本机 | `浏览器 → 127.0.0.1:mynetd httpd → gateway → back`，见 [`local-api.md`](local-api.md) §0 |
+
+多 gateway 就近接入、以及「公网被封时借 node 的 overlay 访问 gateway」的韧性设计，见 `control-plane.md` §3–§4。
+
 ---
 
 ## 1. L1 业务域层

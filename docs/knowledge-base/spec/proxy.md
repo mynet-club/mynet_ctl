@@ -1,6 +1,15 @@
 # SPEC: 代理分流（Proxy）
 
-> 更新：2026-05 | 适用：mynet_lua / mynet_client
+> 更新：2026-09-21 | 适用：mynet_lua / mynet_client
+> 状态：**已冻结（旧线）** —— mynet_lua / mynet_client 线不再演进
+>
+> ⚠️ **新线口径见 [`control-plane.md`](control-plane.md) §7**。
+> `mynet_proxy` CLI **坚决下架**：其最重的职责（往 route.conf 灌海量路由）已被
+> GNB 原生 `p2-route-proxy`（`node.conf` 的 `proxy on`）取代。剩余能力的归宿是
+> **L2 TransportPolicy → L3 BundleEnvelope → L5 Driver（gnb / wireguard 各自落地）
+> + L6 NetworkBackend（OS 策略路由，驱动无关）**，而不是节点上手写配置的 CLI。
+>
+> 本文档保留原实现细节，仅供旧线维护与历史对照。
 
 ---
 
