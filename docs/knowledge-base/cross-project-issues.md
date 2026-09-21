@@ -47,31 +47,12 @@
 
 ---
 
-### 🟠 P1 — 控制面落地时发现的阻断项（2026-09-22 记录，发现即记）
+### 📝 控制面落地发现的缺陷（2026-09-22 记录，发现即记）
 
 > 来源：控制面任务链第 4/5 单元落地过程中撞出来的。**记录在前、处置在后**，
 > 避免"当场只修了主问题、周边缺陷随上下文一起丢掉"。
-
-#### CPI-1. 节点启停/重启功能整体不可用（命名空间漂移残留）
-- **ID**：CPI-1
-- **位置**：[mynet_back/app/Modules/Monitor/Domain/Services/NodeOperatorDomainService.php:5](../../../mynet_back-integration/app/Modules/Monitor/Domain/Services/NodeOperatorDomainService.php)
-- **现状**：`use App\Models\{MonitorRtCmd, Node, User};` —— 该命名空间下只有
-  `AuditLog / DatabaseNotification / Tenant / TenantUser / User`，**没有 `Node`、没有 `MonitorRtCmd`**
-- **证据**：实测调用 `NodeOperatorDomainService::executeAction()` 直接抛
-  `Error: Class "App\Models\Node" not found`（同文件 :61）→ 后台"启动/停止/重启节点"三个动作全部不可用
-- **修复动作**：改用真实位置 `App\Modules\VPN\Models\Node`、`App\Modules\Monitor\Models\MonitorRtCmd`
-- **归属**：属 [mynet-back-namespace-drift.md](mynet-back-namespace-drift.md) 那一类的**残留项**（T42 未清干净）
-- **优先级**：高（用户可见功能直接 500）
-
-#### CPI-3. `App\Services\NodeRebootService` 三处引用不存在的类
-- **ID**：CPI-3
-- **位置**：[RouteRequestDomainService.php:513](../../../mynet_back-integration/app/Modules/VPN/Domain/Services/RouteRequestDomainService.php)、
-  [NodeDomainService.php:219](../../../mynet_back-integration/app/Modules/VPN/Domain/Services/NodeDomainService.php)、
-  [SocialDomainService.php:226](../../../mynet_back-integration/app/Modules/Social/Domain/Services/SocialDomainService.php)
-- **现状**：`app(\App\Services\NodeRebootService::class)`，真类是
-  `App\Modules\VPN\Services\NodeRebootService`
-- **影响**：路由请求审批、节点域、社交域里任何走到"需要重启节点"的分支都会 fatal
-- **优先级**：高（同一类漂移，一起清）
+> CPI-1 / CPI-3 / CPI-2 / CPI-4 / CPI-5 / CPI-6 均已处置，见「已修复」表；
+> 余下 CPI-7（低）、CPI-8（前置已解除）。
 
 ---
 
@@ -103,15 +84,6 @@
 
 ### 🟡 P2 — 控制面相关（2026-09-22 记录）
 
-#### CPI-6. 节点面路由的 `throttle:api` 按 IP 限流（待确认）
-- **ID**：CPI-6
-- **位置**：[VPN/Routes/api.php](../../../mynet_back-integration/app/Modules/VPN/Routes/api.php) monitor 组
-- **现状**：摘 `auth:sanctum` 时保留了 `throttle:api`；Sanctum 下限流键是用户，现在没有用户，
-  退化为按 IP
-- **风险（待验证）**：NAT 后多个节点共用出口 IP 时可能互相挤占配额；默认 60/min 对
-  5 分钟一次的心跳尚有余量，但节点数多、或命令轮询密集时需要重新评估
-- **优先级**：中（需实测确认实际键与阈值后再定）
-
 #### CPI-7. 命令 ID 经 float64 往返
 - **ID**：CPI-7
 - **现状**：agent 的 `monitor.Command.ID` 是 `interface{}`，JSON 数字解码成 float64；
@@ -123,6 +95,7 @@
 
 #### CPI-8. 心跳仍未收敛到网关中继
 - **ID**：CPI-8
+- **前置**：CPI-6 已解除（原按 IP 60/分会让中继后所有节点挤一个桶，约 300 节点打满）
 - **现状**：控制面（事件/取命令/回报）已全部经网关中继，但**心跳本身仍直连 back**
 - **影响**：back 节点接口还不能真正收内网（spec/control-plane.md §6.3 第 3/4 步的剩余部分）
 - **优先级**：中（gateway 已具备能力，缺的是切换与验证）
@@ -175,6 +148,7 @@
 | 2026-09-22 | **CPI-2** back 下发 `mynet.reboot`、agent 只有 `mynet.restart` → 重启静默失效 | `24570da3` |
 | 2026-09-22 | **CPI-4** back 命令词汇整体漂移（mynet.boot/shutdown/regenConfig/reloadConfigs/plugin.proxy.reload/upload-log） | `24570da3` |
 | 2026-09-22 | **CPI-5** 命令输出没回传 back（`Execute` 把 result 硬写成"命令执行成功"） | `b407e91` |
+| 2026-09-22 | **CPI-6** 节点通道 limit 按 IP 60/分（中继后即 300 节点打满）→ 改按已验签节点 180/分 | `fb97a776` |
 
 ---
 
