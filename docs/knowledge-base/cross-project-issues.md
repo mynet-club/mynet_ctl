@@ -102,6 +102,40 @@
 - **倾向**：a)；但这是驱动层的设计决定，不在本机 API 这一轮里替它定
 - **优先级**：中（proxy 是 GUI 的常用开关）
 
+#### CPI-12. relay 域缺 node→back 的用户层鉴权链路（契约未规定）
+- **ID**：CPI-12
+- **位置**：`control-plane.md` §5.3（relay 域契约）
+- **契约要求**：GUI 的平台态查询（节点列表/路由/好友/统计）由 mynetd 经 gateway 中继到 back
+- **断链在哪**：
+  1. back 的用户层接口（`api/v1/nodes|route|social`…）挂在 **`auth:sanctum`**，要**用户** token
+  2. agent 确实持有用户凭证（`internal/daemon/credential` 的 `Token`/`RefreshToken`，100 年有效期），
+     所以"以用户身份访问 back"在数据上是具备的
+  3. **但网关按设计不放行 `Authorization`** —— 中继只透传 `x-*` / 条件请求 / 内容协商头，
+     正是为了"避免节点越权设置 Host/Authorization 之类"（`gateway/server.go` relay）
+- **结论**：三条路都需要决策，契约里没写选哪条
+  a) 网关放行 `Authorization`（削弱一条刚立的安全性质）
+  b) back 增一套"节点身份可访问的用户层"接口
+  c) 网关侧持有「节点 → 用户」令牌映射，由网关代填
+- **影响**：GUI 的平台态功能（列表/好友/路由/统计）暂时无法经本机 API 取到
+- **优先级**：高（这是 §5.1「GUI 只跟本机说话」能否成立的关键一环）
+
+#### CPI-13. conf 声明的命令有 3 条实际会失败（agent 侧，implement 缺失）
+- **ID**：CPI-13
+- **位置**：[conf/command.linux.json](../../../mynet_agent-integration/conf/command.linux.json)（openwrt 同）
+- **实测**：
+  | 声明的命令 | 实际执行 | 结果 |
+  |---|---|---|
+  | `mynet.gnb.refresh.address` | `bin/mynet refresh-address --auto` | **CLI 无 `refresh-address` 子命令**（全仓零实现）→ 未知命令 |
+  | `mynet.wg.refresh.address` | `bin/mynet refresh-address --auto --vpn-type wireguard` | 同上 |
+  | `mynet.wg.refresh.route` | `bin/mynet refresh-routes --auto --node-id X --vpn-type wireguard` | **`refresh-routes` 不认 `--vpn-type`** → unknown flag |
+- **与 CPI-2/CPI-4 是同一类**（命令名/参数与实现不一致 → 静默或半静默失效），
+  只是方向相反：那次是 back 写错命令名，这次是 agent 的 conf 声明了做不到的事
+- **影响**：`config.sync` 契约里的 "**address**" 部分因此无法覆盖（SSOT 要求拉 node/route/address + keys）
+- **修复方向**：补 `refresh-address` 实现（back 已有 `/monitor/index-services` 与
+  `api.GetIndexServicesRendered`），并让 `refresh-routes` 显式接受/拒绝 `--vpn-type`
+  （**不支持就报错，不能静默按 gnb 处理**）
+- **优先级**：中高（声明即承诺；且挡住 config.sync 的完整实现）
+
 #### CPI-10. `nodes / zones` 域的边界未厘清
 - **ID**：CPI-10
 - **位置**：`local-api.md` §3 的 `nodes / zones` 行
