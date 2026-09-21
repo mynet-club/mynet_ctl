@@ -102,6 +102,23 @@
 - **倾向**：a)；但这是驱动层的设计决定，不在本机 API 这一轮里替它定
 - **优先级**：中（proxy 是 GUI 的常用开关）
 
+#### CPI-15. 整批 `NodeMonitorController` 端点曾因缺 request attribute 而全 404（已修）
+- **ID**：CPI-15
+- **位置**：[NodeMonitorController.php](../../../mynet_back-integration/app/Modules/VPN/Controllers/Api/V1/NodeMonitorController.php)
+- **现状（修复前）**：该控制器**每个**端点都写
+  `$nodeId = $request->attributes->get('node_id'); // 从中间件获取已验证的node_id`，
+  而当时的 `NodeHeartbeatAuthMiddleware` 是 `// TODO` 空壳、**从未设置该属性**
+  → `Node::find(null)` → 404 `Node not found`
+- **实测（本次做的反向验证）**：移除那行属性 → `GET /monitor/index-services` 返回
+  **404 "Node not found"**；加回 → **200**。因果确凿
+- **影响面**：node/info、node/config、node/routes、node/full-config、route-config、
+  index-services、router-keys **全部 404** —— 也就是**路由刷新与路由公钥同步此前是坏的**
+  （`refresh-routes` → `/monitor/route-config` → 404；`refreshPublicKeys` → `/monitor/router-keys` → 404）
+- **怎么修好的**：本轮做 CPI-6（按已验签节点限流）时，在验签中间件里加了
+  `$request->attributes->set('node_id', $nodeId)` 供限流器用——**顺手把这批端点一起修好了**。
+  属"意外的正确修复"，记在此处以免日后被当成"本来就是好的"
+- **优先级**：已修（无需动作），记录以便理解历史行为与后续排查
+
 #### CPI-14. `daemon/logger` 在 `Init()` 之前调用会**直接 panic**（地雷）
 - **ID**：CPI-14
 - **位置**：[logger.go](../../../mynet_agent-integration/internal/daemon/logger/logger.go)（`debugLogger` 等包级变量在 `Init` 前为 nil）
