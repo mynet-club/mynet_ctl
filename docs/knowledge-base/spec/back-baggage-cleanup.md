@@ -1,7 +1,7 @@
 # SPEC: mynet_back 历史包袱清理
 
 > 更新：2026-09-21 | 适用：`mynet_back`
-> 状态：**系列任务已完成**（含 tests/Schema 生成器）；剩余项均需用户决策
+> 状态：**包袱清理系列 + 四项待决项均已完成**；`RoutePermissionMiddleware` 为新增待决项
 > 依据：本文件全部结论均来自实测（`ClassLoader::findFile` / `information_schema` / PHP fatal），非推断
 
 ---
@@ -16,6 +16,28 @@
 | 三 · events 系统 | ✅ | **17 个 handler 全部静默失效 → 11 个可解析且可实例化** | `3674b1a9` |
 | 四 · 化妆性清理 | ✅ | 删 19 个死 import；发现器改名；遗留 dump 归档 | `c79f1ac8` |
 | 五 · tests/Schema | ✅ | 生成器 + VpnModule 从真实库重导（15 表，SQLite 15/15） | `92b6c53d` |
+
+### 六 · 四项待决项（用户拍板后执行）
+
+| # | 决策项 | 结果 | 提交 |
+|---|---|---|---|
+| T48 | `alert_rules`/`alerts` | 表**保留**（框架 `AlertService` 的 schema，`framework_core` 迁移也建它）；删掉 app 侧**重复**迁移 `2026_06_27_000003` | `84f99e96` |
+| T47 | `notifications` 表 | 表**改为全局 ID**（唯一漏掉的同族表——`notification_preferences`/`in_app_notifications` 早已是全局 ID）；新增 `App\Models\DatabaseNotification`（`HasGlobalId` + 丢弃 Laravel 派发时塞入的 uuid）+ `User::notifications()` 覆盖 | `60dd72cd` |
+| T46 | events 系统 | **整条管道删除**（38 文件）：实测**运行时 0 监听者**、`EventManager` 不可达、`ProcessEventJob` 引用路径不存在、3 个 Notification handler 加载即 fatal；22 处 `event()` 全部移除 | `6050a6df` |
+| — | 事件系统残骸 | drop `system_events`（0 行 / 无外键 / 无引用）+ 删 13 个孤儿（8 个 Mail 模板 + 5 个无 dispatcher 的 Job） | `f473c30e` |
+| T49 | tests/Schema 其余 22 个 | 全部从真实库重导（保留 `customers` 测试夹具；丢弃 3 张幽灵表） | `aac3284f` |
+| — | 幽灵表模型 | 删 `NodeMetric`/`SocialAccount`（各 0 引用） | `956dda3f` |
+
+**新增待决项（本批扫模型时发现，未处置）**：
+
+`App\Modules\VPN\Models\RoutePermission` 的落表 `route_permissions` **不存在且无任何迁移**，
+但 `routes/admin.php:64` 把 `route.permission` 中间件挂在**整个 admin 组**上：
+
+- `RoutePermissionMiddleware` 有 local/debug 旁路（当前 `APP_ENV=local` 故可用）；
+- **生产环境**会走到 `RoutePermission::getRoutePermission()` → 查不存在的表 → SQL 错误；
+- 即使表存在，`$user->hasPermission()` 也不成立——`hasPermission` 只定义在框架的 `Role` 上，`User` 没有该方法。所以生产下**所有 admin 路由**会 500。
+
+即：该中间件在开发环境被旁路掩盖了，属**生产专有的地雷**。处置方向需决策（建表 + `route:sync-permissions` 命令 / 改接框架 RBAC / 从 admin 组摘掉）。
 
 **唯一遗留的不可解析引用 = 4 个刻意保留的 Notification 地雷**（见 §2.3）。
 
