@@ -321,8 +321,10 @@ GET /api/v1/relay?path=<back-api-path>
    两处必须与 Go 对齐：签名体是「先置 `node_monitor=nil` 再 Marshal」的那份，重编码需 `JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE`；其余端点直接用**原始字节**（命令回报的 `result` 含 `<>&`，Go 会转义而 PHP 不会）。⚠️ 方案强度有限（公钥被当共享秘密用），只作为**堵洞的过渡**，不值得强化
 2. ✅ **补响应性联动**：`NodeMonitorService::processMonitorData` 检测状态跃迁（`nodes.node_status` 真的变了）→ `RelatedNodeRouteRefresher` 为对端（`routes.target_node_id` 指向本节点、且 `node_status >= 启用` 的那些 `node_id`）入队 `mynet.route.update`。
    语义沿用被删除事件系统里的 `RefreshRelatedNodeRoutesHandler`。**入队放在 `DB::commit()` 之后**：命令入队会经网关立刻推事件，而节点是另一个进程、看不到未提交的行
-3. 🔶 **gateway 上线**（部分）：节点已建立到 gateway 的 WS 长连接、Ed25519 challenge-response 握手、事件推送、经中继回源都已落地并**真环境端到端跑通**；但**心跳本身仍走直连**，未收敛到中继
-4. ⬜ **back 节点接口收内网**：确认无直连流量后关闭公网暴露
+3. ✅ **gateway 上线**：节点已建立到 gateway 的 WS 长连接、Ed25519 challenge-response 握手、事件推送、经中继回源都已落地并**真环境端到端跑通**；心跳也经中继（`mynetd.json` 的 `relay_heartbeat`，**默认开**；设 false 可退回直连，供第 4 步之前的过渡）。节点面路由的限流也相应改为**按已验签节点**计（原 `throttle:api` 按 IP 60/分，经中继后所有节点会挤网关那一个 IP，约 300 节点即打满）
+4. ⬜ **back 节点接口收内网**：确认无直连流量后关闭公网暴露。
+   ⚠️ 这是**部署侧动作**，需要现场观测确认；代码侧已具备条件（心跳/取命令/回报三条路径都可经中继）
+   ⚠️ 另需注意：节点通道已不再有按 IP 的兜底限流（见上），未验签的洪泛须由边缘（网关 / nginx）承担
 
 > 步骤 1、2 与 gateway **无依赖**，可先行；3、4 是 gateway 落地后的收敛。
 > HMAC 方案只在 1→3 的窗口期存在，gateway 上线后自然退役。
