@@ -153,6 +153,16 @@ class MynetBackClient
         return $this->get("/api/v2/nodes/{$nodeId}/config-bundle", $token, ['zone_id' => $zoneId], $zoneId);
     }
 
+    /**
+     * BundleEnvelope schema v2（R8：与 agent /monitor/node/bundle 同构）。
+     *
+     * 安装包把该 JSON 写入 bundle.json，离线启动与在线更新共用同一契约。
+     */
+    public function getBundleEnvelope(string $token, int $zoneId, int $nodeId): array
+    {
+        return $this->get("/api/v1/nodes/{$nodeId}/bundle", $token, ['zone_id' => $zoneId], $zoneId);
+    }
+
     // ─── HTTP 基础方法 ───────────────────────────────────────────────────
 
     private function get(string $path, string $token, array $query = [], ?int $zoneId = null): array

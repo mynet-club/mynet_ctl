@@ -64,11 +64,20 @@ class ConfigPackService
         // 2. 获取所有配置 + 密钥（优先使用 config-bundle API，失败则降级为分散请求）
         [$configs, $keys] = $this->fetchViaBundle($token, $zoneId ?? 0, $nodeId);
 
+        // 2b. R8：BundleEnvelope schema v2（与在线更新 / 离线 last-known-good 同一契约）
+        $bundleJson = '';
+        try {
+            $envelope = $this->backClient->getBundleEnvelope($token, $zoneId ?? 0, $nodeId);
+            $bundleJson = json_encode($envelope, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '';
+        } catch (\Throwable) {
+            // 无 Envelope 时仍产出旧 files/keys 布局，安装包不因 R8 而不可用
+        }
+
         // 3. 生成辅助文件
         $readme = $this->generateReadme($nodeId, $nodeName, $platform, $arch);
 
         // 4. 打包 ZIP
-        $zipPath = $this->createZip($nodeId, $nodeName, $configs, $keys, $readme, $platform, $arch);
+        $zipPath = $this->createZip($nodeId, $nodeName, $configs, $keys, $readme, $platform, $arch, $bundleJson);
 
         $safeName = preg_replace('/[^a-zA-Z0-9_\-]/', '_', $nodeName);
         $filename = "mynet_node_{$nodeId}_{$safeName}.zip";
@@ -225,12 +234,18 @@ class ConfigPackService
         string $readme,
         ?string $platform,
         ?string $arch,
+        string $bundleJson = '',
     ): string {
         $tempPath = tempnam(sys_get_temp_dir(), 'mynet_pack_');
 
         $zip = new ZipArchive();
         if ($zip->open($tempPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
             throw new RuntimeException('无法创建 ZIP 文件');
+        }
+
+        // R8：bundle.json = BundleEnvelope schema v2（三条链同一契约）
+        if ($bundleJson !== '') {
+            $zip->addFromString('bundle.json', $bundleJson);
         }
 
         // conf/{nodeId}/ — 配置文件
