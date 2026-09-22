@@ -155,7 +155,7 @@
    `X-Tenant-ID`，框架再校验归属。
 2. 带 `X-Tenant-ID` 注册时，框架会**自动创建 `tenant_users`**。
 
-**GNB 密钥生成依赖原生扩展 `gnb_ed25519`**（源自 `gnb_src`），本环境未加载；**WireGuard 路径走 sodium，正常**——也正好是架构主线方向（S6/S7）。
+**GNB 密钥生成依赖原生扩展 `gnb_ed25519`**（源自 `gnb_src`），本环境未加载；**WireGuard 路径走 sodium，正常**——也正好是架构主线方向（**R6/R7**；原写 S6/S7，S 编号已废止，见 driver-abstraction.md §5）。
 
 **T54 基线**：`route:list` = **1054** · `php -l` 全过 · 外键 **101** 个 **0 违规** · 黄金路径全 2xx。
 
@@ -202,7 +202,7 @@
 flowchart LR
     A["monitor_rt_cmds<br/>PK 修好"] --> B["心跳可实例化"]
     B --> C["配置包可下发"]
-    C --> D["S6 WG Bundle 可验证"]
+    C --> D["R6 WG Bundle 可验证"]
     E["其余包袱<br/>events / 漂移 / 重复"] -.->|"不在关键路径"| F["第三、四阶段"]
 ```
 

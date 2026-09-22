@@ -189,14 +189,26 @@
 
 ## 6. 对 WG 推进的意义（为什么这是前置）
 
-用户已决策：**S6 = back 改产抽象 VPNBundle**。但 back 现在**跑不起来**——
-模块路由不注册意味着 `GET /nodes/{id}/config-bundle` **根本不可达**。
+~~用户已决策：**S6 = back 改产抽象 VPNBundle**~~ —— **该 S 计划已废止，见下方更正**。
+写成当时 back **跑不起来**——模块路由不注册意味着 `GET /nodes/{id}/config-bundle` **根本不可达**。
 
-因此：
-- **本清单是 S6 的前置**：back 起不来 → 无法实现、更无法验证 bundle 下发
-- WG 真实依赖链：`T31 修复 → back 可跑 → S6 改产 VPNBundle → S3 剩余/S4 → S7 WireGuardDriver`
-- **S6 的改造点**在 `app/Modules/VPN/Services/ConfigBundleService.php`（当前产出已渲染的 gnb 文本），
-  改为产出 agent 侧 `VPNBundle` 结构（字段见 `spec/driver-abstraction.md` §3.1）
+> ⚠️ **更正（2026-09-22，spec/driver-abstraction.md §5 已改用 R0–R9）**：
+> 1. 本文提到的 **S3/S4/S6/S7 编号体系已不存在**，现行落地顺序是 **R0–R9**
+>    （R2 = schema v2，R4 = agent 原子 Apply，R5 = 收敛写入权与生命周期权威，
+>    R6 = GNB adapter，R7 = WireGuard reconciler）
+> 2. 「一个扁平 VPNBundle 覆盖两种驱动」的草案**已被撤销**（该 spec §1 原文：
+>    「撤销原来的"一个扁平 VPNBundle 覆盖两种驱动"设计」）。所以下面这句
+>    「S6 的改造点 = ConfigBundleService 改产 VPNBundle」**不能再照做**——
+>    改产的是被否掉的抽象。
+> 3. 现行判据见该 spec §5 的 R0：「back/agent/ctl 不再宣称 S6 完成」；
+>    也见 §决策表 D2：「新链是死代码，**不能宣称 S6 完成**」。
+
+因此（**按 R0–R9 重新表述**）：
+- **本清单是 R0（冻结旧链）与 R3（修正 back 业务模型）的前置**：back 起不来，
+  既无法实现、也无法验证任何 bundle 下发
+- WG 真实依赖链：`T31 修复 → back 可跑 → R2 schema v2 → R3 业务模型 → R4 原子 Apply → R5 写入权收敛 → R7 WireGuard reconciler`
+- 改造点在 `app/Modules/VPN/Services/ConfigBundleService.php`（当前产出已渲染的 gnb 文本），
+  **但目标不是产出扁平 VPNBundle**，而是 R2 的 `BundleEnvelope + NetworkIntent + GnbIntent + WireGuardIntent`
 
 ---
 
@@ -502,4 +514,4 @@ out, n = re.subn(r'\\Modules\\', r'\\App\\Modules\\', out)   # 匹配整篇文�
 - **D 类内联 FQCN**：本批已由脚本第(4)步覆盖（部分为真实修复，如
   `MonitorHistoryService` 里 8 处 `Modules\VPN\Models\*` → `\App\Modules\VPN\Models\*`）。
 - **验收补充**：VPN 路由已注册，但**控制器能否真正应答**尚未验证（需要可用的
-  DB 与租户上下文）。这是 S6 改产 VPNBundle 之前的最后一个未知量。
+  DB 与租户上下文）。这是 R2（schema v2）/R3 之前的最后一个未知量。（原写「S6 改产 VPNBundle」，S 编号已废止。）
