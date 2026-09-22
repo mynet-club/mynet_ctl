@@ -12,7 +12,7 @@
 > | status | ✅ 已实现 | `gnb{running,pid,node_id,vpn_type,tun_iface,hot_restart}` + `agent{version,pid}`；`hot_restart` 如实报 `false`（驱动未声明该能力）。**`proxy` 子对象尚未实现**（见 proxy 行） |
 > | service | ⚠️ 端点就位 | `start/stop/reload` 已按契约接线，但**驱动尚未实现 `VPNDriver.Reload()`/生命周期接口**，故如实返回稳定错误码 `unsupported`。按 [`driver-abstraction.md`](driver-abstraction.md) 这属 S3/S5 的工作；驱动实现后本机 API 一行不用改 |
 > | config | ✅ sync/refresh | 复用 `NodeRefreshService` + `RouteRefreshService` + `AddressRefreshService`（即心跳命令链里 `mynet.node.update`/`mynet.route.update` 的落地实现）——**node / route / address 三者都已覆盖**，符合 §3 的「拉 node/route/address + keys」。该路径写的是渲染后的 gnb 配置，按分层终应收敛到 `VPNDriver.WriteConfig(bundle)` |
-> | proxy | ⬜ 未实现 | 落点未定：契约要求写 `proxy on|off` 到 node.conf，而渲染器目前**不输出这一行**（`BundleFlags.Proxy` 未被使用）。要么让驱动从 bundle 渲染，要么另定标志位——属需决策项 |
+> | proxy | ✅ 已实现 | 标志**归 back 持有**（`node_configs.config` 的 `proxy`），node.conf 只是它的投影——这样配置同步不会把本地改动冲掉。`GET /proxy` 读回 back 值 + node.conf 投影；`enable/disable` 经中继写 back 再 `config.sync` 让 node.conf 跟上。已在 `config/vpn.php` 的 gnb expert 参数里加 `proxy`（渲染成 `proxy on|off`）。实测：开→back 落库→node.conf 出现 `proxy on`；关→回退 |
 > | nodes / zones | ⬜ 未实现 | 「列表」属本机态可做；「切换当前节点」要改 `mynet.conf` 并重载，且 zones 属**平台态**（应经 `relay` 域），需先厘清边界 |
 > | peers | ✅ 已实现 | 复用驱动的 `GetAllPeers` / `GetNetworkSummary`（即 `gnb_ctl -s` 的解析结果），不重复解析 |
 > | logs | ✅ 已实现 | 读日志环形缓冲（与写往文件/控制台的是同一份格式化行） |
@@ -84,7 +84,10 @@
   "error": { "code": "not_found", "message": "…", "detail": "<back 响应原样>" } }
 ```
 
-- `ok` 反映 **back 的结果**（状态码 <400）；本机这一层失败（白名单拒绝 / 无用户凭证）用
+- relay **只做转发 + 限流 + 声明身份**，不解释业务内容：路径白名单、限流（默认 20/秒，
+  超限 429 `rate_limited`）、带上 `Authorization`（用户凭证）与 `X-Tenant-ID`（节点所属租户）。
+  鉴权归属与业务校验一律由 back 负责
+- `ok` 反映 **back 的结果**（状态码 <400）；本机这一层失败（白名单拒绝 / 无用户凭证 / 限流）用
   自己的稳定码 `forbidden` / `unauthorized`
 - `data.body` 与 `error.detail` 都是 **back 响应原样**，本机不改写——壳可以自己解析 back 的信封
 - 路径白名单**默认拒绝**，清单唯一定义在 `relaypolicy`（网关与本机两道闸共用一份，防漂移）。

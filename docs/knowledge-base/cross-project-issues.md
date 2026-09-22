@@ -85,6 +85,27 @@
 
 ### 🟡 P2 — SSOT 自身一致性（2026-09-22 记录）
 
+#### CPI-18 ~ CPI-21. 配置链路四个缺陷（proxy 域落地时全部撞出来）（均已修）
+- **ID**：CPI-18 / 19 / 20 / 21
+- **来源**：把「本机 API 的 proxy 域」真跑通，就必须走完配置的读→改→写整条链路，
+  于是这四个各自独立、都会让配置"存了不生效"的缺陷全部暴露
+
+| ID | 缺陷 | 症状 | 修法 |
+|----|------|------|------|
+| **CPI-18** | 仅凭 Bearer token **解析不出租户**：`IdentifyTenant` 第 6 步靠 `property_exists($user,'current_tenant_id')`，而框架与 back 的 User 都没该属性（Eloquent 字段在 `$attributes`，`property_exists` 恒 false） | 租户为空 → `TenantScope` fail-closed（`WHERE 1=0`）→ 用户层查询**静默返回空**、`Node::find` 得"节点不存在"，而 HTTP 是 200 | 新增 `App\Http\Middleware\ResolveTenantFromUser`：框架没能显式识别时用用户在 `tenant_users` 的活跃归属兜底；显式来源（域名 / `X-Tenant-ID`）仍优先 |
+| **CPI-19** | `extractConfigByType` 对 `expert`/`sys` **恒返回空数组**（原注释："暂时返回空数组"） | 保存的 expert 字段（如 `proxy`）读取时取不到，只见默认值 → "存了 on 读回还是 off" | 按 `config/vpn.php` 定义归类；未定义字段仍归 base（宁可放错也不丢） |
+| **CPI-20** | 节点通道渲染 node.conf 时**丢掉用户配置**：控制器 `array_merge($config['base'], $config['expert'])`，而 `getNodeFullConfig()` 返回的是 `node_info/network_config/additional_config/custom_config`，没有 base/expert 段 → 合并恒空 | **任何一次配置同步都会把节点 node.conf "还原"成默认**，用户改的配置被无声改回 | 改用 `custom_config`（normalize 后的扁平表，生成器正好吃扁平数组） |
+| **CPI-21** | `NodeConfig::updateOrCreateRawConfig()` **被调用而从未定义**（与 CPI-17 同类的第二个） | `saveFullConfig` 这条保存路径同样抛 `BadMethodCallException`——两条路径都要有 | 补实现（含 forceSave 刷 `updated_at`） |
+
+> 另修一处悬空命名空间：`VpnConfigGeneratorFactoryDomainService` 被写成
+> `App\Domain\Services\VPN\...`（真位置 `App\Modules\VPN\Domain\Services\...`），
+> 两处引用（`NodeMonitorController` 的路由渲染、`RouteController`）都会 fatal
+> → **节点侧路由刷新此前是坏的**。
+
+- **优先级**：已修（`84dd7170`）
+
+---
+
 #### CPI-17. 保存节点配置整条路径走不通（`updateOrCreateConfig` 从未定义）（已修）
 - **ID**：CPI-17
 - **位置**：[NodeConfigDomainService.php:123](../../../mynet_back-integration/app/Modules/VPN/Domain/Services/NodeConfigDomainService.php) 调用
@@ -118,111 +139,6 @@
 
 > 本轮在把 `spec/local-api.md`（本机能力面）落地到 mynetd 时撞出来的。
 > 原则同前：**先记录、再处理**；需要决策的不猜。
-
-#### CPI-9. `proxy` 标志的落点未定，proxy 域因此落不了地
-- **ID**：CPI-9
-- **位置**：`local-api.md` §3 proxy 行；[gnb_config_render.go](../../../mynet_agent-integration/internal/infrastructure/gnb_config_render.go) 的 `renderNodeConf`
-- **现状**：契约要求 `proxy.enable` 写 `proxy on`（gnb_native）到 node.conf，
-  但**渲染器目前不输出这一行**——`domain.BundleFlags.Proxy` 字段存在却从未被使用
-  （`renderNodeConf` 只写 nodeid/ifname/listen/mtu/daemon off）。所以磁盘上根本没有这个标志可读可写
-- **两条路各自的问题**：
-  a) 按分层让**驱动**从 bundle 渲染该行（与 `BundleFlags.Proxy` 的设计意图一致）——
-     但需要"读回当前 bundle 再改标志位"的路径，现在没有
-  b) 本机 API 直接改 node.conf——把 gnb 的文件格式耦合进 API 层，
-     与 `driver-abstraction.md` 的分层相悖
-- **倾向**：a)；但这是驱动层的设计决定，不在本机 API 这一轮里替它定
-- **2026-09-22 进展（已定方向并打好基础）**：取 **back 所有**（与"back 是唯一配置源"一致），
-  落点选 **`node_configs.config`**（现成的 per-node JSON，**不必改 schema**）：
-  - `config/vpn.php` 的 gnb expert 参数已加 `proxy`（on/off，默认 off），
-    `formatConfigLine` 已把它渲染成 `proxy on|off` —— 即 §3 说的「node.conf flag」
-    变成该标志的**投影**，配置同步不会把本地改动冲掉
-  - 实测：存 `node_configs.config` → 取出渲染 → 得到 `proxy on`
-  - 为支撑写入，顺带修好 CPI-17（保存配置整条路径此前走不通）
-  - **尚差**：本机 API 的 `GET/POST /api/v1/proxy` 三层（读 → 改 → 整份写回 →
-    `config.refresh` 让 node.conf 跟上）。注意 `getNodeConfig` 返回 `base`/`expert` 嵌套，
-    而 `saveConfig` 收扁平一维 —— 读改写时要按这个形状拼
-- **优先级**：中（proxy 是 GUI 的常用开关）
-
-#### 决策记录：CPI-12 的 node→back 用户层鉴权（2026-09-22）
-
-原为「需决策」项，现按下列取舍落地：
-
-**取舍**：用户 token 由**节点持有并带上**，网关**按路径决定是否透传 `Authorization`**。
-（备选 a) 网关放行全部 Authorization、c) 网关代填令牌，均未采用。）
-
-**理由**：
-1. 系统本来就是这么设计的 —— `internal/daemon/credential` 里的用户 token 正是节点
-   「以用户身份访问 back」的凭据；§5.1 明确说 **GUI 不持有** back 凭据（没说节点不持）
-2. 「网关代填」会把用户 token 复制到网关侧，多一份密钥、且轮换时两边都得改
-3. 真正该保的性质不是"节点不能带 Authorization"，而是**节点不能冒充别的节点**
-   （`X-Node-Id` 由网关按连接身份填写，节点提供的值被丢弃 —— 见 CPI-13 之前的修复）
-   `Authorization` 带的是**它自己用户**的 token，与该性质不冲突
-
-**保留的性质**：节点自身通道（`/api/v1/monitor/*`）**仍不透传** Authorization
-（那边只认 HMAC）。两侧规则由 `relaypolicy` 统一定义，网关与节点共用一份，避免漂移。
-
-**实测**：真链路 `本机 API(local token) → 网关中继(节点 Ed25519) → 真 back 用户层(用户 token)`
-通过：`GET /api/v1/relay?path=/api/v1/nodes` 返回 200 与真实数据；admin 路径 403。
-
-#### CPI-15. 整批 `NodeMonitorController` 端点曾因缺 request attribute 而全 404（已修）
-- **ID**：CPI-15
-- **位置**：[NodeMonitorController.php](../../../mynet_back-integration/app/Modules/VPN/Controllers/Api/V1/NodeMonitorController.php)
-- **现状（修复前）**：该控制器**每个**端点都写
-  `$nodeId = $request->attributes->get('node_id'); // 从中间件获取已验证的node_id`，
-  而当时的 `NodeHeartbeatAuthMiddleware` 是 `// TODO` 空壳、**从未设置该属性**
-  → `Node::find(null)` → 404 `Node not found`
-- **实测（本次做的反向验证）**：移除那行属性 → `GET /monitor/index-services` 返回
-  **404 "Node not found"**；加回 → **200**。因果确凿
-- **影响面**：node/info、node/config、node/routes、node/full-config、route-config、
-  index-services、router-keys **全部 404** —— 也就是**路由刷新与路由公钥同步此前是坏的**
-  （`refresh-routes` → `/monitor/route-config` → 404；`refreshPublicKeys` → `/monitor/router-keys` → 404）
-- **怎么修好的**：本轮做 CPI-6（按已验签节点限流）时，在验签中间件里加了
-  `$request->attributes->set('node_id', $nodeId)` 供限流器用——**顺手把这批端点一起修好了**。
-  属"意外的正确修复"，记在此处以免日后被当成"本来就是好的"
-- **优先级**：已修（无需动作），记录以便理解历史行为与后续排查
-
-#### CPI-14. `daemon/logger` 在 `Init()` 之前调用会**直接 panic**（地雷）
-- **ID**：CPI-14
-- **位置**：[logger.go](../../../mynet_agent-integration/internal/daemon/logger/logger.go)（`debugLogger` 等包级变量在 `Init` 前为 nil）
-- **实测**：`mynet refresh-address --auto` → SIGSEGV：
-  `config.loadCommandMappings` → `logger.Error` → `log.(*Logger).Output` 空指针
-- **触发条件**：任何走 `config.LoadConfig()` 且目标环境缺 `conf/command.*.json` 的 CLI 路径
-  （`LoadConfig` 会在找不到命令映射时记一行 error，而 CLI 从不调用 `logger.Init`）
-- **影响**：不是"少一条日志"，而是**进程崩溃**；`refresh-routes` 等既有命令同样受影响
-- **修复方向**：给 logger 一个**可用的默认状态**（包 init 时按 stderr/stdout + INFO 装配，
-  与 `Init(level, "")` 的"仅控制台"分支一致），`Init` 再按需重配
-
-#### CPI-13. conf 声明的命令有 3 条实际会失败（agent 侧，implement 缺失）
-- **ID**：CPI-13
-- **位置**：[conf/command.linux.json](../../../mynet_agent-integration/conf/command.linux.json)（openwrt 同）
-- **实测**：
-  | 声明的命令 | 实际执行 | 结果 |
-  |---|---|---|
-  | `mynet.gnb.refresh.address` | `bin/mynet refresh-address --auto` | **CLI 无 `refresh-address` 子命令**（全仓零实现）→ 未知命令 |
-  | `mynet.wg.refresh.address` | `bin/mynet refresh-address --auto --vpn-type wireguard` | 同上 |
-  | `mynet.wg.refresh.route` | `bin/mynet refresh-routes --auto --node-id X --vpn-type wireguard` | **`refresh-routes` 不认 `--vpn-type`** → unknown flag |
-- **与 CPI-2/CPI-4 是同一类**（命令名/参数与实现不一致 → 静默或半静默失效），
-  只是方向相反：那次是 back 写错命令名，这次是 agent 的 conf 声明了做不到的事
-- **影响**：`config.sync` 契约里的 "**address**" 部分因此无法覆盖（SSOT 要求拉 node/route/address + keys）
-- **修复方向**：补 `refresh-address` 实现（back 已有 `/monitor/index-services` 与
-  `api.GetIndexServicesRendered`），并让 `refresh-routes` 显式接受/拒绝 `--vpn-type`
-  （**不支持就报错，不能静默按 gnb 处理**）
-- **补充（同日复查 conf 全部调用后发现更多同类）**：
-  | 声明的命令 | 实际执行 | 结果 |
-  |---|---|---|
-  | `plugin.proxy.start` / `.stop` / `.restart` | `bin/mynet_proxy start\|stop\|restart` | **该 CLI 没有这些子命令**（只有 apply / apply-routes / clean / ipconfig / refresh / setup / status）→ 未知命令（两个平台文件都有） |
-  | openwrt 的 `mynet.start` / `.stop` / `.restart` | `mynet start\|stop\|restart` | 本仓 CLI 无这些子命令。**注意**：与 linux 的 `scripts/mynetd start` 不同——openwrt 可能由打包提供 shell 包装器，`mynet_openwrt` 不在工作区，**无法判定真伪，不擅自改** |
-- **已修**：`mynet.gnb.refresh.address`（补 `refresh-address` 实现，全仓此前零实现）；
-  `mynet.wg.refresh.{address,route}` 由"unknown command/flag"改为**明确报"暂不支持 wireguard"**
-  （不再是"看不懂的失败"，但 wg 支持仍属驱动层工作）
-- **已修（2026-09-22）**：`mynet.gnb.refresh.address` 补上 `refresh-address` 实现
-  （monitor.GetIndexServices + daemon/address 服务 + CLI 子命令），
-  `refresh-routes`/`refresh-address` 接受 `--vpn-type` 且非 gnb 明确报错；
-  `config.sync` 因此按契约覆盖了 node/route/**address**。
-  对真 back 实测通过（取渲染结果 → 写 driver/gnb/conf/<nodeID>/address.conf，退出码 0）
-- **仍待决**：`plugin.proxy.*`（proxy 正下架，需定退役节奏）、openwrt 的
-  `mynet.{start,stop,restart}`（需 `mynet_openwrt` 才能判定）
-- **优先级**：中高（声明即承诺；且挡住 config.sync 的完整实现）
 
 #### CPI-10. `nodes / zones` 域的边界未厘清
 - **ID**：CPI-10
@@ -310,6 +226,9 @@
 | 2026-09-22 | **CPI-8** 心跳未收敛到中继 → `relay_heartbeat`（默认开）让心跳也走网关 | `9a3d4e8` |
 | 2026-09-22 | **CPI-12** relay 域缺 node→back 用户层鉴权链路 → 已定设计并实现（节点持用户 token，网关按路径透传 Authorization） | 见 relay 系列提交 |
 | 2026-09-22 | 本机能力面 relay 域 + relaypolicy 单一策略来源（网关/本机两道闸） | 见 relay 系列提交 |
+| 2026-09-22 | **CPI-9** proxy 域落地（标志归 back，node.conf 为投影；读→改→整份写回→同步） | `c335296` |
+| 2026-09-22 | relay 补上漏掉的限流（固定窗口 20/秒，超限 429 `rate_limited`） | `c335296` |
+| 2026-09-22 | **CPI-18~21** 配置链路四个缺陷 + 一处悬空命名空间 | `84dd7170` |
 | 2026-09-22 | 本机能力面骨架落地（信封/token 鉴权/HTTP/传输无关 Service 层） | `ee5467e` |
 | 2026-09-22 | 本机能力面 service/config 两域 | `28afbb5` |
 | 2026-09-22 | 本机能力面 peers 域 | `790edbd` |
