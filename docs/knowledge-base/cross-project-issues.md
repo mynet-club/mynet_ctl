@@ -222,6 +222,7 @@
 | 2026-09-22 | **CPI-18~21** 配置链路四个缺陷 + 一处悬空命名空间 | `84dd7170` |
 | 2026-09-22 | **CPI-10** nodes/zones 域落地（zone ≡ tenant；relay 之上的具名薄封装 + 本机态标记） | `4c3025f` |
 | 2026-09-22 | **R1** GNB P1/P2/P3 与 WG 能力探测落地；`Capabilities()` 改为反映实测（`OpenGNBDriver` 改名、不伪造 gnb 产物） | agent `e85eb5a` |
+| 2026-09-22 | **R1 出口判据达成**：对真实编出的 gnb 二进制实测 `hot_restart=true, route_proxy=true, log_hot_config=false` | agent `2840888` |
 | 2026-09-22 | 本机能力面骨架落地（信封/token 鉴权/HTTP/传输无关 Service 层） | `ee5467e` |
 | 2026-09-22 | 本机能力面 service/config 两域 | `28afbb5` |
 | 2026-09-22 | 本机能力面 peers 域 | `790edbd` |
@@ -235,7 +236,15 @@
    用 `Open*` / `Discover*`（对齐 Go 惯例 `os.Open` / `sql.Open`），把代价写进名字里。
    只要一个纯结构体就**直接 `&Type{...}`**，别绕那个发现式构造函数。
    （已落实：`NewGNBDriver` → `OpenGNBDriver`，见 agent `e85eb5a`）
-2. **测试不得伪造 gnb 产物**。用户原话：「gnb.map 是 gnb 产物，不能手动修改」。
+2. **gnb 构建与回滚（2026-09-22 记录）**：我们用的是**自己补丁过的树**（P1 v2 热重启 + P2 proxy
+   路由放行）。`mynet_gnb` 通常只读，本次是用户明示「用我们自己 patch 过的代码去编译」后才动的：
+   - 目标目录是 `mynet_gnb/src`（= 上游树根，含 `Makefile.inc` 与 `src/`）
+   - **p2 的 `apply.sh` 必须用 `bash` 跑**（用了 `mapfile < <(...)`，`sh` 下直接语法错）
+   - `make -f Makefile.Darwin install` 只拷到 `src/bin/`，不碰系统路径 ✓
+   - 回滚：各补丁目录下的 `revert.sh`（p1 v2 / p2 各一份）
+   - ⚠️ gnb / gnb_ctl / gnb_es 的 ctl block 共享内存布局变了，**必须来自同一份构建**
+   - 实测能力：P1=true、P2=true、P3=false（未打 P3，符合预期）
+3. **测试不得伪造 gnb 产物**。用户原话：「gnb.map 是 gnb 产物，不能手动修改」。
    `gnb.map`、`gnb_ctl` 等是 gnb 自己产出/安装的东西，测试里不能手搓来"凑安装现场"。
    需要验证"探测/读取"逻辑时，只放**探测夹具**（例如含补丁特征串的假二进制），
    并写明它不是 gnb 产物、也不会被执行。
