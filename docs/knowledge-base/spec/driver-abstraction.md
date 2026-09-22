@@ -274,7 +274,7 @@ VPNDriver
 | **R5** | 收敛配置写入权与生命周期权威；旧 node/route refresh 改为委托 Apply | 每种文件只有一个写入者 ✅ **2026-09-22**：唯一写入口 `coordinator.ApplyFiles`；node/route/address refresh + `GNBDriver.WriteConfig` + `GNBRunner.EnsureConfig` 均已收敛；进程生命周期权威 = `node.GNBRunner`。完整 `BundleApplier.Apply(envelope)` 委托待 R8 有 Envelope 下发后接线 |
 | **R6** | 实现 GNB adapter，完整保留 node.conf 选项、route 节点环/relay、address 角色、keys、P1/P2 能力 | 与现生产链行为对照通过 ✅ **2026-09-22**：`coordinator.GnbAdapter`（Envelope→node/route/address/ed25519/security）；生产形状单测锁定（daemon off / proxy on / i\|0\|host\|port / id\|ip\|mask / 私钥 0600）；via/proxy_fallback 注释段。热重启 Reload 待接 GNBDriver（P1） |
 | **R7** | 实现 WireGuard crypto reconciler + Linux NetworkReconciler | `wg syncconf` 与 address/FIB/rule/firewall 分开验证 |
-| **R8** | 接 back API/ETag/cache；ctl 安装包复用同一 schema | 在线更新、离线启动、安装包三条链一致 |
+| **R8** | 接 back API/ETag/cache；ctl 安装包复用同一 schema | 在线更新、离线启动、安装包三条链一致 ✅ **2026-09-22**：`config_revisions` + `BundleEnvelopePublisher` + `GET /monitor/node/bundle` & `/nodes/{id}/bundle`（ETag/304）；agent `GetBundle`+`HTTPFetcher`+`handleBundleChanged→Apply`；ctl 安装包含 `bundle.json`（同 schema） |
 | **R9** | 逐步关闭旧分散端点和多写者 | 无 last-writer-wins |
 
 在 R2–R6 完成前，不应继续实现 `WireGuardDriver`；否则会把错误抽象固化进代码。

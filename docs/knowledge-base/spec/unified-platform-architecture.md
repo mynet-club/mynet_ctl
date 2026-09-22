@@ -641,8 +641,8 @@ agent 侧:
   - Go: `mynet_agent/internal/domain/bundle_envelope.go` + 测试
   - PHP: `mynet_back/app/Modules/VPN/Domain/Bundle/` + `tests/BundleEnvelopeV2Test.php`
   - 两边 checksum 与 fixtures 预计算值一致（canonical JSON 算法已冻结，见 schema `$defs.checksumAlgorithm`）
-- [ ] `generation` 单调递增，支持 ETag/304
-  - 字段已定义；单调性与 ETag 由 back 发布链保证（阶段 2.6 / R8）
+- [x] `generation` 单调递增，支持 ETag/304
+  - 2026-09-22：back `config_revisions` + `rev-{YmdHis}-{seq}`；ETag=`"<checksum>"`；`/monitor/node/bundle` 与 `/nodes/{id}/bundle` 支持 If-None-Match→304
 - [x] `checksum` 校验流程有测试覆盖
   - Go `TestBundleEnvelopeFixturesChecksumRoundTrip` / PHP `testComputeChecksumMatchesFixture`
 - [ ] 兼容策略的四个场景均有测试覆盖
