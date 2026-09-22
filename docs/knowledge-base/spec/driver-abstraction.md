@@ -275,7 +275,7 @@ VPNDriver
 | **R6** | 实现 GNB adapter，完整保留 node.conf 选项、route 节点环/relay、address 角色、keys、P1/P2 能力 | 与现生产链行为对照通过 ✅ **2026-09-22**：`coordinator.GnbAdapter`（Envelope→node/route/address/ed25519/security）；生产形状单测锁定（daemon off / proxy on / i\|0\|host\|port / id\|ip\|mask / 私钥 0600）；via/proxy_fallback 注释段。热重启 Reload 待接 GNBDriver（P1） |
 | **R7** | 实现 WireGuard crypto reconciler + Linux NetworkReconciler | `wg syncconf` 与 address/FIB/rule/firewall 分开验证 |
 | **R8** | 接 back API/ETag/cache；ctl 安装包复用同一 schema | 在线更新、离线启动、安装包三条链一致 ✅ **2026-09-22**：`config_revisions` + `BundleEnvelopePublisher` + `GET /monitor/node/bundle` & `/nodes/{id}/bundle`（ETag/304）；agent `GetBundle`+`HTTPFetcher`+`handleBundleChanged→Apply`；ctl 安装包含 `bundle.json`（同 schema） |
-| **R9** | 逐步关闭旧分散端点和多写者 | 无 last-writer-wins |
+| **R9** | 逐步关闭旧分散端点和多写者 | 无 last-writer-wins ✅ **2026-09-22**：`configsync.Sync` 为唯一内容权威（Envelope Apply 优先，旧 text 链仅回落）；心跳命令/控制面/本机 API 均走 Sync；`proxy.writeRouteConf` 收敛到 ApplyFiles；back 旧端点带 `Deprecation` 头。旧端点待旧 agent 退场后删除 |
 
 在 R2–R6 完成前，不应继续实现 `WireGuardDriver`；否则会把错误抽象固化进代码。
 
