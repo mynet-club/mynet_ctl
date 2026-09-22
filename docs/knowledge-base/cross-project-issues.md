@@ -140,22 +140,23 @@
 > 本轮在把 `spec/local-api.md`（本机能力面）落地到 mynetd 时撞出来的。
 > 原则同前：**先记录、再处理**；需要决策的不猜。
 
-#### CPI-11. `service.*` 依赖驱动实现生命周期接口（非缺陷，是排期依赖）
+#### CPI-11. `service.*` 与「切换当前节点」依赖驱动生命周期接口 —— **按 spec 现在就不该实现**
 - **ID**：CPI-11
 - **现状**：本机 API 的 `service.start/stop/reload` 端点已按契约接线，但
   `domain.VPNLifecycleDriver`（Start/Stop/Reload/Capabilities/WriteConfig/Status）
   **尚无任何实现**——`GNBDriver` 有 Capabilities/WriteConfig/Status，缺 Start/Stop/Reload，
-  实测不满足该接口（与 `driver-abstraction.md` 的 S1 阶段一致）
-- **本机 API 的做法**：类型断言取能力，取不到返回稳定错误码 `unsupported`，
-  错误信息里点明属 S3/S5 的工作；**不**代驱动展开 gnb 机制（契约明确禁止）
-- **解锁条件**：驱动实现该接口后，本机 API 一行不用改
-- **优先级**：记在案（不是本机 API 的债，是驱动层排期）
-
----
-
-### 🟡 P2 — 控制面相关（2026-09-22 记录）
-
-> CPI-7 为唯一遗留（低优先级：当前 ID 上限恰好等于 float64 精确整数上限，安全）。
+  实测不满足该接口。本机 API 的做法是类型断言取能力，取不到返回稳定码 `unsupported`
+  并点明原因，**不代驱动展开 gnb 机制**（契约明确禁止）。
+- **为什么现在不该做（查过 spec 后更正）**：`driver-abstraction.md §5` 的落地顺序是
+  **R0–R9**，而生命周期权威收敛是 **R5**，排在 R2（`BundleEnvelope` + `NetworkIntent`
+  schema v2）与 R4（原子 Apply：stage→validate→write→reload→health-check→commit/rollback）
+  之后。该 spec 明确写着：「**在 R2–R6 完成前，不应继续实现 `WireGuardDriver`；
+  否则会把错误抽象固化进代码**」——同理，现在补 `Start/Reload` 会绕过 R4 的原子 Apply
+  与 R5 的写入权收敛，等于把两套生命周期权威固化下来。
+- **因此**：这不是"缺一个补丁"，而是**被已排期的工作流挡住**。本机能力面除这两项外已齐。
+- **顺带更正**：`internal/domain/vpn_lifecycle_driver.go` 的注释原引用 S1/S3/S4/S5
+  并称"见 spec §5"，而该章节早已改写成 R0–R9——过期引用，已更正（`988a543`）。
+- **优先级**：记在案（非本机 API 的债；等 R2–R5）
 
 #### CPI-7. 命令 ID 经 float64 往返
 - **ID**：CPI-7
