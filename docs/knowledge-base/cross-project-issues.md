@@ -85,6 +85,19 @@
 
 ### 🟡 P2 — SSOT 自身一致性（2026-09-22 记录）
 
+#### CPI-17. 保存节点配置整条路径走不通（`updateOrCreateConfig` 从未定义）（已修）
+- **ID**：CPI-17
+- **位置**：[NodeConfigDomainService.php:123](../../../mynet_back-integration/app/Modules/VPN/Domain/Services/NodeConfigDomainService.php) 调用
+  `NodeConfig::updateOrCreateConfig()`，而 [NodeConfig.php](../../../mynet_back-integration/app/Modules/VPN/Models/NodeConfig.php) 只有 `findByNodeId`
+- **实测**：`BadMethodCallException: Call to undefined method App\Modules\VPN\Models\NodeConfig::updateOrCreateConfig()`
+  → `POST/PUT /api/v1/nodes/{id}/config` 这条保存路径根本走不通
+- **与 CPI-2/4/13 同一类**：声明了却做不到（这次是"调用了却没人实现"）
+- **已修**：实现为**整体替换 `config`**（调用方是 `saveFullConfig`，传的是重建的全量数据；
+  合并会让"清掉某项"永远做不到）。模型带 SoftDeletes 且 node_id 唯一，故从软删记录里找并恢复
+- **优先级**：已修（`02319ece`）
+
+---
+
 #### CPI-16. 6 份 spec 的「适用」头仍指向已冻结的旧线（已标注）
 - **ID**：CPI-16
 - **位置**：`spec/{auth,wizard,service,proxy,plugins,debug-env}.md`
@@ -118,6 +131,16 @@
   b) 本机 API 直接改 node.conf——把 gnb 的文件格式耦合进 API 层，
      与 `driver-abstraction.md` 的分层相悖
 - **倾向**：a)；但这是驱动层的设计决定，不在本机 API 这一轮里替它定
+- **2026-09-22 进展（已定方向并打好基础）**：取 **back 所有**（与"back 是唯一配置源"一致），
+  落点选 **`node_configs.config`**（现成的 per-node JSON，**不必改 schema**）：
+  - `config/vpn.php` 的 gnb expert 参数已加 `proxy`（on/off，默认 off），
+    `formatConfigLine` 已把它渲染成 `proxy on|off` —— 即 §3 说的「node.conf flag」
+    变成该标志的**投影**，配置同步不会把本地改动冲掉
+  - 实测：存 `node_configs.config` → 取出渲染 → 得到 `proxy on`
+  - 为支撑写入，顺带修好 CPI-17（保存配置整条路径此前走不通）
+  - **尚差**：本机 API 的 `GET/POST /api/v1/proxy` 三层（读 → 改 → 整份写回 →
+    `config.refresh` 让 node.conf 跟上）。注意 `getNodeConfig` 返回 `base`/`expert` 嵌套，
+    而 `saveConfig` 收扁平一维 —— 读改写时要按这个形状拼
 - **优先级**：中（proxy 是 GUI 的常用开关）
 
 #### 决策记录：CPI-12 的 node→back 用户层鉴权（2026-09-22）
