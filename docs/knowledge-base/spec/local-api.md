@@ -16,6 +16,7 @@
 > | nodes / zones | ⬜ 未实现 | 「列表」属本机态可做；「切换当前节点」要改 `mynet.conf` 并重载，且 zones 属**平台态**（应经 `relay` 域），需先厘清边界 |
 > | peers | ✅ 已实现 | 复用驱动的 `GetAllPeers` / `GetNetworkSummary`（即 `gnb_ctl -s` 的解析结果），不重复解析 |
 > | logs | ✅ 已实现 | 读日志环形缓冲（与写往文件/控制台的是同一份格式化行） |
+> | relay | ✅ 已实现 | 平台态经网关中继；路径白名单默认拒绝、`relaypolicy` 单一来源；已对**真 back** 实测（`/api/v1/nodes` 200 + admin 403） |
 >
 > 传输：HTTP 已实现（`127.0.0.1:<port>`，token 0600 鉴权，写操作强制 POST）。
 > **ubus 传输未实现**——按本文件 §1 的「同一能力面，两种传输，一份实现」，
@@ -72,6 +73,38 @@
 
 `error.code` 为稳定标识符（供壳做分支），`message` 仅供人读。
 
+**可选字段 `error.detail`**（只增不改）：经 `relay` 域中继而 back 侧失败时，
+回传 back 的原始响应体。信封约定失败时 `data: null`，若无 `detail` 就会把上游细节丢光。
+
+**relay 域的语义**（已实现，落地在 `mynet_agent/internal/localapi`）：
+
+```json
+{ "ok": true,  "data": { "status": 200, "content_type": "…", "body": "<back 响应原样>" }, "error": null }
+{ "ok": false, "data": null,
+  "error": { "code": "not_found", "message": "…", "detail": "<back 响应原样>" } }
+```
+
+- `ok` 反映 **back 的结果**（状态码 <400）；本机这一层失败（白名单拒绝 / 无用户凭证）用
+  自己的稳定码 `forbidden` / `unauthorized`
+- `data.body` 与 `error.detail` 都是 **back 响应原样**，本机不改写——壳可以自己解析 back 的信封
+- 路径白名单**默认拒绝**，清单唯一定义在 `relaypolicy`（网关与本机两道闸共用一份，防漂移）。
+  ⚠️ 「具体清单」是 [`control-plane.md`](control-plane.md) §10 的待决项，当前是依据
+  §5.3 原则与 §5.2 举例给出的**起始清单**（nodes / route / social / user(s) /
+  notifications / service(s) / mynet + 节点通道），可随契约演进调整
+
+**鉴权链路**（已实现并实测）：
+
+```
+GUI ── local token ──> mynetd 本机 API
+                        └─ relay ── WS(节点 Ed25519) ──> gateway
+                                                          └─ + 用户 token ──> back 用户层
+```
+
+- GUI 不持有 back 凭据（§5.1）；**用户 token 由节点持有**（`conf/credential.json`）
+- 网关只证明节点身份（Ed25519 + `X-Node-Id`），用户层的 `Authorization` 由节点带上、
+  网关**按路径**决定是否透传：用户层放行，节点自身通道（`/api/v1/monitor/*`，只认 HMAC）不透传
+- 该规则由 `relaypolicy` 统一定义，网关侧与节点侧共用，避免两边漂移
+
 ---
 
 ## 3. 能力面（双通道映射）
@@ -90,6 +123,7 @@
 | **nodes / zones** | `GET /api/v1/nodes` 等 | `mynet.nodes` / `mynet.zones` | 列表、切换当前节点 |
 | **peers** | `GET /api/v1/peers` | `mynet.peers` | `gnb_ctl -s` 摘要 |
 | **logs** | `GET /api/v1/logs?n=100` | `mynet.logs` | 环形缓冲 tail |
+| **relay** | `GET /api/v1/relay?path=<back-api-path>` | — | **平台态**经网关中继到 back（§0 / [`control-plane.md`](control-plane.md) §5.3）；路径白名单默认拒绝 |
 
 ### status 响应示例
 

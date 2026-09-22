@@ -120,6 +120,27 @@
 - **倾向**：a)；但这是驱动层的设计决定，不在本机 API 这一轮里替它定
 - **优先级**：中（proxy 是 GUI 的常用开关）
 
+#### 决策记录：CPI-12 的 node→back 用户层鉴权（2026-09-22）
+
+原为「需决策」项，现按下列取舍落地：
+
+**取舍**：用户 token 由**节点持有并带上**，网关**按路径决定是否透传 `Authorization`**。
+（备选 a) 网关放行全部 Authorization、c) 网关代填令牌，均未采用。）
+
+**理由**：
+1. 系统本来就是这么设计的 —— `internal/daemon/credential` 里的用户 token 正是节点
+   「以用户身份访问 back」的凭据；§5.1 明确说 **GUI 不持有** back 凭据（没说节点不持）
+2. 「网关代填」会把用户 token 复制到网关侧，多一份密钥、且轮换时两边都得改
+3. 真正该保的性质不是"节点不能带 Authorization"，而是**节点不能冒充别的节点**
+   （`X-Node-Id` 由网关按连接身份填写，节点提供的值被丢弃 —— 见 CPI-13 之前的修复）
+   `Authorization` 带的是**它自己用户**的 token，与该性质不冲突
+
+**保留的性质**：节点自身通道（`/api/v1/monitor/*`）**仍不透传** Authorization
+（那边只认 HMAC）。两侧规则由 `relaypolicy` 统一定义，网关与节点共用一份，避免漂移。
+
+**实测**：真链路 `本机 API(local token) → 网关中继(节点 Ed25519) → 真 back 用户层(用户 token)`
+通过：`GET /api/v1/relay?path=/api/v1/nodes` 返回 200 与真实数据；admin 路径 403。
+
 #### CPI-15. 整批 `NodeMonitorController` 端点曾因缺 request attribute 而全 404（已修）
 - **ID**：CPI-15
 - **位置**：[NodeMonitorController.php](../../../mynet_back-integration/app/Modules/VPN/Controllers/Api/V1/NodeMonitorController.php)
@@ -147,23 +168,6 @@
 - **影响**：不是"少一条日志"，而是**进程崩溃**；`refresh-routes` 等既有命令同样受影响
 - **修复方向**：给 logger 一个**可用的默认状态**（包 init 时按 stderr/stdout + INFO 装配，
   与 `Init(level, "")` 的"仅控制台"分支一致），`Init` 再按需重配
-
-#### CPI-12. relay 域缺 node→back 的用户层鉴权链路（契约未规定）
-- **ID**：CPI-12
-- **位置**：`control-plane.md` §5.3（relay 域契约）
-- **契约要求**：GUI 的平台态查询（节点列表/路由/好友/统计）由 mynetd 经 gateway 中继到 back
-- **断链在哪**：
-  1. back 的用户层接口（`api/v1/nodes|route|social`…）挂在 **`auth:sanctum`**，要**用户** token
-  2. agent 确实持有用户凭证（`internal/daemon/credential` 的 `Token`/`RefreshToken`，100 年有效期），
-     所以"以用户身份访问 back"在数据上是具备的
-  3. **但网关按设计不放行 `Authorization`** —— 中继只透传 `x-*` / 条件请求 / 内容协商头，
-     正是为了"避免节点越权设置 Host/Authorization 之类"（`gateway/server.go` relay）
-- **结论**：三条路都需要决策，契约里没写选哪条
-  a) 网关放行 `Authorization`（削弱一条刚立的安全性质）
-  b) back 增一套"节点身份可访问的用户层"接口
-  c) 网关侧持有「节点 → 用户」令牌映射，由网关代填
-- **影响**：GUI 的平台态功能（列表/好友/路由/统计）暂时无法经本机 API 取到
-- **优先级**：高（这是 §5.1「GUI 只跟本机说话」能否成立的关键一环）
 
 #### CPI-13. conf 声明的命令有 3 条实际会失败（agent 侧，implement 缺失）
 - **ID**：CPI-13
@@ -281,6 +285,8 @@
 | 2026-09-22 | **CPI-5** 命令输出没回传 back（`Execute` 把 result 硬写成"命令执行成功"） | `b407e91` |
 | 2026-09-22 | **CPI-6** 节点通道 limit 按 IP 60/分（中继后即 300 节点打满）→ 改按已验签节点 180/分 | `fb97a776` |
 | 2026-09-22 | **CPI-8** 心跳未收敛到中继 → `relay_heartbeat`（默认开）让心跳也走网关 | `9a3d4e8` |
+| 2026-09-22 | **CPI-12** relay 域缺 node→back 用户层鉴权链路 → 已定设计并实现（节点持用户 token，网关按路径透传 Authorization） | 见 relay 系列提交 |
+| 2026-09-22 | 本机能力面 relay 域 + relaypolicy 单一策略来源（网关/本机两道闸） | 见 relay 系列提交 |
 | 2026-09-22 | 本机能力面骨架落地（信封/token 鉴权/HTTP/传输无关 Service 层） | `ee5467e` |
 | 2026-09-22 | 本机能力面 service/config 两域 | `28afbb5` |
 | 2026-09-22 | 本机能力面 peers 域 | `790edbd` |
