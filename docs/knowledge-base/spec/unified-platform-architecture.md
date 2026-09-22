@@ -645,7 +645,8 @@ agent 侧:
   - 2026-09-22：back `config_revisions` + `rev-{YmdHis}-{seq}`；ETag=`"<checksum>"`；`/monitor/node/bundle` 与 `/nodes/{id}/bundle` 支持 If-None-Match→304
 - [x] `checksum` 校验流程有测试覆盖
   - Go `TestBundleEnvelopeFixturesChecksumRoundTrip` / PHP `testComputeChecksumMatchesFixture`
-- [ ] 兼容策略的四个场景均有测试覆盖
+- [x] 兼容策略的四个场景均有测试覆盖
+  - ①`min_agent_version` 字段约定 ②`compat-extra-fields` ③`TestValidateRejectsDriverMismatch` ④checksum Verify/Fetcher 用例
   - 已覆盖：agent 版本过旧（`min_agent_version` 字段 + 注释约定）、未知字段忽略（compat-extra-fields）、driver 与 intent 错配（schema allOf + 测试）、checksum 失败（verify 用例）
   - 「不下发 / 拒绝 Apply」的运行时策略属 R4 BundleValidator
 
@@ -749,11 +750,16 @@ flowchart LR
 
 ### 4.5 出口判据
 
-- [ ] `BundleApplier.Apply` 有完整的 stage/rollback 测试（注入 write/reload/healthcheck 失败）
-- [ ] 旧 `node.refresh` / `route.refresh` 入口委托给 Apply 后行为不变
+- [x] `BundleApplier.Apply` 有完整的 stage/rollback 测试（注入 write/reload/healthcheck 失败）
+  - `internal/coordinator`：write/reload/health-check 失败均回滚，新建文件被删
+- [x] 旧 `node.refresh` / `route.refresh` 入口委托给 Apply 后行为不变
+  - R9：`configsync.Sync` 为唯一入口（Envelope 优先，旧 text 链仅回落）
 - [ ] 断网时 agent 能使用 last-known-good 启动
-- [ ] `apply_journal.jsonl` 记录每次 Apply 的完整生命周期
-- [ ] 并发 Apply 有文件锁保护
+  - `Applier.LoadLastKnownGood()` 已有；**启动路径未接**
+- [x] `apply_journal.jsonl` 记录每次 Apply 的完整生命周期
+  - journal 不含明文私钥
+- [x] 并发 Apply 有文件锁保护
+  - `apply.lock` + `TestConcurrentApplyRejected`
 
 ---
 
@@ -914,12 +920,18 @@ Reload():
 
 ### 5.4 出口判据
 
-- [ ] `ConfigDriver` 接口在 Go 编译通过
+- [x] `ConfigDriver` 接口在 Go 编译通过
+  - `coordinator.ConfigWriter` + `GnbAdapter`
 - [ ] GNB Driver.Apply 与当前生产链 `node.refresh`/`route.refresh` 的输出文件完全一致（A/B 对比测试）
+  - 形状单测已锁；**真链路逐字节 A/B 未做**
 - [ ] WG Driver.Validate 覆盖所有密钥/CIDR/端口约束
-- [ ] GNB Capabilities 探测正确识别 P1/P2/P3
-- [ ] WG Capabilities 正确返回不支持的能力
-- [ ] GNB security/*.private 文件权限为 0600
+  - 本阶段非目标：不启用 WireGuard（§6）
+- [x] GNB Capabilities 探测正确识别 P1/P2/P3
+  - `capability.ProbeGnb` + `TestE2E_ProbeRealGnb`
+- [x] WG Capabilities 正确返回不支持的能力
+  - `capability.ProbeWireGuard`；本阶段无 WG Driver
+- [x] GNB security/*.private 文件权限为 0600
+  - `WriteConfig` / `GnbAdapter` 测试
 
 ---
 
