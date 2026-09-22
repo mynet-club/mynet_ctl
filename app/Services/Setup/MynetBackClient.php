@@ -154,13 +154,20 @@ class MynetBackClient
     }
 
     /**
-     * BundleEnvelope schema v2（R8：与 agent /monitor/node/bundle 同构）。
-     *
-     * 安装包把该 JSON 写入 bundle.json，离线启动与在线更新共用同一契约。
+     * BundleEnvelope schema v2（R8）。GET /nodes/{id}/bundle 返回**裸 Envelope**。
      */
     public function getBundleEnvelope(string $token, int $zoneId, int $nodeId): array
     {
-        return $this->get("/api/v1/nodes/{$nodeId}/bundle", $token, ['zone_id' => $zoneId], $zoneId);
+        $request = Http::timeout($this->timeout)->withToken($token)->acceptJson();
+        if ($zoneId) {
+            $request = $request->withHeaders(['X-Zone-ID' => $zoneId]);
+        }
+        $response = $request->get($this->baseUrl . "/api/v1/nodes/{$nodeId}/bundle");
+        if ($response->failed()) {
+            $this->throwFromResponse($response, "/api/v1/nodes/{$nodeId}/bundle");
+        }
+        $json = $response->json();
+        return is_array($json) ? $json : [];
     }
 
     // ─── HTTP 基础方法 ───────────────────────────────────────────────────
