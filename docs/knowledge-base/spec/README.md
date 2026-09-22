@@ -31,6 +31,8 @@
 | [node-keying.md](node-keying.md) | **节点密钥与鉴权**：GNB ed25519 密钥派生 / `ed25519_key_exchange` DH / 心跳 HMAC 现状 / gateway 鉴权方案 | 目标线 |
 | [unified-platform-architecture.md](unified-platform-architecture.md) | 统一平台架构 L1~L7 与实施计划（业务与驱动分层） | 目标线 |
 | [driver-abstraction.md](driver-abstraction.md) | VPN Driver 抽象层：公共控制面 + 驱动专属 intent（gnb / wireguard） | 目标线 |
+| [schemas/bundle-envelope-v2.schema.json](schemas/bundle-envelope-v2.schema.json) | R2 线格式 SSOT：BundleEnvelope + NetworkIntent + GnbIntent + WireGuardIntent | 机器可读契约 |
+| [fixtures/bundle-envelope-v2/](fixtures/bundle-envelope-v2/) | R2 双端互解 fixtures（Go/PHP 共用，7 场景） | 共享测试数据 |
 | [local-api.md](local-api.md) | 本机能力面：mynetd HTTP/ubus 契约（GUI/OpenWrt 壳只调不改） | 目标线 |
 | [data-models.md](data-models.md) | 所有数据结构（JSON/conf 格式，唯一定义处） | 目标线 |
 | [auth.md](auth.md) | 登录 / 登出 / Token 刷新 | ⚠️ **冻结（旧线）** |

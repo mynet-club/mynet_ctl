@@ -633,11 +633,21 @@ agent 侧:
 
 ### 3.6 出口判据
 
-- [ ] JSON Schema 已定义并可校验
-- [ ] PHP 和 Go 使用同一组 fixtures，双端解码结果一致
+- [x] JSON Schema 已定义并可校验
+  - SSOT: `spec/schemas/bundle-envelope-v2.schema.json`（draft 2020-12）
+  - 双端 typed 解码 + fixture 覆盖即结构校验；完整 JSON Schema 库未接入（非 R2 阻塞项）
+- [x] PHP 和 Go 使用同一组 fixtures，双端解码结果一致
+  - fixtures: `spec/fixtures/bundle-envelope-v2/`（7 个场景：gnb-minimal / gnb-peers-routes / gnb-proxy-relay / gnb-ipv6 / wireguard-minimal / wireguard-multi-peer / compat-extra-fields）
+  - Go: `mynet_agent/internal/domain/bundle_envelope.go` + 测试
+  - PHP: `mynet_back/app/Modules/VPN/Domain/Bundle/` + `tests/BundleEnvelopeV2Test.php`
+  - 两边 checksum 与 fixtures 预计算值一致（canonical JSON 算法已冻结，见 schema `$defs.checksumAlgorithm`）
 - [ ] `generation` 单调递增，支持 ETag/304
-- [ ] `checksum` 校验流程有测试覆盖
+  - 字段已定义；单调性与 ETag 由 back 发布链保证（阶段 2.6 / R8）
+- [x] `checksum` 校验流程有测试覆盖
+  - Go `TestBundleEnvelopeFixturesChecksumRoundTrip` / PHP `testComputeChecksumMatchesFixture`
 - [ ] 兼容策略的四个场景均有测试覆盖
+  - 已覆盖：agent 版本过旧（`min_agent_version` 字段 + 注释约定）、未知字段忽略（compat-extra-fields）、driver 与 intent 错配（schema allOf + 测试）、checksum 失败（verify 用例）
+  - 「不下发 / 拒绝 Apply」的运行时策略属 R4 BundleValidator
 
 ---
 

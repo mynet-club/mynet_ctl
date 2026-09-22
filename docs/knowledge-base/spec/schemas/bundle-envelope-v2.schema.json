@@ -1,0 +1,471 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mynet.local/spec/schemas/bundle-envelope-v2.schema.json",
+  "title": "BundleEnvelope",
+  "description": "R2 schema v2：公共外壳 + NetworkIntent + 驱动专属 intent（GnbIntent / WireGuardIntent）。设计依据 driver-abstraction.md §3 与 unified-platform-architecture.md §3。扁平 VPNBundle 已撤销，不得再一一映射 GNB route ↔ WG AllowedIPs。",
+  "type": "object",
+  "required": ["schema_version", "generation", "checksum", "generated_at", "node", "driver", "network"],
+  "additionalProperties": true,
+  "properties": {
+    "schema_version": {
+      "const": 2,
+      "description": "契约版本。agent 对未知小版本必须忽略未知字段；对不支持的大版本拒绝 Apply。"
+    },
+    "generation": {
+      "type": "string",
+      "minLength": 1,
+      "description": "不透明单调版本串（如 rev-20260921-001）。用于 ETag/304 与 last-known-good 比对；比较语义由 back 保证单调，agent 不解析其内部结构。"
+    },
+    "checksum": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "description": "见 $defs.checksumAlgorithm。对去掉 checksum 字段后的 canonical JSON 取 sha256。"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "min_agent_version": {
+      "type": "string",
+      "description": "低于此版本的 agent 不得被下发本 envelope（back 侧拦截）；agent 本地仍应再校验一次。"
+    },
+    "node": {
+      "$ref": "#/$defs/NodeRef"
+    },
+    "driver": {
+      "enum": ["gnb", "wireguard"],
+      "description": "驱动名。能力（proxy/热重启等）不得由此推断，必须由探测得到（R1 / capability.Probe*）。"
+    },
+    "network": {
+      "$ref": "#/$defs/NetworkIntent"
+    },
+    "gnb": {
+      "oneOf": [
+        { "$ref": "#/$defs/GnbIntent" },
+        { "type": "null" }
+      ],
+      "description": "driver=gnb 时必填；driver=wireguard 时必须为 null。"
+    },
+    "wireguard": {
+      "oneOf": [
+        { "$ref": "#/$defs/WireGuardIntent" },
+        { "type": "null" }
+      ],
+      "description": "driver=wireguard 时必填；driver=gnb 时必须为 null。"
+    },
+    "connections": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/ConnectionPlan" },
+      "description": "可选的传输计划（L2 产物）。驱动 intent 才是落地依据；connections 仅作可追溯元数据，driver 不得直接消费。"
+    },
+    "capabilities": {
+      "type": "object",
+      "description": "可选的服务端视角能力回执（agent_version / platform 等）。本地真实能力以 agent 探测为准。"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "driver": { "const": "gnb" } },
+        "required": ["driver"]
+      },
+      "then": {
+        "required": ["gnb"],
+        "properties": {
+          "gnb": { "$ref": "#/$defs/GnbIntent" },
+          "wireguard": { "type": "null" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "driver": { "const": "wireguard" } },
+        "required": ["driver"]
+      },
+      "then": {
+        "required": ["wireguard"],
+        "properties": {
+          "wireguard": { "$ref": "#/$defs/WireGuardIntent" },
+          "gnb": { "type": "null" }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "checksumAlgorithm": {
+      "description": "checksum = 'sha256:' + hex(sha256(canonical_json(envelope 去掉 checksum 键)))。canonical_json：对象键按 Unicode 码点升序、数组保持顺序、无多余空白、字符串用 JSON 转义但不做 HTML 转义（不用 \\u003c 等）、整数无小数点、浮点用最短往返表示。Go/PHP 实现见 mynet_agent/internal/domain/bundle_envelope.go 与 mynet_back/app/Modules/VPN/Domain/Bundle/BundleEnvelope.php。"
+    },
+    "NodeId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "业务节点 ID 的字符串形态（业务模型里是 int；本 schema 统一 string）。不得等同于任何协议公钥身份。"
+    },
+    "KeyAlgorithm": {
+      "enum": ["ed25519", "curve25519"],
+      "description": "ed25519=GNB；curve25519=WireGuard。两种密钥格式与生命周期不同，禁止互转。"
+    },
+    "PublicKeyHex64": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "GNB Ed25519 公钥（32 字节 hex）。"
+    },
+    "PrivateKey": {
+      "type": "string",
+      "minLength": 1,
+      "description": "下发给 agent 的明文私钥（back 解析 secret:// 后写入）。日志/状态 dump 不得回显。"
+    },
+    "WgKey": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=$",
+      "description": "WireGuard Curve25519 密钥，base64(32 字节)，44 字符。"
+    },
+    "CIDR": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F:.]+/[0-9]{1,3}$"
+    },
+    "HostPort": {
+      "type": "string",
+      "minLength": 1,
+      "description": "host 或 host:port。无端口时由驱动补默认端口（GNB index=9016）。"
+    },
+    "NodeRef": {
+      "type": "object",
+      "required": ["id"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "$ref": "#/$defs/NodeId" },
+        "interface": {
+          "type": "string",
+          "description": "期望 TUN 接口名（如 gnb_tun_1001 / wg0）。"
+        },
+        "mtu": {
+          "type": "integer",
+          "minimum": 576,
+          "maximum": 65535
+        },
+        "listen_port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
+          "description": "传输层监听端口（GNB UDP / WG listen port）。"
+        }
+      }
+    },
+    "NetworkIntent": {
+      "type": "object",
+      "description": "操作系统网络状态意图。不包含 GNB route.conf 语义，也不包含 WG AllowedIPs（那是 cryptokey routing，属于驱动 intent）。",
+      "additionalProperties": true,
+      "properties": {
+        "addresses": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/CIDR" },
+          "description": "本节点 TUN 接口地址（interface address）。不是 advertised prefix。"
+        },
+        "routes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/OsRoute" },
+          "description": "OS FIB 路由。与 GNB route.conf / WG AllowedIPs 不同构。"
+        },
+        "rules": {
+          "type": "array",
+          "items": { "type": "object" },
+          "description": "策略路由规则（ip rule）。结构由 R7 NetworkReconciler 冻结。"
+        },
+        "firewall": {
+          "type": "array",
+          "items": { "type": "object" }
+        },
+        "nat": {
+          "type": "array",
+          "items": { "type": "object" }
+        }
+      }
+    },
+    "OsRoute": {
+      "type": "object",
+      "required": ["prefix"],
+      "additionalProperties": true,
+      "properties": {
+        "prefix": { "$ref": "#/$defs/CIDR" },
+        "via": {
+          "type": "string",
+          "description": "下一跳地址（可空表示直连/on-link）。"
+        },
+        "dev": {
+          "type": "string",
+          "description": "出接口。"
+        },
+        "table": {
+          "type": ["string", "integer"],
+          "description": "路由表（main/auto/数字）。"
+        },
+        "metric": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "type": {
+          "enum": ["unicast", "blackhole", "unreachable", "prohibit", "local", "broadcast", "anycast", "multicast"],
+          "default": "unicast"
+        },
+        "source": {
+          "type": "string",
+          "description": "数据来源标记（如 lan/wan/overlay），供审计；驱动不据此猜语义。"
+        }
+      }
+    },
+    "GnbIntent": {
+      "type": "object",
+      "description": "GNB 专属意图。route.conf 不只是 FIB：它同时创建节点、绑定虚拟 IP/网段、构成准入/准出白名单，并可定义节点环与 relay。address.conf 只能给 route.conf 已创建的节点附加角色与初始 endpoint。",
+      "required": ["identity"],
+      "additionalProperties": true,
+      "properties": {
+        "identity": {
+          "type": "object",
+          "required": ["node_id", "key_algorithm", "private_key", "public_key"],
+          "additionalProperties": true,
+          "properties": {
+            "node_id": { "$ref": "#/$defs/NodeId" },
+            "key_algorithm": { "const": "ed25519" },
+            "private_key": { "$ref": "#/$defs/PrivateKey" },
+            "public_key": { "$ref": "#/$defs/PublicKeyHex64" },
+            "peer_public_keys": {
+              "type": "object",
+              "description": "peer-id → 64-hex Ed25519 公钥。",
+              "additionalProperties": { "$ref": "#/$defs/PublicKeyHex64" }
+            }
+          }
+        },
+        "listeners": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/HostPort" },
+          "description": "UDP 监听地址。"
+        },
+        "nodes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/GnbNode" },
+          "description": "overlay 节点表（由 route.conf 创建/绑定的对端）。"
+        },
+        "routes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/GnbRoute" },
+          "description": "route.conf 语义：节点 + 前缀 + 准入/准出/relay。禁止机械等同 WG AllowedIPs。"
+        },
+        "discovery": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "index_servers": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/HostPort" },
+              "description": "index/tracker：注册与查询 NAT 后 endpoint。普通数据面仍优先 P2P。"
+            },
+            "static_nodes": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/GnbEndpointHint" },
+              "description": "静态初始 endpoint（address.conf 角色）。运行时 learned endpoint 只进 Status。"
+            },
+            "forward_nodes": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/NodeId" },
+              "description": "forward/中继候选节点。"
+            }
+          }
+        },
+        "forwarding": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "direct": { "type": "boolean" },
+            "standard": { "type": "boolean", "description": "Standard Forwarding" },
+            "unified": {
+              "enum": ["auto", "on", "off"],
+              "description": "Unified Forwarding。"
+            },
+            "proxy": {
+              "type": "boolean",
+              "description": "P2 补丁能力：准出无 route 时兜底到 f 节点、准入跳过白名单。**仅当目标二进制探测到 RouteProxy 时才可为 true**；否则 agent 必须拒绝 Apply。"
+            },
+            "relay_routes": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["via_node_id", "prefix"],
+                "additionalProperties": true,
+                "properties": {
+                  "via_node_id": { "$ref": "#/$defs/NodeId" },
+                  "prefix": { "$ref": "#/$defs/CIDR" }
+                }
+              },
+              "description": "显式 relay 路径。中继保持 GNB payload 端到端保护，不等同 WireGuard hub。"
+            }
+          }
+        },
+        "options": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "multi_socket": { "type": "boolean" },
+            "safe_index": { "type": "boolean" },
+            "mtu": { "type": "integer", "minimum": 576, "maximum": 65535 },
+            "ifname": { "type": "string" },
+            "passcode": {
+              "type": "string",
+              "description": "可选 passcode 明文（原 passcode_ref 解析后的值）。"
+            }
+          }
+        }
+      }
+    },
+    "GnbNode": {
+      "type": "object",
+      "required": ["node_id"],
+      "additionalProperties": true,
+      "properties": {
+        "node_id": { "$ref": "#/$defs/NodeId" },
+        "public_key": { "$ref": "#/$defs/PublicKeyHex64" },
+        "tun_address": {
+          "$ref": "#/$defs/CIDR",
+          "description": "该节点在 overlay 上的虚拟地址/前缀（route.conf 绑定）。"
+        }
+      }
+    },
+    "GnbRoute": {
+      "type": "object",
+      "required": ["node_id", "prefix"],
+      "additionalProperties": true,
+      "properties": {
+        "node_id": { "$ref": "#/$defs/NodeId" },
+        "prefix": {
+          "$ref": "#/$defs/CIDR",
+          "description": "CIDR 前缀（设计修正：不再用 {network,netmask}，IPv6 才自然）。"
+        },
+        "source": {
+          "type": "string",
+          "description": "来源角色标记（如 lan/wan/overlay）。"
+        },
+        "via_node_id": {
+          "$ref": "#/$defs/NodeId",
+          "description": "经由的中继节点（节点环/relay）。空表示直连该 node_id。"
+        },
+        "proxy_fallback": {
+          "type": "boolean",
+          "description": "P2：是否为 proxy 兜底用的 f 节点。"
+        }
+      }
+    },
+    "GnbEndpointHint": {
+      "type": "object",
+      "required": ["node_id", "endpoint"],
+      "additionalProperties": true,
+      "properties": {
+        "node_id": { "$ref": "#/$defs/NodeId" },
+        "endpoint": { "$ref": "#/$defs/HostPort" },
+        "role": {
+          "type": "string",
+          "description": "address.conf 角色（如 i=index, p=peer, f=forward/proxy）。"
+        }
+      }
+    },
+    "WireGuardIntent": {
+      "type": "object",
+      "description": "WireGuard 专属意图。AllowedIPs 是双向 cryptokey routing：出站按目的前缀选公钥；入站只接受该公钥声明前缀内的源地址。它不是普通系统路由，也不等同 GNB route。",
+      "required": ["interface", "peers"],
+      "additionalProperties": true,
+      "properties": {
+        "interface": {
+          "type": "object",
+          "required": ["private_key", "public_key", "key_algorithm"],
+          "additionalProperties": true,
+          "properties": {
+            "private_key": { "$ref": "#/$defs/PrivateKey" },
+            "public_key": { "$ref": "#/$defs/WgKey" },
+            "key_algorithm": { "const": "curve25519" },
+            "listen_port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+            "fwmark": { "type": ["integer", "null"] },
+            "dns": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        },
+        "peers": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/WgPeer" }
+        },
+        "routing": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "mode": {
+              "enum": ["managed", "external"],
+              "description": "managed=NetworkReconciler 接管 FIB/rules；external=外部路由。"
+            },
+            "table": {
+              "type": ["string", "integer"],
+              "description": "auto 或具体表号。"
+            }
+          }
+        }
+      }
+    },
+    "WgPeer": {
+      "type": "object",
+      "required": ["public_key", "allowed_ips"],
+      "additionalProperties": true,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "可选业务侧 peer 关联 ID。"
+        },
+        "business_node_id": { "$ref": "#/$defs/NodeId" },
+        "public_key": { "$ref": "#/$defs/WgKey" },
+        "preshared_key": {
+          "type": ["string", "null"],
+          "description": "PSK 明文（可空）。不得进入命令行、日志或普通状态 dump。"
+        },
+        "bootstrap_endpoint": {
+          "type": ["string", "null"],
+          "description": "初始传输位置提示。运行时 learned endpoint 只进 Status，不回写期望配置。"
+        },
+        "allowed_ips": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/CIDR" },
+          "description": "双向 cryptokey routing 前缀。同接口精确重复必须拒绝；重叠默认拒绝或显式告警。"
+        },
+        "persistent_keepalive_seconds": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535,
+          "description": "per-peer NAT 映射保活，不是发现/中继/健康检查。"
+        }
+      }
+    },
+    "ConnectionPlan": {
+      "type": "object",
+      "required": ["connection_id", "target_node_id"],
+      "additionalProperties": true,
+      "properties": {
+        "connection_id": {
+          "type": ["integer", "string"],
+          "description": "业务连接 ID。"
+        },
+        "target_node_id": { "$ref": "#/$defs/NodeId" },
+        "transport_mode": {
+          "enum": ["auto", "direct", "proxy", "relay"],
+          "default": "auto"
+        },
+        "transport_policy": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "allow_direct": { "type": "boolean" },
+            "fallback_to_proxy": { "type": "boolean" },
+            "proxy_node_id": { "$ref": "#/$defs/NodeId" },
+            "keepalive_seconds": { "type": "integer", "minimum": 0 }
+          }
+        }
+      }
+    }
+  }
+}

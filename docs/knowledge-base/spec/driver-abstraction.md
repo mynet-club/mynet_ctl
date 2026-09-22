@@ -268,11 +268,11 @@ VPNDriver
 |---|---|---|
 | **R0** | 冻结当前生产链；撤销错误的扁平 VPNBundle 草案 | back/agent/ctl 不再宣称 S6 完成 |
 | **R1** | 建立发布二进制 capability 探测：GNB P1/P2/P3、WG tools/kernel 特性 | 能力来自实测而非 driver 名 |
-| **R2** | 定义 `BundleEnvelope + NetworkIntent + GnbIntent + WireGuardIntent` schema v2 | JSON Schema + 双端 fixture 可互解 |
-| **R3** | 修正 back 业务模型：区分 interface address、advertised prefix、WAN/endpoint、peer relationship、relay/topology、key algorithm | 不再从混合 route 列表猜语义 |
-| **R4** | agent 建原子 Apply：stage→validate→write→reload→health-check→commit/rollback；保存 generation 与 last-known-good | 任一步失败不留下半套配置 |
-| **R5** | 收敛配置写入权与生命周期权威；旧 node/route refresh 改为委托 Apply | 每种文件只有一个写入者 |
-| **R6** | 实现 GNB adapter，完整保留 node.conf 选项、route 节点环/relay、address 角色、keys、P1/P2 能力 | 与现生产链行为对照通过 |
+| **R2** | 定义 `BundleEnvelope + NetworkIntent + GnbIntent + WireGuardIntent` schema v2 | JSON Schema + 双端 fixture 可互解 ✅ **2026-09-22**：`spec/schemas/bundle-envelope-v2.schema.json` + 7 fixtures；Go `internal/domain/bundle_envelope.go` 与 PHP `App\Modules\VPN\Domain\Bundle` 互解，checksum 一致 |
+| **R3** | 修正 back 业务模型：区分 interface address、advertised prefix、WAN/endpoint、peer relationship、relay/topology、key algorithm | 不再从混合 route 列表猜语义 ✅ **2026-09-22**：`NetworkSemanticsProjector` + 六类 VO；CPI-22 修复 ip_type 分类；明文私钥不进投影 |
+| **R4** | agent 建原子 Apply：stage→validate→write→reload→health-check→commit/rollback；保存 generation 与 last-known-good | 任一步失败不留下半套配置 ✅ **2026-09-22**：`internal/coordinator`（Applier + FuncWriter + journal + 锁）；注入 write/reload/health-check 失败均回滚；`last-known-good.json` + `current_generation`；journal 不含明文私钥。旧 refresh 委托 Apply 属 R5 |
+| **R5** | 收敛配置写入权与生命周期权威；旧 node/route refresh 改为委托 Apply | 每种文件只有一个写入者 ✅ **2026-09-22**：唯一写入口 `coordinator.ApplyFiles`；node/route/address refresh + `GNBDriver.WriteConfig` + `GNBRunner.EnsureConfig` 均已收敛；进程生命周期权威 = `node.GNBRunner`。完整 `BundleApplier.Apply(envelope)` 委托待 R8 有 Envelope 下发后接线 |
+| **R6** | 实现 GNB adapter，完整保留 node.conf 选项、route 节点环/relay、address 角色、keys、P1/P2 能力 | 与现生产链行为对照通过 ✅ **2026-09-22**：`coordinator.GnbAdapter`（Envelope→node/route/address/ed25519/security）；生产形状单测锁定（daemon off / proxy on / i\|0\|host\|port / id\|ip\|mask / 私钥 0600）；via/proxy_fallback 注释段。热重启 Reload 待接 GNBDriver（P1） |
 | **R7** | 实现 WireGuard crypto reconciler + Linux NetworkReconciler | `wg syncconf` 与 address/FIB/rule/firewall 分开验证 |
 | **R8** | 接 back API/ETag/cache；ctl 安装包复用同一 schema | 在线更新、离线启动、安装包三条链一致 |
 | **R9** | 逐步关闭旧分散端点和多写者 | 无 last-writer-wins |

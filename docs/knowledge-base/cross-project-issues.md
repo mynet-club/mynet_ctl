@@ -55,6 +55,14 @@
 > 本批 CPI-1 ~ CPI-8 全部已处置（见「已修复」表）；仅 CPI-7 保留为低优先级记录
 > （当前全局 ID 上限恰好等于 float64 精确整数上限，暂无风险）。
 
+#### CPI-22. `node_ips.ip_type` 三套分类互相矛盾，且两处引用了不存在的常量（R3 撞出）（**已修 2026-09-22**）
+
+| 项 | 内容 |
+|---|---|
+| **位置** | `mynet_back/app/Modules/VPN/Models/NodeIP.php`；`Domain/Services/RouteDomainService.php`；`app/Modules/Monitor/Services/MonitorHistoryService.php` |
+| **现象** | 三套分类并存（模型 1/2/3、旧库注释 0/1、路由投影 node_ip/vpn_ip/lan_ip/wan_ip/endpoint_ip）；两处 `match` 引用不存在的 `IP_TYPE_WAN`/`IP_TYPE_ENDPOINT` → 遇 `ip_type=3` 即 `Error: Undefined constant` |
+| **处置** | ① 模型冻结 1=vpn 2=lan 3=public，`IP_TYPE_WAN=IP_TYPE_PUBLIC`；endpoint 不是存储类型（learned 只进 Status）；② 两处 `match` 改用真实常量；③ 新增 `NetworkSemanticsProjector` + 六类语义 VO（interface / advertised / WAN / peer / relay / key algorithm），出口判据「不再从混合 route 列表猜语义」达成；④ 测试 `tests/NetworkSemanticsProjectorTest.php` 6 例 |
+
 ---
 
 ## 📐 架构设计决策（非 bug，易被误判）
