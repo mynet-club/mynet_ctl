@@ -13,7 +13,7 @@
 > | service | ⚠️ 端点就位 | `start/stop/reload` 已按契约接线，但**驱动尚未实现 `VPNDriver.Reload()`/生命周期接口**，故如实返回稳定错误码 `unsupported`。按 [`driver-abstraction.md`](driver-abstraction.md) 这属 S3/S5 的工作；驱动实现后本机 API 一行不用改 |
 > | config | ✅ sync/refresh | 复用 `NodeRefreshService` + `RouteRefreshService` + `AddressRefreshService`（即心跳命令链里 `mynet.node.update`/`mynet.route.update` 的落地实现）——**node / route / address 三者都已覆盖**，符合 §3 的「拉 node/route/address + keys」。该路径写的是渲染后的 gnb 配置，按分层终应收敛到 `VPNDriver.WriteConfig(bundle)` |
 > | proxy | ✅ 已实现 | 标志**归 back 持有**（`node_configs.config` 的 `proxy`），node.conf 只是它的投影——这样配置同步不会把本地改动冲掉。`GET /proxy` 读回 back 值 + node.conf 投影；`enable/disable` 经中继写 back 再 `config.sync` 让 node.conf 跟上。已在 `config/vpn.php` 的 gnb expert 参数里加 `proxy`（渲染成 `proxy on|off`）。实测：开→back 落库→node.conf 出现 `proxy on`；关→回退 |
-> | nodes / zones | ⬜ 未实现 | 「列表」属本机态可做；「切换当前节点」要改 `mynet.conf` 并重载，且 zones 属**平台态**（应经 `relay` 域），需先厘清边界 |
+> | nodes / zones | ✅ 已实现 | **zone ≡ tenant**（用户确认；back 亦把 tenant 切换写作「切换当前区域」）。两域是 relay 之上的具名薄封装：数据源在 back，并**合并本机态**——当前区域＝本节点所属租户、当前节点＝`mynet.conf` 的 NodeID（裸 relay 给不了）。`GET /zones`、`GET /nodes`、`POST /zones/switch` 均已实现并真环境实测。「切换当前**节点**」（改 `mynet.conf` + 重载）未做，与 CPI-11 同块依赖 |
 > | peers | ✅ 已实现 | 复用驱动的 `GetAllPeers` / `GetNetworkSummary`（即 `gnb_ctl -s` 的解析结果），不重复解析 |
 > | logs | ✅ 已实现 | 读日志环形缓冲（与写往文件/控制台的是同一份格式化行） |
 > | relay | ✅ 已实现 | 平台态经网关中继；路径白名单默认拒绝、`relaypolicy` 单一来源；已对**真 back** 实测（`/api/v1/nodes` 200 + admin 403） |
@@ -123,7 +123,7 @@ GUI ── local token ──> mynetd 本机 API
 | **proxy** | `GET /api/v1/proxy` | `mynet.proxy` | enabled / mode / gnb_proxy / node.conf flag |
 | | `POST /api/v1/proxy/enable` | `mynet.proxy.enable` | 写 `proxy on`（gnb_native） |
 | | `POST /api/v1/proxy/disable` | `mynet.proxy.disable` | 写 `proxy off` |
-| **nodes / zones** | `GET /api/v1/nodes` 等 | `mynet.nodes` / `mynet.zones` | 列表、切换当前节点 |
+| **nodes / zones** | `GET /api/v1/nodes`、`GET /api/v1/zones`、`POST /api/v1/zones/switch` | `mynet.nodes` / `mynet.zones` | 平台态列表（经 relay）+ 本机态标记；区域切换 |
 | **peers** | `GET /api/v1/peers` | `mynet.peers` | `gnb_ctl -s` 摘要 |
 | **logs** | `GET /api/v1/logs?n=100` | `mynet.logs` | 环形缓冲 tail |
 | **relay** | `GET /api/v1/relay?path=<back-api-path>` | — | **平台态**经网关中继到 back（§0 / [`control-plane.md`](control-plane.md) §5.3）；路径白名单默认拒绝 |
