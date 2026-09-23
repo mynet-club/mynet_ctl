@@ -776,6 +776,7 @@ gnb 靠协议层自己兜底，wg 必须靠上层观测切换。硬压成一套�
 | **平台执行器对称**（2026-09-23） | 桌面 `exec mynet <子命令>`、OpenWrt `lua -e "..."`；**同一套 mynetd 通信层** |
 | **身份生命周期交给框架** |
 | **back 全部在 user 层** | 不用 RBAC；admin 是平台层（框架 platform 模块），不属于 back |
+| **节点直连 = 智能同类型**（2026-09-23） | 节点↔节点**只同类型直连**（一节点一网卡）；双驱动节点可分别与 gnb/wg 建连；**gnb-only ↔ wg-only 不直连**。跨驱动互通 = 经双驱动节点的 **L6 路由桥**（apply 一条 route），不是节点间建连 |
 | **多节点并行分两步**（2026-09-23） | 短期互斥切换 `POST /api/v1/nodes/switch`；并行作为后续增量，不阻塞 M0–M1 |
 | **连接「已鉴权」置位时机**（2026-09-23） | gateway 维护连接状态表；back 验证通过**任意一次**节点通道请求即置位。回传机制：back 响应头 `X-Node-Verified: <node_id>`，gateway 解析后置位；伪造 node_id 不被置位 |
 | **mynet_back 按需 module 砍 logging**（2026-09-23） | 只留 `multi-tenant-saas` + `infrastructure` + `auth`；MyNet 不用审计日志，`logging` 一并砍 |
