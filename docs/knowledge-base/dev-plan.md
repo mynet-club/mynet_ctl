@@ -309,13 +309,13 @@ P0 ──┬──────────────────────�
 | 10 | | S1-1 | back 按需 module（31→3）+ 删 27 个模块的迁移 | P0-1 | ☑ |
 | 11 | | S1-2 | `mynet_agent/shared/` 骨架（config/logger/errors/domain/utils） | S0-3 | ☑ |
 | | | | **▶ M0 出口：两套测试全绿 · 无明文密码 · 无私钥出口** | | |
-| 12 | **S2 执行器 mynet** | F-1 | 收敛两套重复探测 → `mynet detector` | P0-5 | ☐ |
-| 13 | | F-6 | `system.json` 机制（`mynet detector` 产出 + 双端消费 + 指纹重跑） | F-1 | ☐ |
-| 14 | | S2-1 | `mynet metrics`（心跳数据源：系统指标 + VPN/peer 状态） | S1-2 | ☐ |
-| 15 | | F-2 | 写入移到 `mynet apply`（OS 路由/防火墙，从 shell/Lua 迁） | F-6 | ☐ |
-| 16 | | F-4 | 平台实现（linux / darwin / windows / openwrt） | F-2 | ☐ |
-| 17 | | F-5 | 多写者收敛（唯一写入者 = `mynet apply`） | F-2 | ☐ |
-| 18 | | D-7 | `mynet` 子命令收口 | S2-1 | ☐ |
+| 12 | **S2 执行器 mynet** | F-1 | 收敛两套重复探测 → `mynet detector` | P0-5 | ☑ |
+| 13 | | F-6 | `system.json` 机制（`mynet detector` 产出 + 双端消费 + 指纹重跑） | F-1 | ☑ |
+| 14 | | S2-1 | `mynet metrics`（心跳数据源：系统指标 + VPN/peer 状态） | S1-2 | ☑ |
+| 15 | | F-2 | 写入移到 `mynet apply`（OS 路由/防火墙，从 shell/Lua 迁） | F-6 | ☑ |
+| 16 | | F-4 | 平台实现（linux / darwin / windows / openwrt）—— darwin 路由已并入；windows/openwrt 细化待补 | F-2 | ☐ |
+| 17 | | F-5 | 多写者收敛（唯一写入者 = `mynet apply`） | F-2 | ☑ |
+| 18 | | D-7 | `mynet` 子命令收口 | S2-1 | ☑ |
 | 19 | **S3 纯通信 mynetd** | D-11 | mynetd 默认瘦（只留 `embed` 开关） | S1-2 | ☐ |
 | 20 | | D-6 | 内化 `bin/mynet` 的 5 条命令链 | D-7 | ☐ |
 | 21 | | D-1 | 本地 token：首次 `GET /` 种 HttpOnly+SameSite=Strict cookie | — | ☐ |
