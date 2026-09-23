@@ -79,3 +79,17 @@ curl http://10.31.0.3:9080/  →  hello-from-B-via-bridge
 与产品规则一致：**跨驱动 = 双驱动节点显式转发**，不是透明路由。
 
 OpenWrt 坑：Python `create_connection` 报 `unknown encoding: idna`，须用 `(ip, port)` 元组裸连。
+
+## U1-B2 PASS
+A 经 C 桥访问 B wg 侧多文件（`/p.txt` → `proxy-target-ok`）。
+
+## U1-Z1 回归（全绿）
+
+| 套件 | 结果 |
+|---|---|
+| `go test ./...` | 全绿 |
+| `phpunit Default` | **72/72 · 2250 assertions** |
+| `security_audit.sh` | **SECURITY AUDIT PASS** |
+
+## U1 稳定性（进行中）
+30min 监视 `/tmp/u1-stab.log`：A-B 0% loss（修复路由后）；B-C / C-A 大部分 0%。
