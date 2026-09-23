@@ -102,3 +102,14 @@ A 经 C 桥访问 B wg 侧多文件（`/p.txt` → `proxy-target-ok`）。
 
 ## U1-A7 稳定性（进行中，目前优）
 连续 5+ 采样 **A-B / B-C / C-A 全 0% loss**。
+
+## G3 TUNNEL PASS（三场景全绿）
+
+```
+场景1 gnb:   A↔B ✓  A→C ✓
+场景2 wg:    A↔B ✓  B→C ✓  C→A ✓
+场景3 跨驱动: A(gnb)→C桥→B(wg) HTTP ✓
+```
+
+第二个路由劫持教训：`10.23.0.2` 被 `via 192.168.0.1 dev ens18` 抢走（wg AllowedIPs 含 10.31.0.0/24 引起路由表混乱）。
+**规范**：wg AllowedIPs 只放对端 TUN /32；跨驱动网段用显式桥，不进 AllowedIPs。
