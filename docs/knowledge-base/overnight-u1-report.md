@@ -173,3 +173,14 @@ reachabilityPlan → target 10.31.0.1:8080, allowed=false, warnings=[无授权�
 - `scripts/e2e/t23_social.sh` / `demo_t2.sh` — 产品链
 - `scripts/security_audit.sh` — 安全复检
 - `deploy/docker-compose.yml` + `backup.sh` + `README.md`
+
+### 巡检 2026-09-24T01:27:58+08:00
+- 长稳: 2026-09-24T01:25:54+08:00 gnb_ab:0% packet loss wg_bc:0% packet loss bridge:hello-from-B-via-bri
+- G3: G3 TUNNEL PASS
+
+## T3-2 TLS 骨架（新增）
+`deploy/Caddyfile` + `caddy-compose.yml`：api/gw 双域名 + 安全响应头。
+证书签发留给人工（红线）。
+
+## T3-3 备份脚本实测
+`deploy/backup.sh` 可跑；mysqldump 缺失时跳过 DB 段，目录 0700、产物 0600。
