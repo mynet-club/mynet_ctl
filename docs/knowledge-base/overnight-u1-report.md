@@ -65,3 +65,17 @@
 ## 安全发现
 
 0.16 上 `mynet_e2e_node` 进程命令行含**明文私钥**（9-22 测试残留）。已停进程，建议清理。
+
+## U1-A6 最终方案（PASS）
+
+**双驱动节点显式 TCP 桥**（Python 转发 10.31.0.3:9080 → 10.23.0.2:8080）：
+
+```
+A(gnb 10.31.0.1) --gnb--> C(10.31.0.3 + 10.23.0.3) --wg--> B(10.23.0.2:8080)
+                          └── bridge_fwd.py :9080
+curl http://10.31.0.3:9080/  →  hello-from-B-via-bridge
+```
+
+与产品规则一致：**跨驱动 = 双驱动节点显式转发**，不是透明路由。
+
+OpenWrt 坑：Python `create_connection` 报 `unknown encoding: idna`，须用 `(ip, port)` 元组裸连。
