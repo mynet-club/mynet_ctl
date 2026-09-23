@@ -177,7 +177,7 @@ mynet（配置工具 + 系统能力）
 | B-6 | `KeyExchangeDomainService` | 同上 | registerPublicKey/rotateKey/revokeKey/getPeerKeyPair |
 | B-7 | `TransportPlannerDomainService` | 同上 | plan / planAll；输出不含驱动原生语法 |
 | B-8 | `Connection.status` 补 `suspended`/`revoked` | model + migration | spec §1.3 状态机完整 |
-| B-9 | 补缺表：`route_permissions`（决定建表 or 删模型）、`service_metrics`、`social_accounts` | migration | 三表有定论 |
+| B-9 | 三表定论：**全不建**——`route_permissions`（RBAC 删）/ `service_metrics`（死簇删）/ `social_accounts`（幽灵删）；替代：`node_access_rules`+`connection_grants` / `node_monitor_snapshots` / `social_connections` | migration | ☑ 有定论 |
 
 **出口判据**（spec §1.5）：
 - 同一套业务命令在 gnb / wg 测试场景下均通过
@@ -336,7 +336,7 @@ P0 ──┬──────────────────────�
 | 36 | | B-5 | `ConnectionDomainService` | B-4, B-8 | ☑ |
 | 37 | | B-6 | `KeyExchangeDomainService` | B-4 | ☑ |
 | 38 | | B-7 | `TransportPlannerDomainService` | B-5 | ☑ |
-| 39 | | B-9 | 补缺表（`route_permissions` 等三表有定论） | B-1 | ☐ |
+| 39 | | B-9 | 补缺表（`route_permissions` 等三表有定论） | B-1 | ☑ |
 | 40 | **S6 驱动** | A-1 | X25519 密钥生成与落盘 | — | ☐ |
 | 41 | | A-2 | `WireGuardDriver` 只读（解析 `wg show`） | A-1 | ☐ |
 | 42 | | A-3 | 补足 `VPNLifecycleDriver`（gnb+wg 双侧，实现归 `mynet`） | A-2, F-2 | ☐ |
