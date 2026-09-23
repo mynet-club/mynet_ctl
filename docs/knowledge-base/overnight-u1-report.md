@@ -93,3 +93,12 @@ A 经 C 桥访问 B wg 侧多文件（`/p.txt` → `proxy-target-ok`）。
 
 ## U1 稳定性（进行中）
 30min 监视 `/tmp/u1-stab.log`：A-B 0% loss（修复路由后）；B-C / C-A 大部分 0%。
+
+
+## U1-B4 UI 静态验收（PASS）
+- 本机/社区两域页面 + 路由 + local API ✓
+- 路由**无 vpn_type 分支**（仅注释声明）✓
+- dist/index.html 可 sync-embed ✓
+
+## U1-A7 稳定性（进行中，目前优）
+连续 5+ 采样 **A-B / B-C / C-A 全 0% loss**。
