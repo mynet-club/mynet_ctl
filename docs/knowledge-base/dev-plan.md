@@ -297,9 +297,9 @@ P0 ──┬──────────────────────�
 
 | # | 阶段 | 任务 ID | 内容 | 前置 | 状态 |
 |---|---|---|---|---|---|
-| 1 | **S0 立骨架** | S0-1 | 建 `mynet_agent` / `mynet_web` / `mynet_desktop` / `mynet_back` 四个空 repo | — | ☐ |
-| 2 | | S0-2 | 挂载 `mynet_openwrt` / `mynet_ctl` / `mynet_gnb` / `mynet_utc` | — | ☐ |
-| 3 | | S0-3 | 各 repo README + 目录骨架（对齐执行器架构与 L1–L7） | S0-1 | ☐ |
+| 1 | **S0 立骨架** | S0-1 | 建 `mynet_agent` / `mynet_web` / `mynet_desktop` / `mynet_back` 四个空 repo | — | ☑ |
+| 2 | | S0-2 | 挂载 `mynet_openwrt` / `mynet_ctl` / `mynet_gnb` / `mynet_utc` | — | ☑ |
+| 3 | | S0-3 | 各 repo README + 目录骨架（对齐执行器架构与 L1–L7） | S0-1 | ☑ |
 | 4 | **S1 地基** | P0-1 | 删框架残留（`ToolRegistry` / `ActionNodeTest` / `Conversation`） | — | ☐ |
 | 5 | | P0-2 | 移除硬编码生产密码；e2e 加 `//go:build e2e` | — | ☐ |
 | 6 | | P0-3 | 清测试库脏状态；VPN tests 纳入 suite | P0-1 | ☐ |
