@@ -342,9 +342,9 @@ P0 ──┬──────────────────────�
 | 42 | | A-3 | 补足 `VPNLifecycleDriver`（gnb+wg 双侧，实现归 `mynet`） | A-2, F-2 | ☑ |
 | 43 | | A-4 | `vpn_driver_factory` 接上 | A-2 | ☑ |
 | 44 | | A-5 | `WireGuardIntent` 落地（fixture 驱动） | A-4 | ☑ |
-| 45 | | A-7 | `nodes.vpn_type` 多值 | B-2, B-4 | ☐ |
-| 46 | | C-1 | back X25519 密钥 + `mynet setup` 下发 | D-7, B-1 | ☐ |
-| 47 | | C-2 | 节点↔back 改 DH+HMAC（复用驱动密钥） | A-1, B-3 | ☐ |
+| 45 | | A-7 | `nodes.vpn_type` 多值 | B-2, B-4 | ☑ |
+| 46 | | C-1 | back X25519 密钥 + `mynet setup` 下发 | D-7, B-1 | ☑ |
+| 47 | | C-2 | 节点↔back 改 DH+HMAC（复用驱动密钥） | A-1, B-3 | ☑ |
 | 48 | **S7 验证** | F-3 | 跨驱动路由（A(gnb)→C(双驱动)→B(wg)） | F-4 | ☐ |
 | 49 | | A-8 | 双驱动验证测试套件（六项判据，三场景） | A-5, B-7, C-2, F-3 | ☐ |
 | | | | **▶ M1 出口：A-8 在 gnb / wg / 跨驱动三场景全绿** | | |
