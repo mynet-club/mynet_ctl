@@ -56,7 +56,7 @@ R1 端到端闭环 ──────────────► 双节点 gnb+w
 | 12 | **R3 平台** | R3-1 | OpenWrt 实机：ipk 装载 + mynetd procd + LuCI | — | ☑ |
 | 13 | | R3-2 | `verify_gnb_es_orphan.sh --crash` PASS → 切 procd（**已切换 + respawn 实测**） | R3-1 | ☑ |
 | 14 | | R3-3 | `_gnb_peer_heal` 新判据实机 24h 无抖动 | R3-2 | ☐ |
-| 15 | | R3-4 | Lua 真收窄：结果回 mynetd，去掉自报心跳 | R3-1 | ☐ |
+| 15 | | R3-4 | Lua 真收窄：结果回 mynetd，去掉自报心跳 | R3-1 | ☑ |
 | 16 | | R3-5 | desktop：macOS launchd / Linux systemd 装载冒烟 | — | ☑ |
 | 17 | **R4 分发** | R4-1 | `make dist` 三平台产物（`mynet_agent_*`） | R2-2 | ☑ |
 | 18 | | R4-2 | ctl `apps.json` 索引生成 + 版本单调 | R4-1 | ☑ |
