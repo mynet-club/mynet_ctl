@@ -327,7 +327,7 @@ P0 ──┬──────────────────────�
 | 27 | | C-5 | 推送 / presence 只按状态路由 | C-4 | ☑ |
 | 28 | | C-8 | relay 白名单细粒度（放行 auth 会话 5 条，删 3 个 fragment） | — | ☑ |
 | 29 | | C-7 | gateway 加用户面 HTTPS 入口 `/v1/relay` | C-8 | ☑ |
-| 30 | | C-6 | presence 走 Redis pub/sub | C-4 | ☐ |
+| 30 | | C-6 | presence 走 Redis pub/sub | C-4 | ☑ |
 | 31 | **S5 back 业务层** | B-1 | create migration 全套 + baseline 策略 | S1-1 | ☑ |
 | 32 | | B-2 | `node_keys` 加 `algorithm`/`key_version`/`status` | B-1 | ☑ |
 | 33 | | B-3 | 公钥编码统一 hex | B-2 | ☑ |
@@ -348,11 +348,11 @@ P0 ──┬──────────────────────�
 | 48 | **S7 验证** | F-3 | 跨驱动路由（A(gnb)→C(双驱动)→B(wg)） | F-4 | ☑ |
 | 49 | | A-8 | 双驱动验证测试套件（六项判据，三场景） | A-5, B-7, C-2, F-3 | ☑ |
 | | | | **▶ M1 出口：A-8 在 gnb / wg / 跨驱动三场景全绿** | | |
-| 50 | **S8 mynet_web** | D-3 | WebUI embed | D-1, D-2 | ☐ |
-| 51 | | D-4 | UI 合并（Quasar 基线，迁 `mynet_ui` 本机域） | D-3 | ☐ |
+| 50 | **S8 mynet_web** | D-3 | WebUI embed | D-1, D-2 | ☑ |
+| 51 | | D-4 | UI 合并（Quasar 基线骨架已立，页面迁移 S8） | D-3 | ☐ |
 | 52 | | D-5 | echarts 按需引入 | D-4 | ☐ |
 | 53 | | D-9 | `driver` 域（列/装/升，与 CLI 共用 `upgrade_service`） | D-7 | ☐ |
-| 54 | | D-10 | `POST /api/v1/nodes/switch` | D-7 | ☐ |
+| 54 | | D-10 | `POST /api/v1/nodes/switch` | D-7 | ☑ |
 | 55 | **S9 平台** | E-1 | procd 接管 gnb（含 `gnb_es` 孤儿前置验证） | — | ☐ |
 | 56 | | E-2 | `node.conf` 改 `--systemd` / `daemon off` | E-1 | ☐ |
 | 57 | | E-3 | `_gnb_peer_heal` **改造判据后**搬进 mynetd | E-1 | ☐ |
