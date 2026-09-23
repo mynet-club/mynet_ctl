@@ -160,3 +160,17 @@ E 防火墙放行 + 回程
 — pidfile → kill 主进程 → PPID 收 gnb_es → 兜底按二进制路径（仍只杀本安装的）。
 
 **排查实例**用 `pgrep -f 'gnb -c <conf>'`（cmdline 匹配 conf 目录），不用 `pidof gnb`。
+
+### 5.1 何时自动匹配失明（→ 人工判断）
+
+| 场景 | cmdline 匹配 | 说明 |
+|---|---|---|
+| **改端口 / 改 node.conf 内容** | ✅ 不失明 | cmdline 只有 `-c <conf_dir>`，端口在 conf 里 |
+| **conf 目录改名/迁移** | ❌ 失明 | 进程仍带旧路径 |
+| **符号链接 / 别名启动** | ⚠️ 可能失明 | `/proc/pid/exe` 是真实路径 |
+| **`sudo gnb …`** | ⚠️ 双 PID | sudo 壳 + 真 gnb——杀真进程不是壳 |
+| **PID 复用** | ❌ 危险 | pidfile 过期后 PID 被别人占 |
+| **daemonize 后改写 cmdline** | ❌ 失明 | 视 `gnb -d` 行为 |
+
+**处置**：`GNB_PID=… sh verify_gnb_es_orphan.sh --crash`  
+定位不到时：`sh verify_gnb_es_orphan.sh --inspect` —— **只列候选（pid/ppid/exe/cmd/端口/TUN），不自动杀**，由人判断后带 `GNB_PID` 再操作。
