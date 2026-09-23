@@ -55,6 +55,20 @@ void ed25519_create_keypair(pub, priv, seed) {
 
 ---
 
+## 1.3 多实例隔离（设计如此）
+
+每个 gnb 实例有**独立 UDP 端口 + 独立 TUN**；OpenWrt 再加 **netifd interface**：
+
+| 实例 | node.conf | listen | ifname | OpenWrt `/etc/config/network` |
+|---|---|---|---|---|
+| 旧 e2e 节点 | `conf/8675838…/node.conf` | **9016** | `gnb_tun_8675838…` | `config interface 'mynet'` device=gnb_tun |
+| index 节点 | `conf/index/node.conf` | **9016** | `gnb_idx0` | — |
+| U1 3002 | `conf/3002/node.conf` | **9202** | `gnb0` | — |
+
+**结论**：同机多实例可并存；排查冲突只看 **ifname / listen 是否撞车**，不要见双进程就杀。
+
+---
+
 ## 2. 节点连通性检查模型（四步 + 一）
 
 > 你的模型**成立**，与今夜实测完全吻合。编号整理为 **5 步**（原第 5 点补为 E）。
@@ -92,7 +106,7 @@ E 防火墙放行 + 回程
 |---|---|---|
 | **1** | **OS 路由劫持**：`ip route replace 10.31.0.0/24 via 10.23.0.3 dev wg0` 会**抢走整个 gnb 网** | 跨驱动测试**只加 /32**，绝不动对方在用的 /24 |
 | **2** | **wg AllowedIPs 塞整网段** → cryptokey routing + 系统路由表互相污染 | AllowedIPs **只放对端 TUN /32**；网段用显式桥 |
-| **3** | **双 gnb 实例**（旧 e2e + 新节点）抢 UDP/TUN | 同机只跑一套；旧 `mynet_e2e_node` 停掉后才稳 |
+| **3** | **多实例是设计特性，不是冲突**：每实例独立 `ifname` + `listen` UDP；OpenWrt 另有 `/etc/config/network` 的 `config interface` | 同机可并存多实例（实测旧 e2e `gnb_tun_8675838:9016` + 新节点 `gnb0:9202`）。A↔B 不通是**路由劫持**（发现 1），不是双实例 |
 | **4** | **路由指向物理网关**（`via 192.168.0.1 dev ens18`）→ wg 流量漏出 | `ip route get` 必须核对 **dev 是不是隧道** |
 | **5** | **密钥一致 + Direct P2P ≠ 数据通** | 仍要查 D/E；计数 `in/out` 是关键证据 |
 | **6** | **计数诊断法** | A↔B 不通时：A `in`↑`out`0 + B `out`↑`in`0 ⇒ 封装单向；`in/out` 皆 0 ⇒ TUN 根本没进 |
