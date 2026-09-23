@@ -1,0 +1,1451 @@
+<!-- AI生成 -->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MyNet 产品形态 — mynetd 是产品本体</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<p data-aigc-mark="1" style="margin:0 0 8px;font-size:10px;line-height:1.3;color:#6b6560;font-weight:400;">AI生成</p>
+
+
+<header class="hero">
+  <div class="wrap">
+    <p class="eyebrow">产品形态 · 2026-09-23</p>
+    <h1>mynetd 是产品本体</h1>
+    <p class="lede">
+      MyNet 节点侧的唯一产品是 <code>mynetd</code>：起来就带本机 Web 管理面，
+      社区管理用用户登录会话取回；本机既可以是节点，也可以只做管理桌面。
+      同一份源码靠条件编译裁出多套构建产物——桌面全量，OpenWrt 瘦构建。
+    </p>
+
+    <div class="verdicts">
+      <div class="verdict ok">
+        <span class="vtag">定</span>
+        <p><strong>mynetd 是产品本体</strong>——规范第一原则已如此声明；<code>mynet</code> 是同包内的运维 CLI。</p>
+      </div>
+      <div class="verdict ok">
+        <span class="vtag">定</span>
+        <p><strong>两个 Web 面</strong>——本机态 mynetd 直接答；平台态经 relay 中继。</p>
+      </div>
+      <div class="verdict ok">
+        <span class="vtag">定</span>
+        <p><strong>藏掉 api.mynet.club</strong>——GUI 只谈本机，back 退内网，对外只剩 gateway。</p>
+      </div>
+      <div class="verdict ok">
+        <span class="vtag">定</span>
+        <p><strong>relay 不做鉴权</strong>——只做路径白名单，鉴权归 back。</p>
+      </div>
+      <div class="verdict ok">
+        <span class="vtag">定</span>
+        <p><strong>OpenWrt 也是 mynetd</strong>——条件编译裁瘦，另加 procd 管 gnb 进程。</p>
+      </div>
+      <div class="verdict warn">
+        <span class="vtag">待办</span>
+        <p><strong>WebUI embed 与 UI 合并</strong>、登录路径、端口统一——见待决事项。</p>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+
+<!-- ============ 一 ============ -->
+<section id="dist">
+  <h2><span class="num">一</span>产品本体与分发</h2>
+
+  <p>
+    分发的产品叫 <code>mynet_agent</code>（<strong>文件名前缀也是 <code>mynet_agent</code></strong>，不用 <code>agent_*</code>），是<strong>一个包</strong>，内含多个产物。
+    其中 <code>mynetd</code> 是产品本体，其余是同包内的辅助二进制。
+  </p>
+
+  <table class="tbl">
+    <thead>
+      <tr><th>包内产物</th><th>角色</th><th>运行期是否必需</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>bin/mynetd</code></td>
+        <td>常驻：心跳、命令执行、网关长连接、本机 HTTP API、WebUI</td>
+        <td><span class="pill ok">必需</span></td>
+      </tr>
+      <tr>
+        <td><code>bin/mynet</code></td>
+        <td>运维 CLI：<code>refresh-routes</code> / <code>refresh-address</code> / <code>refresh-config</code> / <code>status</code> / <code>monitor</code> / <code>config</code> / <code>nodes</code> / <code>platform</code></td>
+        <td><span class="pill warn">目前必需</span></td>
+      </tr>
+      <tr>
+        <td><code>bin/mynet-updater</code></td>
+        <td>自更新：等父进程退出 → 备份 → 整目录覆盖 → 失败回滚 → 重启</td>
+        <td><span class="pill ok">必需</span></td>
+      </tr>
+      <tr>
+        <td><code>bin/mynet_proxy</code></td>
+        <td>旧线代理（CIDR 注入）——<strong>新线已定下架</strong></td>
+        <td><span class="pill mute">将下线</span></td>
+      </tr>
+      <tr>
+        <td><code>scripts/mynetd</code></td>
+        <td>平台 shell 包装（<code>start|stop|restart</code>），由 <code>scripts/_src/platforms/&lt;平台&gt;/mynetd</code> 部署</td>
+        <td><span class="pill ok">必需</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3><code>bin/mynet</code> 目前被运行期调用，不能直接砍</h3>
+  <p>
+    远程命令表里有 <strong>5 条</strong>直接 <code>exec bin/mynet</code>，由 back 下发、经 mynetd 执行：
+  </p>
+
+  <div class="codeblock">
+    <div class="cbhead">conf/command.linux.json（实测）</div>
+<pre><span class="c-key">"mynet.gnb.refresh.route"</span>   → <span class="c-bin">bin/mynet</span> refresh-routes --auto --node-id {{.NodeID}}
+<span class="c-key">"mynet.gnb.refresh.address"</span> → <span class="c-bin">bin/mynet</span> refresh-address --auto
+<span class="c-key">"mynet.wg.refresh.route"</span>    → <span class="c-bin">bin/mynet</span> refresh-routes --vpn-type wireguard
+<span class="c-key">"mynet.wg.refresh.address"</span>  → <span class="c-bin">bin/mynet</span> refresh-address --vpn-type wireguard
+<span class="c-key">"mynet.route.refresh"</span>       → <span class="c-bin">bin/mynet</span> refresh-routes --auto
+
+<span class="c-dim"># 另有两条已内化到 mynetd 进程内的 handler：</span>
+<span class="c-key">"mynetd.route.fetch"</span>  → handler: route.refresh
+<span class="c-key">"mynetd.node.refresh"</span> → handler: node.refresh</pre>
+  </div>
+
+  <div class="callout warn">
+    <p class="co-title">同一件事存在两条实现路径</p>
+    <p>
+      <code>mynet.route.update</code> 的命令链是
+      <code>[mynetd.route.fetch(handler) → mynet.route.refresh(bin/mynet) → mynet.restart]</code>——
+      「刷路由」既有一个进程内 handler，又有一个外部 CLI，职责重叠。
+      <strong>要把 <code>bin/mynet</code> 的调用点内化为 mynetd 的 handler</strong>，
+      让 <code>mynet</code> 从「运行期必需」降级为「可选运维 CLI」。
+    </p>
+  </div>
+
+  <h3>「脚手架」要拆成两件事</h3>
+  <table class="tbl">
+    <thead><tr><th>含义</th><th>归属</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>安装脚手架</strong>：放二进制、装系统服务、首次配置</td>
+        <td><code>mynet_desktop</code> / <code>mynet_openwrt</code>（平台适配层）</td>
+      </tr>
+      <tr>
+        <td><strong>运维 CLI</strong>：refresh-*、status、monitor、check、token</td>
+        <td><code>bin/mynet</code>；也可被 mynetd 子命令取代</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============ 二 ============ -->
+<section id="twofaces">
+  <h2><span class="num">二</span>两个 Web 面</h2>
+
+  <p>
+    本机能力面只有一份实现，两种传输：<code>local-api.md</code> §1 的第一原则是
+    「<strong>同一能力面，两种传输，一份实现</strong>」，实现只有一处：<code>mynetd</code>。
+  </p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 680 330" role="img" aria-label="mynetd 两个 Web 面的数据流">
+      <defs>
+        <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+          <path d="M0,0 L10,5 L0,10" fill="none" stroke="#5b6472" stroke-width="1.4"/>
+        </marker>
+        <marker id="arT" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+          <path d="M0,0 L10,5 L0,10" fill="none" stroke="#0b6b5e" stroke-width="1.4"/>
+        </marker>
+      </defs>
+
+      <rect x="34" y="40" width="128" height="52" rx="8" fill="#fff" stroke="#c9ced8" stroke-width="1"/>
+      <text x="98" y="62" class="svg-t" text-anchor="middle">浏览器 / WebUI</text>
+      <text x="98" y="79" class="svg-s" text-anchor="middle">本机页面</text>
+
+      <rect x="238" y="30" width="168" height="230" rx="8" fill="#fff" stroke="#0b6b5e" stroke-width="1.4"/>
+      <text x="322" y="52" class="svg-t" text-anchor="middle">mynetd</text>
+      <text x="322" y="69" class="svg-s" text-anchor="middle">127.0.0.1:&lt;port&gt; · local token</text>
+
+      <rect x="252" y="84" width="140" height="44" rx="6" fill="#eef6f4" stroke="#a8cec7" stroke-width="1"/>
+      <text x="322" y="102" class="svg-t2" text-anchor="middle">本机能力面</text>
+      <text x="322" y="118" class="svg-s" text-anchor="middle">status service config proxy …</text>
+
+      <rect x="252" y="140" width="140" height="44" rx="6" fill="#fdf5ea" stroke="#e3c493" stroke-width="1"/>
+      <text x="322" y="158" class="svg-t2" text-anchor="middle">relay 域</text>
+      <text x="322" y="174" class="svg-s" text-anchor="middle">路径白名单 · 限流</text>
+
+      <rect x="252" y="196" width="140" height="48" rx="6" fill="#fff" stroke="#c9ced8" stroke-width="1"/>
+      <text x="322" y="215" class="svg-t2" text-anchor="middle">WS 长连接</text>
+      <text x="322" y="231" class="svg-s" text-anchor="middle">Ed25519 身份（寻址用）</text>
+
+      <rect x="450" y="196" width="120" height="48" rx="8" fill="#fff" stroke="#c9ced8" stroke-width="1"/>
+      <text x="510" y="215" class="svg-t2" text-anchor="middle">mynet-gateway</text>
+      <text x="510" y="231" class="svg-s" text-anchor="middle">字节中继 · 不解析</text>
+
+      <rect x="450" y="88" width="120" height="52" rx="8" fill="#fff" stroke="#c9ced8" stroke-width="1"/>
+      <text x="510" y="110" class="svg-t2" text-anchor="middle">mynet_back</text>
+      <text x="510" y="127" class="svg-s" text-anchor="middle">业务权威 · 内网</text>
+
+      <line x1="162" y1="66" x2="232" y2="66" stroke="#0b6b5e" stroke-width="1.2" marker-end="url(#arT)"/>
+      <text x="197" y="58" class="svg-s" text-anchor="middle">HTTP</text>
+
+      <line x1="392" y1="220" x2="444" y2="220" stroke="#5b6472" stroke-width="1.2" marker-end="url(#ar)"/>
+      <line x1="570" y1="196" x2="570" y2="146" stroke="#5b6472" stroke-width="1.2" marker-end="url(#ar)"/>
+      <text x="586" y="176" class="svg-s" text-anchor="start">内网</text>
+      <text x="586" y="190" class="svg-s" text-anchor="start">HTTP</text>
+
+      <text x="252" y="272" class="svg-s">① 本机态 → mynetd 直接答（不经过网络）</text>
+      <text x="252" y="290" class="svg-s">② 平台态 → relay → gateway → back（浏览器永不直连 back）</text>
+      <text x="252" y="308" class="svg-s c-teal">GUI 的信任边界止于本机；用户凭据由节点持有</text>
+    </svg>
+    <figcaption>两个面的划分来自 <code>local-api.md</code> §0「GUI 接入模型」，relay 域已实现并对真 back 实测通过。</figcaption>
+  </figure>
+
+  <table class="tbl">
+    <thead><tr><th>查询类型</th><th>数据来源</th><th>处理方</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>本机态</strong></td>
+        <td>gnb/wg 进程、tun、本机配置、proxy 开关、日志、peers</td>
+        <td>mynetd 直接答</td>
+      </tr>
+      <tr>
+        <td><strong>平台态</strong></td>
+        <td>back 上的节点列表、路由、好友、统计、服务</td>
+        <td>mynetd 经 gateway 中继（<code>relay</code> 域）</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="takeaway">
+    <strong>导航结构就是能力面结构。</strong>
+    本机域 = local-api 的 status / service / config / proxy / peers / logs；
+    社区域 = relay 之上的 nodes / route / social / services / zones。
+    UI 不需要发明新概念，壳（<code>mynet_ui</code> / LuCI）也不持有业务——
+    壳里出现的任何业务计算都是需要迁回 mynetd 的债。
+  </p>
+</section>
+
+<!-- ============ 三 ============ -->
+<section id="embed">
+  <h2><span class="num">三</span>WebUI：mynetd embed 与 UI 合并</h2>
+
+  <h3>WebUI 由 mynetd embed</h3>
+
+  <blockquote>
+    <p class="q">「WebUI 静态资源由 <strong>mynetd embed</strong>，还是桌面 embed、OpenWrt 走 LuCI 壳——<strong>仍待定</strong>：属壳的交付形态，不影响能力面本身。」</p>
+    <cite>— spec/local-api.md §7 待定项 #3</cite>
+  </blockquote>
+
+  <p>
+    <strong>定：mynetd embed。</strong>一份产物、零配置、装完即用，UI 与能力面同版本不会错配。
+    代价是 UI 迭代要跟着 mynetd 发版、二进制变大、<code>mynet_ui</code> 需从独立仓库改为构建时嵌入。
+  </p>
+
+  <h3><code>mynet_gui</code> 与 <code>mynet_ui</code> 合并</h3>
+
+  <p>两者功能互补而非重复，合起来正好是「本机域 + 社区域」：</p>
+
+  <table class="tbl">
+    <thead><tr><th></th><th><code>mynet_ui</code></th><th><code>mynet_gui</code></th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>技术栈</strong></td>
+        <td>Vue 3 + Vite + Tailwind</td>
+        <td>Vue 3 + Quasar 2（自带 Electron / Capacitor）</td>
+      </tr>
+      <tr>
+        <td><strong>现有页面</strong></td>
+        <td>Dashboard、<strong>Service（gnb 安装/启停/重启、PID/TUN）</strong>、
+            <strong>Plugins（启停/安装）</strong>、Logs、Network、Settings、Profile、Login</td>
+        <td>dashboard、<strong>nodes（列表/创建/详情/编辑 basic·network·config·keys）</strong>、
+            <strong>routes（list/active/topology/pending/friends + 4 步向导）</strong>、
+            <strong>services（public/friend/my/anonymous）</strong>、
+            <strong>social（friends/requests/invitations）</strong>、
+            ippool、zone、auth 全套、system</td>
+      </tr>
+      <tr>
+        <td><strong>对应能力面</strong></td>
+        <td>本机域</td>
+        <td>社区域</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p><strong>定：以 <code>mynet_gui</code> 的 Quasar 栈为基线</strong>，把 <code>mynet_ui</code> 的本机域页面迁进来。</p>
+
+  <h4>产物实测（mynet_gui/dist/spa）</h4>
+
+  <div class="codeblock">
+    <div class="cbhead">Quasar 构建产物实测</div>
+<pre>index-Byp661Zr.js          444 KB  →  <span class="c-teal">147 KB gz</span>
+index-Bg-vjflb.css         241 KB  →  <span class="c-teal"> 42 KB gz</span>
+MainLayout-*.js             79 KB  →   23 KB gz
+────────────────────────────────────────────────
+首屏合计                             <span class="c-teal">≈ 212 KB gz</span>   <span class="c-dim">← 可接受的现代 SPA 首屏</span>
+
+dist/spa 全量              3.7 MB           <span class="c-dim">← 懒加载所有 chunk 之和</span>
+
+<span class="c-hl">ConnectionDetailsPage-*.js  1107 KB  →  358 KB gz</span>   <span class="c-dim">← 异常：单页 chunk 1 MB</span></pre>
+  </div>
+
+  <p>
+    那个 1 MB 的 chunk 是 <strong><code>echarts</code> 全量引入</strong>（特征串命中 9 次），与 Quasar 无关。
+    ECharts 支持按需引入（<code>echarts/core</code> + 只引需要的 chart / component），可压到 100–200 KB。
+    <strong>这是合并时要一并处理的体积问题</strong>。
+  </p>
+
+  <h3>本地 token 与 DNS rebinding</h3>
+
+  <p>embed 之后，浏览器要能调通本机 API，两个问题必须一起解：</p>
+
+  <ul class="tight">
+    <li>
+      <strong>浏览器怎么拿到 local token。</strong>
+      <code>mynetd</code> 的 token 落盘在 <code>&lt;MYNET_HOME&gt;/var/run/local-api.token</code>（<strong>0600</strong>），
+      浏览器读不到；而 <code>mynet_ui</code> 现在完全没有 token 概念（axios 只有 <code>baseURL: '/api'</code>）。
+      <strong>建议用 Cookie</strong>：mynetd 首次 <code>GET /</code> 时种 <code>HttpOnly</code> + <code>SameSite=Strict</code> 的 cookie，
+      API 同时接受 cookie 与 Bearer。HttpOnly 防 XSS 读取，浏览器自动携带，CSRF 由 SameSite 兜住。
+    </li>
+    <li>
+      <strong>校验 <code>Origin</code> / <code>Host</code> 头。</strong>
+      任何网页都能让浏览器请求 <code>http://127.0.0.1:&lt;port&gt;</code>——
+      只校验 token 不校验来源，恶意网页就能读本机状态甚至操作节点（DNS rebinding）。
+      只接受 <code>127.0.0.1:&lt;port&gt;</code> 与 <code>localhost:&lt;port&gt;</code>。<strong>这是必做加固，不是可选项。</strong>
+    </li>
+  </ul>
+</section>
+
+<!-- ============ 四 ============ -->
+<section id="hidedomain">
+  <h2><span class="num">四</span>藏掉 api.mynet.club</h2>
+
+  <p>
+    「GUI 只跟本机 mynetd 说话」走到极致，结果是：
+    <strong>浏览器不需要知道 back 在哪，back 就能彻底退进内网</strong>。
+    对外只剩 <code>gateway</code>——一个无状态的 Go 二进制，可多实例、可挂 CDN。
+  </p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 680 250" role="img" aria-label="对外暴露面：现状 vs 目标">
+      <defs>
+        <marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+          <path d="M0,0 L10,5 L0,10" fill="none" stroke="#5b6472" stroke-width="1.4"/>
+        </marker>
+      </defs>
+
+      <text x="40" y="28" class="svg-t">现状：两个公网入口</text>
+      <rect x="40" y="44" width="250" height="82" rx="8" fill="#fdf1f1" stroke="#e8b4b4" stroke-width="1"/>
+      <text x="56" y="68" class="svg-s">公网暴露</text>
+      <text x="56" y="88" class="svg-t2">api.mynet.club  → back（用户 API）</text>
+      <text x="56" y="110" class="svg-t2">my.mynet.club  → gui 静态 + 反代 back</text>
+
+      <rect x="330" y="44" width="300" height="82" rx="8" fill="#fff" stroke="#c9ced8" stroke-width="1"/>
+      <text x="346" y="68" class="svg-s">问题</text>
+      <text x="346" y="88" class="svg-t2">两个域名、两套证书、两处暴露面</text>
+      <text x="346" y="110" class="svg-t2">mynet_ui 让用户手填 back 地址</text>
+
+      <text x="40" y="164" class="svg-t">目标：只剩 gateway</text>
+      <rect x="40" y="180" width="250" height="56" rx="8" fill="#eef6f4" stroke="#a8cec7" stroke-width="1"/>
+      <text x="56" y="202" class="svg-s">公网暴露</text>
+      <text x="56" y="222" class="svg-t2">gateway（无状态 · 可多实例 · 可 CDN）</text>
+
+      <rect x="330" y="180" width="300" height="56" rx="8" fill="#fff" stroke="#a8cec7" stroke-width="1"/>
+      <text x="346" y="202" class="svg-s">内网</text>
+      <text x="346" y="222" class="svg-t2">back · 无需公网域名</text>
+    </svg>
+    <figcaption><code>mynet_ui/src/views/Login.vue</code> 当前 <code>placeholder="https://api.mynet.club/api/v2"</code>——要求用户知道并填写 back 地址，这是要消掉的东西。</figcaption>
+  </figure>
+
+  <h3>登录：改白名单粒度，不新造域</h3>
+
+  <p>
+    <strong>原则：放行「会话读写」，禁止「身份生命周期变更」。</strong>
+    规范原话是「禁止 relay 到 <code>admin/*</code> 与任何<strong>身份生命周期</strong>接口」——
+    会话管理不属于身份生命周期。当前实现过于粗：一个 <code>/auth</code> 子串把所有 auth 路径一起扫掉。
+  </p>
+
+  <div class="codeblock">
+    <div class="cbhead">relaypolicy.go —— 全部改动集中在这一个文件</div>
+<pre><span class="c-dim">// ① 从 deniedFragments 移除 3 个过粗的子串</span>
+<span class="c-hl">- "/auth"</span>      <span class="c-dim">// 太粗，扫掉所有 auth 路径</span>
+<span class="c-hl">- "/login"</span>     <span class="c-dim">// 要放行 auth/login</span>
+<span class="c-hl">- "/logout"</span>    <span class="c-dim">// 要放行 auth/logout</span>
+
+<span class="c-dim">// ② 加入 AllowedPathPrefixes 5 个（会话读写 + 我是谁）</span>
+<span class="c-teal">+ "/api/v1/auth/login"
++ "/api/v1/auth/refresh"
++ "/api/v1/auth/logout"
++ "/api/v1/auth/verify"
++ "/api/v1/auth/me"</span>
+
+<span class="c-dim">// ③ 继续禁止（默认拒绝已兜住，deniedFragments 保留作纵深防御）
+//    auth/register · forgot-password · reset-password · verify-email
+//    resend-verification · password · profile
+//    以及 /admin · /operator · /mfa · /token</span></pre>
+  </div>
+
+  <p>
+    首次向导不需要独立域：<strong>登录（已解决）+ 已有的 <code>zones</code> / <code>zones/switch</code>
+    + 待补的 <code>POST /api/v1/nodes/switch</code></strong>（切换当前节点）。
+    真正需要新增域的只有 <code>driver</code>（列驱动 / 安装 / 升级）——那是本机能力，与 relay 无关。
+  </p>
+
+  <h3>gateway 两个入口（已定）</h3>
+
+  <div class="callout teal">
+<pre style="margin:4px 0 12px;font-family:var(--mono);font-size:12.5px;line-height:1.75;color:var(--ink-2)">gateway
+  ├── /v1/node/connect   <span class="c-teal">WS</span>    节点面 · Ed25519 身份 · presence · 推送
+  └── /v1/relay          <span class="c-teal">HTTPS</span> 用户面 · <span class="c-hl">无身份</span> · 字节中继 · 鉴权归 back</pre>
+    <p>
+      这条解掉了一个结构性矛盾：<strong>「藏掉 api.mynet.club」要求 back 内网，
+      而 console 模式与移动端又需要取平台态</strong>——两者不能靠「直连 back」同时满足。
+      统一走 gateway 的用户面入口后，<strong>back 保持内网，对外仍然只有 gateway</strong>。
+    </p>
+    <p>
+      console 模式的 mynetd 用<strong>普通 HTTPS</strong> 打 <code>/v1/relay</code>
+      （不是节点 WS 长连接），因此<strong>不加载节点面模块</strong>；
+      移动端（无常驻 mynetd）走同一个入口。
+    </p>
+  </div>
+
+  <h3>四件前置</h3>
+  <table class="tbl">
+    <thead><tr><th>#</th><th>问题</th><th>说明</th></tr></thead>
+    <tbody>
+      <tr class="hl">
+        <td>1</td>
+        <td><strong>登录路径</strong></td>
+        <td>GUI 只谈本机意味着登录也得经 mynetd → <code>/v1/relay</code>。按上面改 relay 白名单粒度即可</td>
+      </tr>
+      <tr>
+        <td>2</td>
+        <td><strong>移动端</strong></td>
+        <td><span class="pill ok">已解</span>走 gateway 的用户面 HTTPS 入口，对外仍然只有 gateway</td>
+      </tr>
+      <tr>
+        <td>3</td>
+        <td><strong>CDN 技术约束</strong></td>
+        <td>WS 长连接在 CDN 上通常有超时（需 ping/pong 保活，gateway 已有）；
+            CDN 后看不到真实客户端 IP，按 IP 限流要处理 <code>X-Forwarded-For</code>；
+            需确认所选 CDN 支持 WebSocket 升级</td>
+      </tr>
+      <tr>
+        <td>4</td>
+        <td><strong>多 gateway 的 presence 一致性</strong></td>
+        <td>「多放一点」的前提。共享存储或广播，二选一（<code>control-plane.md</code> §3.3 既有待决项）</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============ 五 ============ -->
+<section id="mode">
+  <h2><span class="num">五</span>节点模式 / 管理桌面</h2>
+
+  <p>
+    <strong>「只做管理桌面」可行</strong>——本机不跑 gnb/wg、也不安装启停 gnb/wg，只管理社交网络。
+    关键是分清两条面：
+  </p>
+
+  <table class="tbl">
+    <thead><tr><th>面</th><th>接口</th><th>鉴权</th><th>需要 gateway</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>节点面</strong></td>
+        <td><code>/api/v1/monitor/*</code>（心跳、取命令、回报、router-keys）</td>
+        <td>节点 HMAC / Ed25519</td>
+        <td><span class="pill ok">需要</span>——目的是让 back 对节点不可达</td>
+      </tr>
+      <tr class="hl">
+        <td><strong>用户面</strong></td>
+        <td><code>/api/v1/{nodes,route,social,users,notifications,service}</code></td>
+        <td><strong>用户登录会话</strong>（Bearer token + <code>X-Tenant-ID</code>）</td>
+        <td><span class="pill bad">不需要</span>——<strong>本来就公网可达</strong></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p>
+    <code>control-plane.md</code> §6.3 第 4 步收内网的是「<strong>back 节点接口</strong>」（<code>/api/v1/monitor/*</code>），
+    不是全部。用户面 API 保持公网——<code>mynet_gui</code> 今天就是这么跑的：
+    生产环境 <code>VITE_API_BASE_URL=https://my.mynet.club</code>，用 back 的 JWT，
+    <strong>API 层零 gateway、零 mynetd、零 <code>node_id</code> 依赖</strong>。
+  </p>
+
+  <div class="mode-switch" role="group" aria-label="运行模式切换">
+    <button class="mbtn active" data-mode="node">① 成为节点</button>
+    <button class="mbtn" data-mode="console">② 只做管理桌面</button>
+  </div>
+
+  <div class="mode-panel" id="panel-node">
+    <table class="tbl">
+      <thead><tr><th>能力</th><th>是否可用</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td>本机态管理（服务/配置/proxy/peers/日志）</td><td><span class="pill ok">可用</span></td><td>mynetd 直接答</td></tr>
+        <tr><td>平台态管理（社交/路由/节点/服务）</td><td><span class="pill ok">可用</span></td><td><strong>经 gateway 的 <code>/v1/relay</code></strong>（与 console 模式同一入口）</td></tr>
+        <tr><td>实际组网（跑驱动、建 tun、转发）</td><td><span class="pill ok">可用</span></td><td>需要 root</td></tr>
+        <tr><td>被 back 下发命令（refresh/restart）</td><td><span class="pill ok">可用</span></td><td>心跳响应携带 <code>commands[]</code></td></tr>
+      </tbody>
+    </table>
+    <p class="mode-note">
+      <strong>需要 root</strong>——建 tun 设备、改系统路由、装服务。
+    </p>
+  </div>
+
+  <div class="mode-panel" id="panel-console" hidden>
+    <table class="tbl">
+      <thead><tr><th>能力</th><th>是否可用</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr class="hl"><td>平台态管理（社交/路由/节点/服务）</td><td><span class="pill ok">可用</span></td><td><strong>经 gateway 的 <code>/v1/relay</code></strong>（HTTPS，无节点身份）→ back</td></tr>
+        <tr><td>驱动管理（下载/安装/升级 gnb·wg）</td><td><span class="pill ok">可用</span></td><td>写 <code>$MYNET_HOME/driver/*</code>，装在用户目录时无需 root</td></tr>
+        <tr><td>本机态管理（服务/proxy/peers）</td><td><span class="pill mute">暂空</span></td><td>还没有驱动与节点，装上后即为节点模式</td></tr>
+        <tr><td>实际组网</td><td><span class="pill mute">不需要</span></td><td>本机不是节点</td></tr>
+        <tr><td>被 back 下发命令</td><td><span class="pill mute">不适用</span></td><td>没有节点通道</td></tr>
+      </tbody>
+    </table>
+    <p class="mode-note">
+      <strong>不需要 root</strong>（前提是装在用户目录）；走 <strong>gateway 的 <code>/v1/relay</code></strong>（用户面 HTTPS 入口，非节点 WS）。
+      在产品上这是<strong>自然的引导状态</strong>：装完 mynetd → 登录 → 下载驱动 → 配置本机 → 再决定是否升级为节点。
+    </p>
+  </div>
+
+  <h3>console 模式：不加载节点面模块</h3>
+
+  <div class="codeblock">
+    <div class="cbhead">两种模式的初始化差异</div>
+<pre><span class="c-teal">node 模式</span>      ControlPlane + gatewayclient <span class="c-teal">已初始化</span>
+                 ├── X25519 DH + HMAC（<span class="c-hl">复用驱动密钥</span>）
+                 ├── WS 长连接 · presence · 事件订阅
+                 └── commands[] 执行
+
+<span class="c-teal">console 模式</span>   ControlPlane / gatewayclient <span class="c-hl">不初始化</span>
+                 ├── 不连 gateway
+                 ├── 不订阅事件 · 不执行 commands[]
+                 └── <span class="c-hl">既无身份密钥，也无驱动密钥</span>——只要用户登录会话</pre>
+  </div>
+
+  <p>
+    console 模式的启动路径更短、攻击面更小，也解释了为什么它能非 root 运行。
+  </p>
+
+  <p class="takeaway">
+    <strong>console 模式要改一处代码</strong>：<code>cmd/mynetd/main.go</code> 当前强制 root。
+    console 模式只做「下载驱动 + 写 <code>$MYNET_HOME</code> 下配置 + 登录会话」，装在用户目录时不需要任何特权。
+    只有建 tun、改系统路由、装系统服务才需要 root——那是节点模式的事。
+    gnb 自己也有同款先例：<code>--set-tun</code>「不启动虚拟网卡，不需要 root 权限启动进程」。
+  </p>
+</section>
+
+<!-- ============ 六 ============ -->
+<section id="relay">
+  <h2><span class="num">六</span>relay 的职责</h2>
+
+  <p>
+    <strong>relay 不做鉴权，只做路径白名单；鉴权交给 back。</strong>
+    实现已经是这样——<code>relaypolicy</code> 是纯路径判断，里面没有鉴权逻辑：
+  </p>
+
+  <div class="codeblock">
+    <div class="cbhead">internal/relaypolicy/relaypolicy.go（实测）</div>
+<pre><span class="c-dim">// 允许中继的 back 路径前缀</span>
+AllowedPathPrefixes = [ "/api/v1/monitor/",   <span class="c-dim">// 节点自身通道（back 侧走 HMAC）</span>
+                        "/api/v1/nodes", "/api/v1/route", "/api/v1/social",
+                        "/api/v1/user",  "/api/v1/users", "/api/v1/notifications",
+                        "/api/v1/service", "/api/v1/services", "/api/v1/mynet" ]
+
+<span class="c-dim">// 纵深防御：即便前缀命中也必须拒绝</span>
+deniedFragments = [ "/admin", "/auth", "/mfa", "/operator", "/login", "/logout",
+                    "/register", "/password", "/reset", "/token", ... ]
+
+func <span class="c-hl">IsAllowed</span>(path string) bool   <span class="c-dim">// ← 全部逻辑就这一个函数，纯字符串判断</span></pre>
+  </div>
+
+  <p>
+    <code>local-api.md</code> §2 的措辞是对的：「relay 只做转发 + 限流 + 声明身份……
+    <strong>鉴权归属与业务校验一律由 back 负责</strong>」。
+    <code>control-plane.md</code> §5.3 把「连接建立用的 Ed25519」写在「鉴权」标题下，措辞应改。
+  </p>
+
+  <h3>连接层的 Ed25519 是干什么的</h3>
+  <p>
+    gateway 验证 WS 连接属于哪个节点，<strong>目的是寻址与在线状态，不是授权这次请求</strong>。它支撑三件事：
+  </p>
+  <ul class="tight">
+    <li><strong>presence</strong>：回答「节点 X 是否在线」——不验证则可被冒充</li>
+    <li><strong>定向推送</strong>：back 调 <code>/v1/notify</code> 推事件给某 <code>node_id</code>，gateway 要靠它找到那条连接</li>
+    <li><strong>按节点限流</strong>：经中继后所有节点挤在网关同一个 IP 上，只能按节点身份计数</li>
+  </ul>
+  <p>
+    <strong>连接身份 = 门牌号；请求授权 = back 的事。</strong>
+  </p>
+
+  <h3>三层三套凭证（术语分清）</h3>
+
+  <div class="callout teal">
+<pre style="margin:4px 0 12px;font-family:var(--mono);font-size:12.5px;line-height:1.8;color:var(--ink-2)">层        谁 ↔ 谁                认证                    凭证
+<span class="c-teal">数据面</span>    节点 ↔ 节点            gnb / wg 自己的加密      <span class="c-hl">驱动密钥</span>（gnb 非标准 ed25519 / wg X25519）
+<span class="c-teal">节点面</span>    节点 ↔ gateway         X25519 DH + HMAC        <span class="c-hl">复用驱动密钥</span>（同一套）
+<span class="c-teal">用户面</span>    用户/桌面 ↔ back        <span class="c-hl">cookie / 登录会话</span>       无密钥，用会话</pre>
+    <p>
+      <strong>「控制面」= 节点面 + 用户面</strong>（管理通信的总称，与数据面对称）。
+      cookie 属<strong>用户面</strong>；Ed25519 属<strong>节点面</strong>——两者不是一回事。
+    </p>
+  </div>
+
+  <p><strong>为什么节点面不用 cookie：人用会话，机器用密钥。</strong></p>
+
+  <table class="tbl">
+    <thead><tr><th></th><th>用户（人）</th><th>节点（机器）</th></tr></thead>
+    <tbody>
+      <tr><td><strong>生命周期</strong></td><td>登录 → 有效期 → 刷新 → 登出</td><td>无人值守、重启后要自动恢复</td></tr>
+      <tr><td><strong>凭证形态</strong></td><td>会话 token（cookie）</td><td><strong>驱动密钥</strong>（与数据面同一套）</td></tr>
+      <tr class="hl"><td><strong>线上跑什么</strong></td><td><strong>token 本身</strong>（即凭证）</td><td><strong>只有签名</strong>，私钥永不出节点</td></tr>
+      <tr><td><strong>失效后果</strong></td><td>重新登录</td><td>会话失效会<strong>断 WS</strong>，还要自己重新登录并存凭证</td></tr>
+    </tbody>
+  </table>
+
+  <p>
+    这与 ssh 私钥、sshd host key、TLS 客户端证书是同一个模型：
+    <strong>机器身份用密钥，用户身份用会话</strong>。
+    私钥的安全性不在于「磁盘上不可复制」，而在于<strong>「它从不上网络」</strong>——
+    线上只出现 HMAC，截获无用；而 token 是 bearer 凭证，被看到即可冒用直到撤销。
+  </p>
+
+  <h3>gateway 不鉴权，只做透传 + 连接状态</h3>
+
+  <div class="callout teal">
+<pre style="margin:4px 0 12px;font-family:var(--mono);font-size:12.5px;line-height:1.8;color:var(--ink-2)">WS 连接建立（像 TCP 握手）  →  <span class="c-hl">只有传输状态，无密码学</span>
+   ↓
+请求携带凭证 ──<span class="c-teal">透传</span>──&gt; back 验证
+   ↓
+back 验证通过 → 连接置位「已鉴权 = node X」
+   ↓
+推送 / presence 只按这个<span class="c-hl">状态</span>路由</pre>
+    <p>
+      <strong>鉴权不鉴权靠状态解决</strong>——连接本身不鉴权，
+      <strong>连接的鉴权状态由 back 验证请求后置位</strong>。
+      这与 TCP 一致：握手只建立传输，语义由上层负责。
+    </p>
+    <p>
+      因此 gateway <strong>不需要任何密钥</strong>，也不存在「公钥下发」问题——
+      与「relay 不做鉴权，鉴权归 back」是同一条原则的延伸。
+    </p>
+  </div>
+
+  <div class="callout warn">
+    <p class="co-title">残余风险：连接身份是声明的</p>
+    <p>
+      未验证的 <code>node_id</code> 声明意味着攻击者可以<strong>抢占推送通道</strong>、
+      <strong>伪造 presence</strong>。但推送内容按规范<strong>不含业务载荷</strong>
+      （只是「有命令待执行」），且攻击者<strong>无法真的执行命令</strong>（back 会验请求）——
+      泄露的是存在性，不是数据。
+    </p>
+  </div>
+
+  <h3>节点 ↔ back 的请求鉴权：复用驱动密钥，复制数据面的 DH</h3>
+
+  <p>
+    gateway 不鉴权后，<strong>节点 ↔ back 的请求鉴权就成了唯一鉴权点</strong>。
+    不需要额外一套密钥——<strong>直接复制数据面的 DH 逻辑</strong>——
+    而两种驱动最终都做 <strong>X25519 DH</strong>，只是公钥表示不同：
+  </p>
+
+  <div class="codeblock">
+    <div class="cbhead">证据：GNB 的 ed25519_key_exchange 本质就是 X25519</div>
+<pre><span class="c-dim">libs/ed25519/key_exchange.c</span>
+/* unpack the public key and convert edwards to montgomery */
+/* montgomeryX = (edwardsY + 1)*inverse(1 - edwardsY) mod p */
+fe_frombytes(x1, public_key);  <span class="c-dim">…edwards → montgomery…</span>
+<span class="c-dim">/* montgomery ladder */</span>
+fe_tobytes(shared_secret, x2);      <span class="c-dim">→ 32B</span>
+
+<span class="c-teal">WG 的驱动密钥本来就是 X25519 → 直接 DH。</span></pre>
+  </div>
+
+  <p><strong>机制</strong>：</p>
+
+  <div class="codeblock">
+    <div class="cbhead">节点面挑战响应（DH + HMAC）</div>
+<pre>back → node:  challenge = nonce(32B) + ts        <span class="c-dim">（或请求自带 ts + 随机数）</span>
+node → back:  mac = HMAC-SHA256(shared, request)
+                shared = <span class="c-hl">X25519</span>(driver_priv, back_pub)
+back:         shared = <span class="c-hl">X25519</span>(back_priv, toMontgomery_if_gnb(node_pub))
+                验证 mac
+
+<span class="c-dim">// gnb 节点：driver_priv = ed25519 标量（clamp 后前 32B）；back_pub 是 X25519 格式，直接 DH
+// wg  节点：driver_priv = X25519 私钥
+// back 只需按 algorithm 决定要不要做 edwards→montgomery —— 一个函数，不是两套逻辑
+// gateway 全程只透传字节，不参与</span></pre>
+  </div>
+
+  <p><strong>好处</strong>：</p>
+  <ul class="tight">
+    <li><strong>一套密钥</strong>——驱动密钥就是节点身份，不再多出「节点身份密钥」</li>
+    <li><strong>机制同源</strong>——节点面的 DH 就是数据面那套，与 GNB 的 <code>ed25519_key_exchange</code> 同源</li>
+    <li><strong>gnb / wg 通吃</strong>——两者都最终做 X25519 DH，只差一个公钥格式转换</li>
+  </ul>
+
+  <div class="callout warn">
+    <p class="co-title">代价只有两条，都不致命</p>
+    <table class="tbl" style="margin-top:10px">
+      <thead><tr><th>代价</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong>back</strong> 需要一对 X25519 密钥</td>
+          <td>只需一对（不是每节点一对）。分发简单——节点本就信任 back，
+              可随 <code>mynet setup</code> 下发或内置发行版（pinning 会让轮换麻烦）</td>
+        </tr>
+        <tr>
+          <td><strong>密钥不隔离</strong></td>
+          <td>驱动密钥泄露 = 节点面一并失守。但驱动密钥本就是节点核心身份，泄露本来就是灾难级</td>
+        </tr>
+      </tbody>
+    </table>
+    <p>
+      另有一个小差别（本场景无影响）：DH + HMAC 是<strong>对称证明</strong>——
+      back 持有 <code>back_priv</code>，理论上能伪造节点的 mac。
+      但 back 本就是业务权威；而签名是公开可验的、DH+HMAC 只有对端能验，
+      <strong>对「节点向 back 证明身份」这个用途恰好够用</strong>。
+    </p>
+  </div>
+
+  <h3>relay 在 OpenWrt 上不存在</h3>
+  <p>
+    OpenWrt 不当用户连接网关的代理，所以不需要 <code>relay</code> 域，也不需要社区 UI。
+    分工随之清晰：
+  </p>
+
+  <table class="tbl">
+    <thead><tr><th>环境</th><th>管哪些面</th><th>是否需要 relay</th></tr></thead>
+    <tbody>
+      <tr class="hl">
+        <td><strong>桌面 / Linux / Windows / 移动</strong></td>
+        <td><strong>本机面 + 社区域</strong>（状态 / 服务 / 驱动 / 日志 · 节点 / 路由 / 好友 / 服务 / 区域）</td>
+        <td><span class="pill ok">需要</span>——社区域经 mynetd 中继</td>
+      </tr>
+      <tr>
+        <td><strong>OpenWrt</strong></td>
+        <td><strong>只管本机面</strong>（gnb / 配置 / 日志 / 驱动）</td>
+        <td><span class="pill bad">不需要</span>——<strong>relay 不存在</strong></td>
+      </tr>
+    </tbody>
+  </table>
+  <p>理由直接：<strong>没人会在路由器的 LuCI 页面里管好友列表</strong>。</p>
+</section>
+
+<!-- ============ 七 ============ -->
+<section id="openwrt">
+  <h2><span class="num">七</span>OpenWrt 实现路线</h2>
+
+  <h3>跑的还是 mynetd，只是条件编译裁瘦</h3>
+
+  <p>
+    OpenWrt 上<strong>不是另一个产品</strong>，<strong>就是 mynetd</strong>。
+    「瘦」是<strong>同一份源码的另一套构建产物</strong>——靠条件编译 + 按架构编译裁掉重的部分，产品身份不变。
+  </p>
+
+  <p>机制已经现成，mynetd 早就在用：</p>
+  <div class="codeblock">
+    <div class="cbhead">mynet_agent 现有的条件编译</div>
+<pre><span class="c-dim">// 平台级</span>
+internal/system/system_openwrt.go:1:   <span class="c-teal">//go:build openwrt</span>
+internal/system/system_linux.go:1:     <span class="c-teal">//go:build linux &amp;&amp; !openwrt</span>
+internal/system/system_darwin.go:1:    <span class="c-teal">//go:build darwin</span>
+internal/system/system_windows.go:1:   <span class="c-teal">//go:build windows</span>
+
+<span class="c-dim">// 架构级（连 soft-float / hard-float 都分了）</span>
+internal/common/platform/arch_mips_softfloat.go
+internal/common/platform/arch_mips_hardfloat.go
+internal/common/platform/arch_arm_hardfloat.go
+internal/common/platform/arch_mips64le.go …</pre>
+  </div>
+
+  <p>
+    <strong>要做的只是再加一组标签</strong>（如 <code>thin</code> / <code>noembed</code>），
+    把 WebUI embed、gopsutil 这类重的部分排除掉。
+    体积不再是决策依据（现在 OpenWrt 设备常见 1–2 GB 内存、数 GB flash），在实现范围内压到最小即可。
+  </p>
+
+  <h3>本机动作对齐 Lua 现有入口</h3>
+
+  <p>
+    Lua 侧已经有完整的本机管理面，而且<strong>不走 ubus、也不走 init.d</strong>：
+    直接 <code>exec</code> gnb 二进制 + 读写 pidfile（<code>node.lua:1261, 1335</code>）。
+  </p>
+
+  <table class="tbl">
+    <thead><tr><th>能力</th><th>Lua 现有入口（<code>luci.model.mynet.*</code>）</th></tr></thead>
+    <tbody>
+      <tr><td>配置拉取与应用</td><td><code>get_config_bundle</code> · <code>refresh_configs_bundle</code> · <code>write_local_config</code></td></tr>
+      <tr><td>gnb 生命周期</td><td><code>start_gnb</code> · <code>stop_gnb</code> · <code>restart_gnb</code> · <code>gnb_is_running</code></td></tr>
+      <tr><td>密钥</td><td><code>get_private_key</code> · <code>save_private_key</code> · <code>get_peer_keys</code> · <code>refresh_peer_keys_batch</code></td></tr>
+      <tr class="hl"><td><strong>心跳 + 命令处理</strong></td><td><code>run_daemon_heartbeat</code> · <code>submit_heartbeat</code> · <strong><code>_handle_heartbeat_commands</code></strong> · <code>_report_command_result</code></td></tr>
+      <tr><td>健康检查与自愈</td><td><code>run_health_check</code></td></tr>
+      <tr><td>防火墙</td><td><code>ensure_firewall_zone</code> · <code>apply_firewall_masq</code></td></tr>
+    </tbody>
+  </table>
+
+  <h4>已定：mynetd 与 Lua 的职责分界</h4>
+
+  <div class="callout teal">
+<pre style="margin:4px 0 12px;font-family:var(--mono);font-size:12.5px;line-height:1.75;color:var(--ink-2)">mynetd（瘦构建）                Lua（luci.model.mynet.*）
+  ├── <span class="c-teal">心跳采集与上报</span> ─────────────┐
+  ├── <span class="c-teal">获取指令</span>（heartbeat 的 commands[]  │
+  │        或 WS 推送事件）            │
+  ├── 命令分派 ───────────────────→ <span class="c-hl">执行命令</span>
+  │                                  （配置/密钥/防火墙/服务）
+  ├── 收 Lua 的执行结果 ←────────── <span class="c-hl">返回结果</span>
+  └── <span class="c-teal">经 WS 上报 back</span>              │
+        （result → PATCH command result）┘</pre>
+    <p>
+      <strong>mynetd 负责通信，Lua 负责执行。</strong>
+      心跳、取指令、结果上报都在 mynetd；命令的实际执行在 Lua；
+      <strong>结果必须回到 mynetd，由 mynetd 经 WS 上报</strong>（不许 Lua 自己上报）。
+    </p>
+    <p>
+      这样 Lua 侧的 <code>_handle_heartbeat_commands</code> / <code>_report_command_result</code>
+      <strong>职责收窄为纯执行器</strong>——不再自己发心跳、不再自己回报。
+    </p>
+  </div>
+
+  <p>
+    <strong>注意事项</strong>：现状 <code>heartbeat.sh</code> 里的 <code>_gnb_peer_heal</code>
+    （功能性健康检查）必须<strong>搬进 mynetd 瘦构建</strong>——
+    procd 的 respawn 替代不了它（进程没退出），而 cron 被 mynetd 取代后它就没有载体了。
+  </p>
+
+  <div class="codeblock">
+    <div class="cbhead">现成先例：heartbeat.sh</div>
+<pre><span class="c-dim"># cron → shell → lua -e → Lua 函数</span>
+*/5 * * * * /usr/bin/mynet-heartbeat
+
+lua -e "
+    local sys = require('luci.model.mynet.system')
+    local ok, err = <span class="c-teal">sys.run_daemon_heartbeat()</span>
+"
+
+<span class="c-dim"># 脚本注释原文：「与 Go mynetd 完全对齐，永不过期」</span></pre>
+  </div>
+
+  <h3>gnb 进程管理交给 procd</h3>
+
+  <p>
+    现状 <code>rc.mynet</code> 头是 <code>#!/bin/sh /etc/rc.common</code>（老式，不是 procd），
+    注释写「GNB 进程管理<strong>完全委托给 Lua</strong>」。
+    而 <strong>gnb 本身就是为「被服务管理器管」设计的</strong>（源码实测）：
+  </p>
+
+  <div class="codeblock">
+    <div class="cbhead">opengnb 源码证据</div>
+<pre>conf->daemon = 0                        <span class="c-dim">gnb_argv.c:209  ← 默认前台运行</span>
+{ "systemd", no_argument, 0, ... }      <span class="c-dim">gnb_argv.c:444  ← 有 --systemd 开关</span>
+if (systemd_daemon) conf->daemon = 0    <span class="c-dim">gnb_argv.c:754  ← 「别自己 daemon 化，交给服务管理器」</span>
+signal(SIGTERM/SIGINT/SIGHUP, handler)  <span class="c-dim">cli/gnb.c:444-446  ← 信号齐全</span>
+  SIGHUP  → 热重启                      <span class="c-dim">cli/gnb.c:55</span>
+  SIGTERM → 正常退出                     <span class="c-dim">cli/gnb.c:61</span></pre>
+  </div>
+
+  <table class="tbl">
+    <thead><tr><th>现状问题</th><th>证据</th><th>procd 提供</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>不是 procd</td>
+        <td><code>rc.mynet</code> 用老式 <code>rc.common</code></td>
+        <td><strong>状态统一</strong>——<code>/etc/init.d/mynet status</code>、LuCI 服务页、<code>ubus call service list</code> 同一个真相</td>
+      </tr>
+      <tr>
+        <td>进程崩溃无人拉起</td>
+        <td>心跳里没有这类逻辑</td>
+        <td><strong><code>respawn</code></strong>——进程退出即拉起，秒级。<strong>新增能力</strong></td>
+      </tr>
+      <tr class="hl">
+        <td>重启是冷启</td>
+        <td><code>restart_gnb</code> = stop + sleep 1 + start</td>
+        <td><strong><code>reload</code> → SIGHUP</strong>——接上 gnb 热重启，<strong>用上 P1 补丁</strong></td>
+      </tr>
+      <tr>
+        <td>无网卡事件响应</td>
+        <td>—</td>
+        <td><strong>hotplug</strong>——WAN up/down 自动 reload</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>层次关系与职责边界</h3>
+
+  <div class="callout teal">
+<pre style="margin:4px 0 12px;font-family:var(--mono);font-size:12.5px;line-height:1.7;color:var(--ink-2)">mynetd（OpenWrt 瘦构建）
+  └── 调 Lua 函数                    ← 单一入口
+        ├── 配置 / 密钥 / 防火墙  → Lua 直接做
+        └── 进程生命周期        → 委托 /etc/init.d/mynet（procd）
+                                    └── respawn · SIGHUP 热重启 · hotplug</pre>
+    <p>
+      <strong>procd 是 Lua 的实现细节，不是 mynetd 要对接的一层</strong>。
+      mynetd 只调 Lua；Lua 里的 <code>start_gnb</code> / <code>stop_gnb</code> / <code>restart_gnb</code>
+      函数签名不变，只是实现从「exec gnb + 自己管 pidfile」换成「调 <code>/etc/init.d/mynet</code>」。
+    </p>
+  </div>
+
+  <h3>三类自愈需求，别混为一谈</h3>
+
+  <table class="tbl">
+    <thead><tr><th>故障 / 需求</th><th>现状怎么处理</th><th>procd 能替代吗</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>gnb 进程崩溃退出</strong></td>
+        <td>心跳里没有这类逻辑</td>
+        <td><span class="pill ok">能</span>respawn 秒级拉起（新增能力）</td>
+      </tr>
+      <tr class="rowbad">
+        <td><strong>进程活着但打洞失败、peer 不可达</strong></td>
+        <td><code>_gnb_peer_heal</code>：ping peer VIP 3 次不可达 → 重启进程
+            （15 分钟冷却 + 启动 90s 宽限）</td>
+        <td><span class="pill bad">不能</span><strong>进程根本没退出，respawn 不触发</strong>。这段逻辑必须保留</td>
+      </tr>
+      <tr class="rowbad">
+        <td><strong>从 back 取指令</strong>（reboot / 配置变更）</td>
+        <td>cron 心跳每 5 分钟拉</td>
+        <td><span class="pill bad">不能</span>与进程管理无关。要么继续轮询，要么走 WS 长连接</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p>
+    现状自愈的注释原文：「GNB 初次打洞失败后指数退避重试，<strong>可能长达 1 小时不自愈</strong>；
+    restart 即可恢复」——这是<strong>功能性健康检查</strong>，与进程生命周期是两回事。
+  </p>
+
+  <h3>代价</h3>
+  <ul class="tight">
+    <li>要改 <code>node.conf</code> 生成——现在写 <code>daemon on</code>，procd 需要 <code>--systemd</code> 或 <code>daemon off</code>（前台跑）。</li>
+    <li><strong>gnb_es 子进程</strong>：现状 Lua 特意做 PPID 匹配清理。交给 procd 后主进程崩溃会重启 gnb 并重新 fork gnb_es，理论上更干净，但要验证 gnb 崩溃时 gnb_es 不会变孤儿。</li>
+    <li>多节点场景需 procd multi-instance（现状单节点，够用）。</li>
+    <li>要写约 30–50 行 procd 脚本，并把 <code>rc.mynet</code> 里的 plugin hooks / route / firewall 逻辑迁进去。</li>
+  </ul>
+</section>
+
+<!-- ============ 八 ============ -->
+<section id="decide">
+  <h2><span class="num">八</span>已定决策与剩余待决</h2>
+
+  <h3>已定</h3>
+  <table class="tbl">
+    <thead><tr><th>#</th><th>问题</th><th>决定</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>1</td>
+        <td>本地 token 方案</td>
+        <td>首次 <code>GET /</code> 种 <code>HttpOnly</code> + <code>SameSite=Strict</code> cookie，
+            配合 <code>Origin</code> / <code>Host</code> 校验（防 DNS rebinding）</td>
+      </tr>
+      <tr>
+        <td>2</td>
+        <td>gateway 的 back 内网地址</td>
+        <td><strong>部署配置</strong>（启动参数/配置文件），不下发</td>
+      </tr>
+      <tr>
+        <td>3</td>
+        <td>多节点语义</td>
+        <td><strong>目标并行</strong>（同一机器多节点并存）；<strong>短期可先互斥</strong>切换。
+            这决定 <code>nodes/switch</code> 是「切换」还是「增删」、以及 procd 是否要 multi-instance</td>
+      </tr>
+      <tr>
+        <td>4</td>
+        <td>第 8 条「节点提供服务」</td>
+        <td><strong>范围外</strong>——节点上对外公开 80/443 这类是应用层的事，本文档不覆盖
+            <code>services</code> / <code>bind_mode</code></td>
+      </tr>
+      <tr class="hl">
+        <td>5</td>
+        <td>本机 API / WebUI 端口</td>
+        <td><strong>8096</strong>（<code>/etc/services</code> 未登记）。
+            <code>8192</code> 不可用：① 已登记 <code>spytechphone</code>；② <code>mynet_utc</code> 默认端口就是 8192
+            （<code>config/server.ini:41</code>），同机必撞。8193 在 mynet_utc README 里被提过「洪流模式」，一并避开；
+            8191 可用但按偏好取 8096</td>
+      </tr>
+      <tr>
+        <td>6</td>
+        <td>产物命名</td>
+        <td><strong><code>mynet_agent_*</code></strong>（不用 <code>agent_*</code>）；需同步修订
+            <code>mynet_ctl/docs/conventions.md</code> 的产品表</td>
+      </tr>
+      <tr>
+        <td>7</td>
+        <td>节点面 WS 身份</td>
+        <td><strong>gateway 不鉴权</strong>——纯透传 + 连接状态（像 TCP），鉴权归 back、
+            <strong>靠连接状态解决</strong>；节点 ↔ back 的请求用
+            <strong>复用驱动密钥 + X25519 DH</strong>（不多出一套密钥）</td>
+      </tr>
+      <tr>
+        <td>8</td>
+        <td>mynetd 与 Lua 职责</td>
+        <td>mynetd 做<strong>心跳 / 取指令与数据 / WS 上报</strong>；命令交 Lua 执行；
+            <strong>结果回 mynetd，由 mynetd 经 WS 上报</strong></td>
+      </tr>
+      <tr>
+        <td>9</td>
+        <td>配置与运维工具</td>
+        <td>全收进 <strong><code>mynet</code> 一个工具</strong>：
+            <code>setup</code> / <code>install</code> / <code>uninstall</code> / <code>update</code> / <code>config</code>
+            ＋ <code>status</code> / <code>monitor</code> / <code>refresh-*</code> / <code>check</code> / <code>nodes</code> / <code>platform</code></td>
+      </tr>
+      <tr class="hl">
+        <td>10</td>
+        <td>WireGuard 驱动节奏</td>
+        <td><strong>现在就做</strong>——否则无法验证「双驱动统一」的设计是否真行得通。
+            实现清单与验证目标见下</td>
+      </tr>
+      <tr>
+        <td>11</td>
+        <td>多 gateway 的 presence 一致性</td>
+        <td><strong>共享存储</strong>（Redis）。注意它同时要承担<strong>跨实例推送路由</strong>，见下</td>
+      </tr>
+      <tr class="hl">
+        <td>12</td>
+        <td>跨驱动组网：<strong>双驱动节点可桥接</strong></td>
+        <td><b>direct 直连</b>两端必须同一 <code>vpn_type</code>；但<b>经双驱动节点（同时跑 gnb + wg）可以跨驱动</b>——
+            A(gnb) → C(双驱动) → B(wg)。<b>这就是一条路由，放 L6 系统网络层</b>（见下）</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h4>WireGuard 驱动：实现清单与验证目标</h4>
+
+  <div class="callout teal">
+    <p class="co-title">为什么现在就做</p>
+    <p>
+      整套「双驱动统一」的设计（能力分叉、<code>BundleEnvelope</code> 的 <code>WireGuardIntent</code>、
+      节点面 DH 的 <code>toMontgomery</code> 分支、业务对象不泄漏驱动术语）
+      <strong>只有一个驱动时根本无法验证</strong>——所有分支都悬空。
+    </p>
+  </div>
+
+  <table class="tbl">
+    <thead><tr><th>#</th><th>工作</th><th>落点</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td><code>WireGuardDriver</code> 实现 <code>VPNDriver</code>（只读）：
+          <code>GetAllPeers</code> / <code>GetOnlinePeers</code> / <code>GetPeer</code> /
+          <code>GetLocalPeer</code> / <code>GetNetworkSummary</code> / <code>Refresh</code></td>
+          <td>解析 <code>wg show</code> 输出</td></tr>
+      <tr><td>2</td><td><code>WireGuardDriver</code> 实现 <code>VPNLifecycleDriver</code>：
+          <code>Capabilities</code> / <code>WriteConfig</code> / <code>Start</code> / <code>Stop</code> / <code>Reload</code> / <code>Status</code></td>
+          <td><code>ip link add wg0</code> + <code>wg set</code>（或 wg-quick 配置）</td></tr>
+      <tr><td>3</td><td>密钥生成与落盘</td>
+          <td>X25519；wg 格式 <strong>base64 44 字符</strong>（与 gnb 的 64/128 hex 不同——编码在写入边界统一为 hex）</td></tr>
+      <tr class="hl"><td>4</td><td><strong>节点面 DH 分支</strong></td>
+          <td>wg 的 X25519 <strong>直接 DH</strong>（无 <code>toMontgomery</code>）；gnb 走 edwards→montgomery。
+              验证「一个函数分支」是否真的够</td></tr>
+      <tr><td>5</td><td><code>vpn_driver_factory</code> 接上 <code>NewWireGuardDriver</code></td>
+          <td>替换现在的「v0.10.0 支持」占位</td></tr>
+      <tr><td>6</td><td><code>WireGuardIntent</code> 落地验证</td>
+          <td>fixtures <code>wireguard-minimal.json</code> / <code>wireguard-multi-peer.json</code> 已有</td></tr>
+      <tr><td>7</td><td><code>Capabilities()</code> 如实声明</td>
+          <td>无 Discovery（无 index 概念）、无 Proxy、HotReload 视实现</td></tr>
+    </tbody>
+  </table>
+
+  <h4>跨驱动互通：就是一条路由，放 L6</h4>
+
+  <div class="callout teal">
+<pre style="margin:4px 0 12px;font-family:var(--mono);font-size:12.5px;line-height:1.8;color:var(--ink-2)">L5 驱动适配    gnb 管「本网内对端」(A)      wg 管「本网内对端」(B)
+                    ↑ <span class="c-hl">互不感知，也不需要感知</span>
+L6 系统网络    C 的 <span class="c-teal">ip route</span>：
+                 A 网段 → gnb_tun
+                 B 网段 → wg0          <span class="c-teal">← 跨驱动互通就是这一行</span></pre>
+    <p>
+      双驱动节点 C 就是<strong>一台双网卡路由器</strong>：OS 路由表把包从一块网卡转到另一块。
+      这件事<strong>落在驱动无关的系统路由层（L6 <code>NetworkBackend</code>）</strong>，
+      驱动层各自独立、<strong>根本不需要知道对方存在</strong>。
+    </p>
+    <p>
+      一个自然性质（不是设计缺陷）：包在 C 处是<strong>明文</strong>——这是路由的性质。
+      它与 GNB 自己 relay 的「逐跳再加密、端到端保密」不同。
+    </p>
+  </div>
+
+  <p><strong>数据模型只需改两个现有字段</strong>，不需要新实体：</p>
+
+  <table class="tbl">
+    <thead><tr><th>项</th><th>做法</th></tr></thead>
+    <tbody>
+      <tr><td><code>nodes.vpn_type</code></td>
+          <td><strong>支持多值</strong>（这节点启用哪些驱动）</td></tr>
+      <tr><td><code>node_keys</code></td>
+          <td>按 <code>algorithm</code> 多行（每驱动一对密钥）——<strong>本来就是独立表</strong></td></tr>
+      <tr><td>磁盘布局</td>
+          <td><code>driver/gnb/conf/&lt;id&gt;/</code> 与 <code>driver/wireguard/&lt;id&gt;/</code>
+              <strong>本来就是分开的</strong></td></tr>
+      <tr><td><code>BundleEnvelope</code></td>
+          <td>每个驱动<strong>一份独立 envelope</strong>——互斥约束（gnb 不携带 wg intent）因此仍成立</td></tr>
+    </tbody>
+  </table>
+
+  <p><strong>验证目标</strong>（在 gnb 网、wg 网、以及跨驱动桥接场景里各跑一遍）：</p>
+  <ul class="tight">
+    <li>同一个 back 管两类节点，业务对象（Friendship / Connection / Grant / KeyExchange）<strong>不因驱动而分叉</strong></li>
+    <li><code>BundleEnvelope</code> 的互斥校验通过（gnb ↔ wg intent 不混用）</li>
+    <li>节点面 DH 两种驱动走<strong>同一套逻辑</strong>，只差公钥格式转换</li>
+    <li>前端 / 向导<strong>不感知驱动差异</strong></li>
+  </ul>
+
+  <h4>共享存储：一个连带问题</h4>
+
+  <div class="callout warn">
+    <p class="co-title">presence 只是「查表」，推送还需要跨实例路由</p>
+    <p>
+      共享存储解决了 <strong>presence 查询</strong>（<code>node_id → {session_id, gateway实例, ts}</code>），
+      但<strong>推送要发到「持有该连接的那个 gateway 实例」</strong>——
+      back 调 <code>/v1/notify</code> 时该调哪一个？
+    </p>
+    <p>
+      <strong>已定：采用 (b) Redis pub/sub</strong>——一个机制同时覆盖 presence 与推送，
+      不用维护实例归属。back 往 <code>node:&lt;id&gt;</code> channel 发推送，
+      持有该连接的 gateway 实例订阅后发给连接。
+    </p>
+  </div>
+
+  <h3>剩余待决</h3>
+
+  <h4>back 的 X25519 密钥：风险不对称</h4>
+
+  <div class="callout warn">
+    <p class="co-title">风险不对称——决定保护等级</p>
+<pre style="margin:4px 0 10px;font-family:var(--mono);font-size:12.5px;line-height:1.7;color:var(--ink-2)">节点私钥泄露  →  只能冒充<span class="c-teal">那一个</span>节点
+<span class="c-hl">back 私钥泄露  →  可冒充【所有节点】</span>   ← 单点</pre>
+    <p>
+      <code>shared = X25519(node_priv, back_pub) = X25519(back_priv, node_pub)</code>——
+      <code>back_priv</code> 一泄，攻击者拿 <code>node_keys</code> 里的任意 <code>node_pub</code>
+      就能算出 shared，<strong>伪造任意节点的请求</strong>。
+      所以 <strong><code>back_priv</code> 的保护等级高于节点私钥</strong>。
+    </p>
+  </div>
+
+  <table class="tbl">
+    <thead><tr><th>环节</th><th>做法</th></tr></thead>
+    <tbody>
+      <tr><td><strong>生成</strong></td>
+          <td>back 一对长期 X25519 密钥，部署时生成</td></tr>
+      <tr><td><strong>下发</strong></td>
+          <td>公钥随 <strong><code>mynet setup</code> 下发</strong>，节点缓存在 <code>mynet.conf</code>。
+              <strong>不内置发行版</strong>——那会让日后换钥卡在发版上</td></tr>
+      <tr><td><strong>保护</strong></td>
+          <td><code>back_priv</code> 0600 + 不进代码库 + 不进 BundleEnvelope；有条件上 KMS</td></tr>
+      <tr class="hl"><td><strong>轮换</strong></td>
+          <td><strong>当前不做</strong>——后期可加，对架构无影响（下发通道已存在，换实现不改结构）。
+              到时用双钥过渡：back 同时接受新旧两把 → 新公钥下发（旧钥对新钥签名）→ 退役旧钥</td></tr>
+    </tbody>
+  </table>
+
+  <h4>建议直接定、待复核（2）</h4>
+  <table class="tbl">
+    <thead><tr><th>#</th><th>建议</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>B1</td>
+        <td><strong>多节点并行分两步</strong>：先做互斥切换（<code>nodes/switch</code>），
+            再做并行（procd multi-instance + local-api 多 current）</td>
+      </tr>
+      <tr>
+        <td>B2</td>
+        <td><strong>连接「已鉴权」置位时序</strong>：back 验证通过<strong>任意一次节点通道请求</strong>即置位
+            （简单且安全，不需要专门的确认握手）</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h4>照做就行（6）</h4>
+  <table class="tbl">
+    <thead><tr><th>#</th><th>问题</th><th>建议</th><th>影响</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>1</td>
+        <td><strong>mynetd 去掉强制 root</strong></td>
+        <td>console 模式下放宽（装在用户目录时无需特权）</td>
+        <td><span class="pill warn">必做</span>否则管理桌面体验不成立</td>
+      </tr>
+      <tr>
+        <td>2</td>
+        <td><strong>内化 <code>bin/mynet</code> 的 5 条命令链</strong></td>
+        <td>改为 mynetd handler</td>
+        <td><span class="pill warn">中</span>精简分发的前置</td>
+      </tr>
+      <tr>
+        <td>3</td>
+        <td><strong>补 <code>driver</code> 域</strong>（列驱动 / 安装 / 升级）</td>
+        <td><code>upgrade_service.go</code> 已实现，只差暴露</td>
+        <td><span class="pill warn">中</span>「装完能下驱动」的前提</td>
+      </tr>
+      <tr>
+        <td>4</td>
+        <td><strong>补 <code>POST /api/v1/nodes/switch</code></strong></td>
+        <td>目标并行时改为「增删节点」；短期先做互斥切换</td>
+        <td><span class="pill warn">中</span></td>
+      </tr>
+      <tr>
+        <td>5</td>
+        <td><strong>echarts 改按需引入</strong></td>
+        <td>压掉那个 1 MB 的单页 chunk</td>
+        <td><span class="pill warn">中</span>产物体积主要来源</td>
+      </tr>
+      <tr>
+        <td>6</td>
+        <td><strong>改 <code>control-plane.md</code> §5.3 的「鉴权」措辞</strong></td>
+        <td>relay 只做白名单，鉴权归 back；Ed25519 的用途改写为「寻址与 presence」</td>
+        <td><span class="pill mute">小</span>措辞易误导</td>
+      </tr>
+      <tr>
+        <td>7</td>
+        <td><strong>端口同步到 <code>local-api.md</code></strong></td>
+        <td>8720 → 8096；<code>control-plane.md</code> 的 8008 一并统一</td>
+        <td><span class="pill mute">小</span>文档一致性</td>
+      </tr>
+      <tr>
+        <td>8</td>
+        <td><strong><code>mynet_proxy</code> 下架节奏</strong></td>
+        <td>deprecated → 等 L3/L5 落地 → 从命令表摘除</td>
+        <td><span class="pill mute">小</span>命令表还有 3 条 <code>plugin.proxy.*</code></td>
+      </tr>
+      <tr>
+        <td>9</td>
+        <td><strong>多 gateway 的 presence 一致性</strong></td>
+        <td>共享存储或广播，二选一</td>
+        <td><span class="pill warn">中</span>CDN / 多实例的前置</td>
+      </tr>
+      <tr>
+        <td>10</td>
+        <td><strong>procd 的 gnb_es 孤儿验证</strong></td>
+        <td>确认 gnb 崩溃时 gnb_es 会退出，不累积孤儿</td>
+        <td><span class="pill warn">中</span>procd 方案的前置验证</td>
+      </tr>
+      <tr>
+        <td>11</td>
+        <td><strong>back 的 X25519 公钥如何到节点</strong></td>
+        <td>随 <code>mynet setup</code> 下发，或内置发行版（pinning，轮换麻烦）。gateway 不鉴权，故无 gateway 密钥问题</td>
+        <td><span class="pill warn">中</span>节点↔back 请求鉴权的前置</td>
+      </tr>
+      <tr>
+        <td>12</td>
+        <td><strong>「用完即抛」的适用范围</strong></td>
+        <td>仅 OpenWrt 这类 flash 紧张设备；桌面/Linux 的安装与更新工具可常驻</td>
+        <td><span class="pill mute">小</span>已定原则，写入规范即可</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h4>文档同步（3）</h4>
+  <table class="tbl">
+    <thead><tr><th>#</th><th>目标</th><th>改动</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td><code>control-plane.md</code> §5.3</td>
+          <td>relay 只做白名单、鉴权归 back；Ed25519 的用途改写为「寻址与 presence」</td></tr>
+      <tr><td>2</td><td><code>local-api.md</code></td>
+          <td>端口 8720 → <strong>8096</strong>（<code>control-plane.md</code> 的 8008 一并统一）</td></tr>
+      <tr><td>3</td><td><code>mynet_ctl/docs/conventions.md</code></td>
+          <td>产物前缀 <code>agent_*</code> → <strong><code>mynet_agent_*</code></strong></td></tr>
+    </tbody>
+  </table>
+
+  <p class="takeaway">
+    <strong>架构层面没有遗留</strong>——所有设计点都有定论。
+    <strong>A1（WireGuard 开干）、A2（back 密钥暂不轮换）、A3（presence 走 Redis pub/sub）</strong>均已定。
+    跨驱动互通 = L6 的一条路由，数据模型只改两个现有字段。
+    <strong>架构与策略层面已无未决项</strong>；其余是实现、验证与文档同步。
+    另有 <strong>13 条已知坑</strong>见第九节——那是风险清单，不是待决。
+  </p>
+</section>
+
+<!-- ============ 九 ============ -->
+<section id="pitfalls" class="conclusion">
+  <h2><span class="num">九</span>坑（开发前必读）</h2>
+
+  <p>以下都是实测或源码核对过的陷阱，不是推测。</p>
+
+  <h3>安全</h3>
+  <table class="tbl">
+    <thead><tr><th>坑</th><th>细节</th></tr></thead>
+    <tbody>
+      <tr class="rowbad">
+        <td><strong>公钥编码三种假设冲突</strong></td>
+        <td>
+          同一列 <code>node_keys.public_key</code> 上：
+          <code>NodeHeartbeatAuthMiddleware</code> 要求<strong>32 字节 base64</strong>（44 字符）并显式校验 <code>strlen === 32</code>；
+          <code>NodeKey.php:14</code> docblock 写「64 位 <strong>hex</strong>」；
+          bundle 生成时又做 base64 → hex。
+          <strong>不一致会表现为「心跳鉴权失败」而非编码错误，极难定位。</strong>
+          <br><strong>→ 统一按 hex 编码</strong>（遵循 gnb 的 64/128 hex），加 <code>algorithm</code> 列：
+          gnb 侧零转换，wg 的 base64 在写入边界转 hex，中间件也按 hex 解析。
+          注意这只解决<strong>编码</strong>；私钥<strong>布局</strong>是另一维——见下面「GNB 不是标准 ed25519」。
+        </td>
+      </tr>
+      <tr class="rowbad">
+        <td><strong>私钥明文存在 back，且有外发路径</strong></td>
+        <td>
+          <code>NodeKey.php:24</code> 的 <code>private_key</code> 在 <code>$fillable</code>；
+          <code>saveNodeKeys</code> 明文落库并返回；<code>generateNodeKeys</code> 会把它组装进<strong>邮件正文</strong>。
+          与 <code>control-plane.md</code> 的「私钥永不出节点」冲突。
+          （查对端公钥的接口 <code>getRouterKeys</code> 只返回 <code>public_key</code>，是干净的。）
+        </td>
+      </tr>
+      <tr>
+        <td><strong>心跳用「公钥」当 HMAC 密钥</strong></td>
+        <td>
+          <code>HMAC-SHA256(base64_decode(node_keys.public_key), METHOD|path|ts|body)</code>，
+          容忍窗口 300s。公钥按设计可公开，所以<strong>任何读到公钥的一方都能伪造心跳</strong>。
+          代码 docblock 自认是<strong>已知弱点、非实现 bug</strong>，定位为过渡方案待 gateway 的 Ed25519 取代。
+          风险性质是「迁移窗口期暴露」。
+        </td>
+      </tr>
+      <tr>
+        <td><strong>BundleEnvelope 下发时含明文私钥</strong></td>
+        <td>
+          <code>secret://node_keys/1001/private</code> 只是 back 内部生成流程的可追溯引用，
+          下发时明文写入 driver intent 字段，<code>secret://</code> 不下发。规范列为「迁移路径」。
+        </td>
+      </tr>
+      <tr class="rowbad">
+        <td><strong>DNS rebinding</strong></td>
+        <td>
+          <strong>任何网页都能让浏览器请求 <code>http://127.0.0.1:&lt;port&gt;</code></strong>。
+          只校验 token 不校验来源，恶意网页就能读本机状态、操作节点。
+          embed WebUI 时<strong>必须同时校验 <code>Origin</code> / <code>Host</code></strong>。
+        </td>
+      </tr>
+      <tr class="rowbad">
+        <td><strong>GNB 不是标准 ed25519——三层要分清</strong></td>
+        <td>
+          <table class="tbl" style="margin:8px 0 6px">
+            <thead><tr><th>层</th><th>是否标准</th><th>说明</th></tr></thead>
+            <tbody>
+              <tr><td><strong>签名</strong></td><td><span class="pill ok">标准 RFC 8032</span></td>
+                  <td><code>ed25519_sign/verify</code> 是标准方程，stdlib <code>Verify</code> 互通</td></tr>
+              <tr class="rowbad"><td><strong>私钥布局</strong></td><td><span class="pill bad">非标准</span></td>
+                  <td>落盘 <code>clamp(SHA512(seed))</code>，<strong>不是</strong> <code>seed‖public_key</code>。
+                      <code>keypair.c:9-12</code>：<code>sha512(seed,32,private_key)</code> 后<strong>就地 clamp</strong>
+                      （<code>[0]&amp;=248; [31]&amp;=63; [31]|=64</code>）——<strong>「再存的小动作」就在这</strong></td></tr>
+              <tr class="rowbad"><td><strong>数据面</strong></td><td><span class="pill bad">额外操作</span></td>
+                  <td>签名之外再做 <code>ed25519_key_exchange</code>：edwards→montgomery 转换 →
+                      X25519 式 DH → <code>shared_secret</code></td></tr>
+            </tbody>
+          </table>
+          实测对比（同一 seed）：
+          <div class="codeblock" style="margin:6px 0 8px">
+<pre>Go 标准 ed25519.PrivateKey (64B) = <span class="c-teal">seed(32) ‖ public_key(32)</span>
+GNB 落盘的私钥 (64B)            = <span class="c-hl">clamp(SHA512(seed))</span>   <span class="c-dim">← 前 32B 不是 seed</span></pre>
+          </div>
+          后果：拿到 GNB 私钥<strong>无法反推 seed</strong>，也不能直接喂 stdlib 签名
+          （签名侧需 <code>SignGNB</code> 显式 clamp + 自派生 nonce）。
+          <strong>→ 节点面复用驱动密钥时，gnb 侧要按 GNB 布局取标量</strong>
+          （<code>clamp(SHA512(seed))</code> 前 32B）做 X25519 DH，
+          别拿 stdlib 的 <code>seed‖pub</code> 去算。
+          <strong>编码（hex）与布局（seed‖pub 还是 SHA512）是正交的两维</strong>。
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>配置与协议</h3>
+  <table class="tbl">
+    <thead><tr><th>坑</th><th>细节</th></tr></thead>
+    <tbody>
+      <tr class="rowbad">
+        <td><strong>GNB 非标准掩码被静默忽略</strong></td>
+        <td>
+          只认 /32（且 IP 末位非 0）、/24、/16、/8、/0。
+          <code>/27</code> <code>/22</code> 等 <code>get_netmask_class()</code> 返回 <code>'n'</code>，
+          <strong>不报错、不生效、不警告</strong>。配置错了极难发现。
+          <code>192.168.1.0|255.255.255.255</code> 也会被忽略（末位为 0）。
+        </td>
+      </tr>
+      <tr>
+        <td><strong>GNB 数据面默认加密是 XOR</strong></td>
+        <td>
+          <code>--crypto</code> 取 <code>xor</code>(默认) / <code>rc4</code> / <code>none</code>，手册注明「未来会支持 aes」。
+          XOR 是 <strong>64 字节固定周期重复密钥流</strong>，无 nonce；<strong>数据面无 MAC</strong>。
+          唯一的 <code>verifycode</code>（明文首 2 + 末 2 字节）不依赖密钥，<strong>不是完整性保护</strong>。
+        </td>
+      </tr>
+      <tr>
+        <td><strong>GNB 的 <code>auto</code> 模式与 WG 语义不同构</strong></td>
+        <td>
+          gnb 生成 route.conf 同时含 direct + forward，<strong>协议层自选 P2P 或 forward</strong>；
+          wg 无自动 fallback，<strong>靠 L7 观测层检测并切换 peer</strong>。
+          不可把两者压成扁平结构。
+        </td>
+      </tr>
+      <tr class="rowbad">
+        <td><strong>X25519 签不了名</strong></td>
+        <td>
+          WG 的密钥是 DH 原语，<strong>不能用于 challenge-response 签名</strong>。
+          Ed25519 与 X25519 底层同曲线，但 X25519 公钥只有 Montgomery <em>u</em> 坐标、
+          丢掉了 Edwards <strong>符号位</strong>，私钥布局也不同，不能无歧义转换。
+          <strong>→ 节点面别走签名这条路，改走 DH</strong>（见第六节）——
+          两种驱动最终都做 X25519 DH，<strong>可复用同一套驱动密钥</strong>。
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>实现</h3>
+  <table class="tbl">
+    <thead><tr><th>坑</th><th>细节</th></tr></thead>
+    <tbody>
+      <tr class="rowbad">
+        <td><strong><code>IsAllowedWith</code> 先查 deny 再查 allow</strong></td>
+        <td>
+          <strong>只加 <code>AllowedPathPrefixes</code> 而不删 <code>deniedFragments</code> 是无效的</strong>——
+          目标路径仍被子串拦下。改白名单必须两个动作同时做。
+        </td>
+      </tr>
+      <tr>
+        <td><strong>gnb conf 目录有格式化 bug 产物</strong></td>
+        <td>
+          <code>driver/gnb/conf/*/ed25519/</code> 下同时存在正确的 <code>{nodeid}.public</code>
+          与 <code>%!d(string={nodeid}).pub</code>（5 个节点各一份，65 字节）——
+          Go 把 <code>%d</code> 用在字符串上，旧产物未清理。
+        </td>
+      </tr>
+      <tr>
+        <td><strong>心跳路径与文档不符</strong></td>
+        <td>
+          <code>HEARTBEAT_API_SPEC.md</code> 写 <code>POST /api/v1/heartbeat</code>，
+          实现是 <code>POST /api/v1/monitor/heartbeat</code>。
+          另：<code>HEARTBEAT_IMPLEMENTATION_SUMMARY</code> 说「Ed25519 签名验证」，实现是 HMAC。
+        </td>
+      </tr>
+      <tr>
+        <td><strong>gnb_es 子进程需要显式清理</strong></td>
+        <td>
+          Lua 现在靠 PPID 匹配清理 gnb_es——说明 <strong>gnb 崩溃时 gnb_es 可能不自动退出</strong>。
+          procd 接管前必须验证这一点。
+        </td>
+      </tr>
+      <tr>
+        <td><strong>文档与代码漂移</strong></td>
+        <td>
+          <code>control-plane.md</code> 标「gateway 未实现」但代码已存在；
+          <code>mynet_utc</code> <code>VERSION</code>=1.5.0 而 README 写 1.3.0，且其「双模式 8192/8193」
+          「零 malloc 热路径」与实际代码不符（热路径每包 <code>malloc</code>）。
+          <strong>读文档时以源码为准。</strong>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<footer class="wrap foot">
+  <p>
+    依据：<code>mynet_ctl/docs/knowledge-base/spec/{local-api,control-plane,unified-platform-architecture,wizard}.md</code>、
+    <code>mynet_agent/{conf/command.linux.json, internal/{localapi,relaypolicy,gateway,gatewayclient}, cmd/mynetd, internal/common/platform}</code>、
+    <code>mynet_openwrt/{Makefile, scripts/runtime/rc.mynet, scripts/shell/heartbeat.sh, luasrc/model/mynet}</code>、
+    <code>mynet_gnb/src/{src/gnb_argv.c, src/cli/gnb.c, libs/ed25519/keypair.c}</code>、
+    <code>mynet_ctl/docs/conventions.md</code>；产物体积与 RSS 为本地实测。
+  </p>
+</footer>
+
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
