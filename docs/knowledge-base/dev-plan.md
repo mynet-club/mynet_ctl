@@ -349,18 +349,18 @@ P0 ──┬──────────────────────�
 | 49 | | A-8 | 双驱动验证测试套件（六项判据，三场景） | A-5, B-7, C-2, F-3 | ☑ |
 | | | | **▶ M1 出口：A-8 在 gnb / wg / 跨驱动三场景全绿** | | |
 | 50 | **S8 mynet_web** | D-3 | WebUI embed | D-1, D-2 | ☑ |
-| 51 | | D-4 | UI 合并（Quasar 基线骨架已立，页面迁移 S8） | D-3 | ☐ |
-| 52 | | D-5 | echarts 按需引入 | D-4 | ☐ |
-| 53 | | D-9 | `driver` 域（列/装/升，与 CLI 共用 `upgrade_service`） | D-7 | ☐ |
+| 51 | | D-4 | UI 合并（Quasar 两域骨架已立；mynet_ui 页面批量迁移待续） | D-3 | ☐ |
+| 52 | | D-5 | echarts 按需引入 | D-4 | ☑ |
+| 53 | | D-9 | `driver` 域（列/装/升，与 CLI 共用 `upgrade_service`） | D-7 | ☑ |
 | 54 | | D-10 | `POST /api/v1/nodes/switch` | D-7 | ☑ |
 | 55 | **S9 平台** | E-1 | procd 接管 gnb（含 `gnb_es` 孤儿前置验证）—— 样例已立，待孤儿验证 | — | ☐ |
-| 56 | | E-2 | `node.conf` 改 `--systemd` / `daemon off` | E-1 | ☐ |
+| 56 | | E-2 | `node.conf` 改 `--systemd` / `daemon off` | E-1 | ☑ |
 | 57 | | E-3 | `_gnb_peer_heal` **改造判据后**搬进 mynetd | E-1 | ☐ |
 | 58 | | E-4 | Lua 职责收窄为执行器（结果回 mynetd，经 WS 上报） | E-1 | ☐ |
 | 59 | | E-8 | 命名统一 `mynet_agent_*` | — | ☑ |
 | 60 | | E-5 | mynetd 构建落地（OpenWrt 产物） | E-8, D-11 | ☐ |
 | 61 | | E-6 | ubus 薄桥（可选） | E-5 | ☐ |
-| 62 | | E-7 | mynet_desktop 补全 | S3-1 | ☐ |
+| 62 | | E-7 | mynet_desktop 补全 | S3-1 | ☑ |
 | 63 | | E-9 | `apps_index_url` 统一到 `ctl.mynet.club` | — | ☑ |
 | 64 | | E-10 | 文档同步 + 代码改端口（8720→8096） | — | ☑ |
 | | | | **▶ M2 控制面完成 · M3 产品面可用 · M4 平台面收口** | | |
