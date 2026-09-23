@@ -405,7 +405,7 @@ mynetd ═══════ WebSocket ═══════> gateway ── 内
 - gateway 只做**字节中继**：`fetch` 携带 method/path/headers/body，
   gateway 转成对 back 的一次内网 HTTP 调用，**不解析载荷**，且只放行**白名单路径**；
 - **心跳也默认走网关**（`relay_heartbeat=true`），所以「back 对节点不可达」成立；
-- 本机 API（`localapi`）监听 `127.0.0.1:8720`，Bearer 本机 token（落盘 0600），
+- 本机 API（`localapi`）监听 `127.0.0.1:8096`，Bearer 本机 token（落盘 0600），
   提供 `/status`、`/logs`、`/service/{start,stop,reload}`、`/config/{sync,refresh}`、
   `/peers`、`/proxy[/enable|disable]`、`/zones[/switch]`、`/nodes`、`/relay`；
 - `/relay` 就是 GUI 取平台态的通道，经 `localRelay → ControlPlane → gatewayclient` 中继到 back。

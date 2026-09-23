@@ -186,7 +186,7 @@ callback：`PATCH .../commands/{id}/result`（以 back 为准）。
 ## 7. 待定（实现前确认）
 
 1. ~~HTTP 端口默认值与 local token 落盘路径~~ → **已临时定**：为避免阻塞实现，取了明确
-   默认值并全部允许配置覆盖（`mynetd.json` 的 `local_api.listen` = `127.0.0.1:8720`、
+   默认值并全部允许配置覆盖（`mynetd.json` 的 `local_api.listen` = `127.0.0.1:8096`、
    `local_api.token_file` = `<MYNET_HOME>/var/run/local-api.token`）。`mynet_desktop`
    不在当前工作区、无法咨询；打包侧有约定后**改配置即可，不必改代码**
 2. ubus 方法名大小写统一（OpenWrt 惯用 `mynet.service.reload`）——**仍待定**：

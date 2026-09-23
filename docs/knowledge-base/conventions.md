@@ -294,3 +294,13 @@ $MYNET_HOME/
 ### Lua — mynet_lua
 - Lua 5.1 / LuCI v3 MVC
 - OpenWrt 包格式 (.ipk)
+
+
+## 产物命名（E-8 SSOT）
+
+产物前缀统一 **`mynet_agent_*`**（不是 `agent_*`）：
+
+- `mynet_agent_linux_*` / `mynet_agent_darwin_*` / `mynet_agent_windows_*`
+- `mynet_agent_openwrt_*.ipk`
+
+与 `ReleaseDomainService` 一致；守护红线 C3 会拦 `agent_(linux|darwin|…)` 漂移。

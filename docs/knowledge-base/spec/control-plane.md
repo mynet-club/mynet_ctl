@@ -398,3 +398,11 @@ GET /api/v1/relay?path=<back-api-path>
 - [ ] gateway challenge 参数（nonce 长度、ts 窗口、重放缓存 TTL）——见 [`node-keying.md`](node-keying.md) §8
 - [ ] 控制面身份密钥是否独立于驱动密钥（建议独立，避免 wg/gnb 混用）——见 [`node-keying.md`](node-keying.md) §6
 - [ ] GUI `relay` 域的路径白名单具体清单
+
+
+## apps_index_url（E-9 SSOT）
+
+分发索引统一 **`https://ctl.mynet.club`**（不是 `download.mynet.club`）。
+
+- Go 侧 `updater` 与 OpenWrt 侧取同一基址
+- `download.mynet.club` 兼容层保留给旧客户端，新链路一律 `ctl.mynet.club`
