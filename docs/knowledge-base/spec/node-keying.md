@@ -303,3 +303,10 @@ gateway 校验：ed25519_verify(sig, challenge, node_keys.public_key)
 - [ ] gateway challenge 的参数（nonce 长度、ts 窗口、重放缓存 TTL）
 - [ ] back 心跳 HMAC 验签的具体格式确认（base64/hex、消息拼接与 `plugins.md` 对齐）
 - [ ] WG 节点接入时控制面鉴权密钥如何下发（BundleEnvelope 字段）
+
+---
+
+## 附：三端对照与连通性模型
+
+见 [`node-connectivity-checklist.md`](../node-connectivity-checklist.md)：
+PHP 扩展 / Go / C 对照表 + 节点连通性 **A–E 五步** + 过夜实测 10 条发现。

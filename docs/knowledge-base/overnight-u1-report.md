@@ -184,3 +184,15 @@ reachabilityPlan → target 10.31.0.1:8080, allowed=false, warnings=[无授权�
 
 ## T3-3 备份脚本实测
 `deploy/backup.sh` 可跑；mysqldump 缺失时跳过 DB 段，目录 0700、产物 0600。
+
+### 巡检 2026-09-24T02:10:39+08:00
+- 长稳: 2026-09-24T01:36:40+08:00 gnb_ab:0% packet loss wg_bc:0% packet loss bridge:hello-from-B-via-bri
+- G3: G3 TUNNEL PASS
+
+### 巡检 2026-09-24T05:05:33+08:00
+- 长稳: end 2026-09-24T03:32:33+08:00
+- G3: G3 TUNNEL PASS
+
+### 巡检 2026-09-24T05:43:36+08:00
+- 长稳: end 2026-09-24T03:32:33+08:00
+- G3: G3 TUNNEL PASS
