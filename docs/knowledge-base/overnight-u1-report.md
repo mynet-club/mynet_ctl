@@ -134,3 +134,20 @@ A 经 C 桥访问 B wg 侧多文件（`/p.txt` → `proxy-target-ok`）。
 ## GNB 密钥 CLI fallback（新增）
 `NodeKeyDomainService` 在 `gnb_ed25519` 扩展缺失时调 `gnb_crypto` CLI。
 实测 `pub 64 hex / priv 128 hex`，T3-4 真机密钥已用此路径。
+
+## T2-4 服务域（域层 PASS）
+```
+publish(service_id=6570155289121413)
+reachabilityPlan → target 10.31.0.1:8080, allowed=false, warnings=[无授权，不可达]
+```
+授权后 allowed=true（Domain 测试覆盖）。HTTP TenantServiceController 仍有 500，待续。
+
+## 测试基线（最终）
+| 套件 | 结果 |
+|---|---|
+| `go test ./...` | 全绿 |
+| `phpunit Default` | **73/73 · 2253 assertions** |
+| `security_audit.sh` | PASS |
+| `g3_tunnel.sh` | **三场景 PASS** |
+| `u1_mesh.sh` | **6/6 PASS** |
+| 长稳 2h | 进行中（目前 0% loss + bridge OK） |
