@@ -313,7 +313,7 @@ P0 ──┬──────────────────────�
 | 13 | | F-6 | `system.json` 机制（`mynet detector` 产出 + 双端消费 + 指纹重跑） | F-1 | ☑ |
 | 14 | | S2-1 | `mynet metrics`（心跳数据源：系统指标 + VPN/peer 状态） | S1-2 | ☑ |
 | 15 | | F-2 | 写入移到 `mynet apply`（OS 路由/防火墙，从 shell/Lua 迁） | F-6 | ☑ |
-| 16 | | F-4 | 平台实现（linux / darwin / windows / openwrt）—— darwin 路由已并入；windows/openwrt 细化待补 | F-2 | ☐ |
+| 16 | | F-4 | 平台实现（linux / darwin / windows / openwrt） | F-2 | ☑ |
 | 17 | | F-5 | 多写者收敛（唯一写入者 = `mynet apply`） | F-2 | ☑ |
 | 18 | | D-7 | `mynet` 子命令收口 | S2-1 | ☑ |
 | 19 | **S3 纯通信 mynetd** | D-11 | mynetd 默认瘦（只留 `embed` 开关） | S1-2 | ☑ |
