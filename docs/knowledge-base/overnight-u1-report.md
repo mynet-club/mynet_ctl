@@ -113,3 +113,24 @@ A 经 C 桥访问 B wg 侧多文件（`/p.txt` → `proxy-target-ok`）。
 
 第二个路由劫持教训：`10.23.0.2` 被 `via 192.168.0.1 dev ens18` 抢走（wg AllowedIPs 含 10.31.0.0/24 引起路由表混乱）。
 **规范**：wg AllowedIPs 只放对端 TUN /32；跨驱动网段用显式桥，不进 AllowedIPs。
+
+## T3-4 真机节点注册（PASS）
+- back :8080 + sqlite
+- 真机节点 `real-0.32` 注册成功 `node_id=1245816621804034`
+- 密钥生成；GET keys **不含 private_key**
+
+## 当前总分（过夜）
+| 段 | 状态 |
+|---|---|
+| U1-A 多节点 | ✅ gnb mesh · wg mesh · **G3 三场景 PASS** |
+| U1-B 产品 | ✅ 服务可达 · proxy · demo 脚本 · UI 静态验收 |
+| U1-C 生产 | ✅ compose · 备份 · 部署清单 |
+| U1-Z 回归 | ✅ go/php/security_audit 全绿 |
+| U1-A7 稳定性 | ⏳ 监视中（目前 0% loss） |
+
+## U1-A7 稳定性 30min（PASS）
+全程采样 **A-B / B-C / C-A 全 0% packet loss**（约 20+ 轮）。
+
+## GNB 密钥 CLI fallback（新增）
+`NodeKeyDomainService` 在 `gnb_ed25519` 扩展缺失时调 `gnb_crypto` CLI。
+实测 `pub 64 hex / priv 128 hex`，T3-4 真机密钥已用此路径。
