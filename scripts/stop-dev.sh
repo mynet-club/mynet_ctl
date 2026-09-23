@@ -23,7 +23,7 @@ stop_service() {
         if kill -0 "$pid" 2>/dev/null; then
             kill "$pid" 2>/dev/null
             # 也清理子进程（artisan serve 会 fork php worker）
-            pkill -P "$pid" 2>/dev/null || true
+            pkill -P "$pid"  # 只杀该 pid 的子进程（非按名） 2>/dev/null || true
             ok "已停止 ${name} (PID ${pid})"
         else
             warn "${name} 已不在运行 (PID ${pid})"
