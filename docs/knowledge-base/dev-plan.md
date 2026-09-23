@@ -337,11 +337,11 @@ P0 ──┬──────────────────────�
 | 37 | | B-6 | `KeyExchangeDomainService` | B-4 | ☑ |
 | 38 | | B-7 | `TransportPlannerDomainService` | B-5 | ☑ |
 | 39 | | B-9 | 补缺表（`route_permissions` 等三表有定论） | B-1 | ☑ |
-| 40 | **S6 驱动** | A-1 | X25519 密钥生成与落盘 | — | ☐ |
-| 41 | | A-2 | `WireGuardDriver` 只读（解析 `wg show`） | A-1 | ☐ |
-| 42 | | A-3 | 补足 `VPNLifecycleDriver`（gnb+wg 双侧，实现归 `mynet`） | A-2, F-2 | ☐ |
-| 43 | | A-4 | `vpn_driver_factory` 接上 | A-2 | ☐ |
-| 44 | | A-5 | `WireGuardIntent` 落地（fixture 驱动） | A-4 | ☐ |
+| 40 | **S6 驱动** | A-1 | X25519 密钥生成与落盘 | — | ☑ |
+| 41 | | A-2 | `WireGuardDriver` 只读（解析 `wg show`） | A-1 | ☑ |
+| 42 | | A-3 | 补足 `VPNLifecycleDriver`（gnb+wg 双侧，实现归 `mynet`） | A-2, F-2 | ☑ |
+| 43 | | A-4 | `vpn_driver_factory` 接上 | A-2 | ☑ |
+| 44 | | A-5 | `WireGuardIntent` 落地（fixture 驱动） | A-4 | ☑ |
 | 45 | | A-7 | `nodes.vpn_type` 多值 | B-2, B-4 | ☐ |
 | 46 | | C-1 | back X25519 密钥 + `mynet setup` 下发 | D-7, B-1 | ☐ |
 | 47 | | C-2 | 节点↔back 改 DH+HMAC（复用驱动密钥） | A-1, B-3 | ☐ |
