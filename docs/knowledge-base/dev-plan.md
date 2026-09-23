@@ -328,14 +328,14 @@ P0 ──┬──────────────────────�
 | 28 | | C-8 | relay 白名单细粒度（放行 auth 会话 5 条，删 3 个 fragment） | — | ☑ |
 | 29 | | C-7 | gateway 加用户面 HTTPS 入口 `/v1/relay` | C-8 | ☑ |
 | 30 | | C-6 | presence 走 Redis pub/sub | C-4 | ☐ |
-| 31 | **S5 back 业务层** | B-1 | create migration 全套 + baseline 策略 | S1-1 | ☐ |
-| 32 | | B-2 | `node_keys` 加 `algorithm`/`key_version`/`status` | B-1 | ☐ |
-| 33 | | B-3 | 公钥编码统一 hex | B-2 | ☐ |
-| 34 | | B-4 | `ConnectionGrant` + `KeyExchange` 表 | B-1 | ☐ |
-| 35 | | B-8 | `Connection.status` 补 `suspended`/`revoked` | B-1 | ☐ |
-| 36 | | B-5 | `ConnectionDomainService` | B-4, B-8 | ☐ |
-| 37 | | B-6 | `KeyExchangeDomainService` | B-4 | ☐ |
-| 38 | | B-7 | `TransportPlannerDomainService` | B-5 | ☐ |
+| 31 | **S5 back 业务层** | B-1 | create migration 全套 + baseline 策略 | S1-1 | ☑ |
+| 32 | | B-2 | `node_keys` 加 `algorithm`/`key_version`/`status` | B-1 | ☑ |
+| 33 | | B-3 | 公钥编码统一 hex | B-2 | ☑ |
+| 34 | | B-4 | `ConnectionGrant` + `KeyExchange` 表 | B-1 | ☑ |
+| 35 | | B-8 | `Connection.status` 补 `suspended`/`revoked` | B-1 | ☑ |
+| 36 | | B-5 | `ConnectionDomainService` | B-4, B-8 | ☑ |
+| 37 | | B-6 | `KeyExchangeDomainService` | B-4 | ☑ |
+| 38 | | B-7 | `TransportPlannerDomainService` | B-5 | ☑ |
 | 39 | | B-9 | 补缺表（`route_permissions` 等三表有定论） | B-1 | ☐ |
 | 40 | **S6 驱动** | A-1 | X25519 密钥生成与落盘 | — | ☐ |
 | 41 | | A-2 | `WireGuardDriver` 只读（解析 `wg show`） | A-1 | ☐ |
