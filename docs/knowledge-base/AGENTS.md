@@ -164,6 +164,7 @@ operator / platform / plugin / ticket / sms / form / knowledge / conversation �
 | **`back_priv` 保护等级 > 节点私钥** | 节点私钥泄露只冒充那一个节点；`back_priv` 泄露可冒充**所有节点**（`shared = X25519(node_priv, back_pub)`） |
 | **embed WebUI 必须校验 `Origin`/`Host`** | 任何网页都能让浏览器请求 `127.0.0.1:8096`。不校验来源 = DNS rebinding |
 | **本地 token 用 HttpOnly + SameSite=Strict** | 防 XSS 读取与 CSRF |
+| **禁止按名字杀进程** | 多实例 gnb / procd / systemd 可同名并存。用 init 系统或 **pidfile+cmdline** 精确停（参照 `node.lua:stop_gnb`）。禁 `pkill -x` / `killall` / `pidof` 取第一个 |
 | **`%!d(string=...)` 这类格式化 bug 产物不进代码库** | `driver/gnb/conf/4147069894021819/ed25519/` 下现有 5 个，搬运时**不搬** |
 
 ---

@@ -142,3 +142,21 @@ E 防火墙放行 + 回程
 | **一节点一网卡** | A/D：一张 TUN；跨驱动靠双驱动节点显式转发 |
 | **跨驱动 = L6 桥** | D/E：显式转发（`cross_driver_bridge.py`），不是透明路由 |
 | **编码与布局正交** | B：hex 落库 ↔ base64 写 wg；GNB 128/64 hex |
+
+---
+
+## 5. 进程生命周期铁律（多实例安全）
+
+**禁止按名字杀进程。** procd / systemd / launchd / 多实例 gnb 都可能同名并存。
+
+| ✅ 正确 | ❌ 错误 |
+|---|---|
+| `procd_send_signal` / `/etc/init.d/<svc> stop` | `pkill -x mynetd` |
+| `systemctl stop <unit>` / `launchctl stop` | `killall gnb` |
+| **pidfile + cmdline 校验** 后 `kill <pid>` | `kill $(pidof gnb \| awk '{print $1}')` |
+| PPID 匹配收 `gnb_es`（见 `node.lua:find_child_gnb_es`） | `pkill gnb_es` |
+
+**参照实现**：`mynet_openwrt/luasrc/model/mynet/node.lua` 的 `stop_gnb(node_id)`
+— pidfile → kill 主进程 → PPID 收 gnb_es → 兜底按二进制路径（仍只杀本安装的）。
+
+**排查实例**用 `pgrep -f 'gnb -c <conf>'`（cmdline 匹配 conf 目录），不用 `pidof gnb`。
