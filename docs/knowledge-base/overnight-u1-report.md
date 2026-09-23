@@ -151,3 +151,25 @@ reachabilityPlan → target 10.31.0.1:8080, allowed=false, warnings=[无授权�
 | `g3_tunnel.sh` | **三场景 PASS** |
 | `u1_mesh.sh` | **6/6 PASS** |
 | 长稳 2h | 进行中（目前 0% loss + bridge OK） |
+
+## T3-2 TLS（接口就绪，证书待人工）
+- compose 已留 HTTPS 入口位
+- **红线**：DNS/证书变更走人工（过夜授权口径）
+- 有证书后：caddy/nginx 终结 TLS → app:8080 / gateway:8710
+
+## 已知待续（交班）
+
+| 项 | 说明 |
+|---|---|
+| **TenantServiceController HTTP 500** | 域层 `ServiceDomainService` / `TenantScopedServiceService` **已通**；HTTP 层 getCurrentTenantId 已加回退，仍有 500（未写日志） |
+| **PHP `gnb_ed25519` 扩展** | 缺失；已用 `gnb_crypto` CLI fallback（有单测） |
+| **mynet_agent/back 偶发 push** | GitHub 网络抖；本地 commit 完好 |
+| **0.16 旧 e2e 私钥残留** | 进程已停，建议清理 `/home/arthur/mynet` |
+
+## 过夜交付物（脚本）
+- `scripts/e2e/g3_tunnel.sh` — G3 三场景
+- `scripts/e2e/u1_mesh.sh` — 三机矩阵
+- `scripts/e2e/cross_driver_bridge.py` — 跨驱动桥
+- `scripts/e2e/t23_social.sh` / `demo_t2.sh` — 产品链
+- `scripts/security_audit.sh` — 安全复检
+- `deploy/docker-compose.yml` + `backup.sh` + `README.md`
