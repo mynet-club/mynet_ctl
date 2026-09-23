@@ -50,7 +50,7 @@ R1 端到端闭环 ──────────────► 双节点 gnb+w
 | 6 | | R1-6 | **G1**：gnb 场景 + wg 场景 + 跨驱动 三场景 e2e 绿 | R1-2..5 | ☐ |
 | 7 | **R2 执行器** | R2-1 | `mynet setup`：生成节点密钥 + 拉 `back_pub` + 写 `mynet.conf` | R1-4 | ☑ |
 | 8 | | R2-2 | `mynet status` / `check` / `nodes` / `platform` 只读实现 | — | ☑ |
-| 9 | | R2-3 | `mynet refresh-{routes,address,config,keys}` 对接 Bundle | R1-3 | ☐ |
+| 9 | | R2-3 | `mynet refresh-{routes,address,config,keys}` 对接 Bundle | R1-3 | ☑ |
 | 10 | | R2-4 | `mynet install/uninstall`（桌面 systemd/launchd + OpenWrt procd） | R3-1 | ☐ |
 | 11 | | R2-5 | `mynet update` 对接 ctl apps 索引（E-9） | R4-1 | ☐ |
 | 12 | **R3 平台** | R3-1 | OpenWrt 实机：ipk 装载 + mynetd procd + LuCI | — | ☐ |
