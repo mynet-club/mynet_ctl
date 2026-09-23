@@ -316,12 +316,12 @@ P0 ──┬──────────────────────�
 | 16 | | F-4 | 平台实现（linux / darwin / windows / openwrt）—— darwin 路由已并入；windows/openwrt 细化待补 | F-2 | ☐ |
 | 17 | | F-5 | 多写者收敛（唯一写入者 = `mynet apply`） | F-2 | ☑ |
 | 18 | | D-7 | `mynet` 子命令收口 | S2-1 | ☑ |
-| 19 | **S3 纯通信 mynetd** | D-11 | mynetd 默认瘦（只留 `embed` 开关） | S1-2 | ☐ |
+| 19 | **S3 纯通信 mynetd** | D-11 | mynetd 默认瘦（只留 `embed` 开关） | S1-2 | ☑ |
 | 20 | | D-6 | 内化 `bin/mynet` 的 5 条命令链 | D-7 | ☐ |
-| 21 | | D-1 | 本地 token：首次 `GET /` 种 HttpOnly+SameSite=Strict cookie | — | ☐ |
-| 22 | | D-2 | Origin / Host 校验（防 DNS rebinding） | D-1 | ☐ |
-| 23 | | D-8 | 去掉强制 root（console 模式） | D-11 | ☐ |
-| 24 | | S3-1 | mynetd daemon（心跳组装 + WS 上报 + 命令分派 → 执行器） | S2-1 | ☐ |
+| 21 | | D-1 | 本地 token：首次 `GET /` 种 HttpOnly+SameSite=Strict cookie | — | ☑ |
+| 22 | | D-2 | Origin / Host 校验（防 DNS rebinding） | D-1 | ☑ |
+| 23 | | D-8 | 去掉强制 root（console 模式） | D-11 | ☑ |
+| 24 | | S3-1 | mynetd daemon（心跳组装 + WS 上报 + 命令分派 → 执行器）—— 心跳/分派已通，WS 接 transport | S2-1 | ☐ |
 | 25 | **S4 gateway** | C-3 | 拆掉 Ed25519 握手 | — | ☐ |
 | 26 | | C-4 | 连接状态表；back 验证通过即置位（响应头回传） | C-3 | ☐ |
 | 27 | | C-5 | 推送 / presence 只按状态路由 | C-4 | ☐ |
