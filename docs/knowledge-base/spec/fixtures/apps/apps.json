@@ -1,0 +1,36 @@
+{
+  "schema_version": "2.1",
+  "generated_at": "2026-09-23T00:00:00Z",
+  "base_url": "https://ctl.mynet.club",
+  "products": [
+    {
+      "name": "mynet_agent",
+      "external_key": "mynet",
+      "manifest_url": "/d/mynet/manifest.json",
+      "releases": [
+        {"version": "0.1.0", "platform": "linux_amd64", "url": "/d/mynet/mynet_agent_linux_amd64.tgz", "checksum": "sha256:0"}
+      ]
+    },
+    {
+      "name": "gnb",
+      "external_key": "gnb",
+      "manifest_url": "/d/gnb/manifest.json",
+      "releases": [
+        {"version": "1.6.8", "platform": "linux_amd64", "url": "/d/gnb/gnb_linux_amd64.tgz", "checksum": "sha256:1"}
+      ]
+    },
+    {
+      "name": "wireguard",
+      "external_key": "wireguard",
+      "manifest_url": "/d/wireguard/manifest.json",
+      "releases": [
+        {"version": "1.0.0", "platform": "linux_amd64", "url": "/d/wireguard/wg_linux_amd64.tgz", "checksum": "sha256:2"}
+      ]
+    }
+  ],
+  "apps": {
+    "mynet": "/d/mynet/manifest.json",
+    "gnb": "/d/gnb/manifest.json",
+    "wireguard": "/d/wireguard/manifest.json"
+  }
+}

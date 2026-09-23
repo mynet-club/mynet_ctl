@@ -44,22 +44,22 @@ R1 端到端闭环 ──────────────► 双节点 gnb+w
 |---|---|---|---|---|---|
 | 1 | **R1 闭环** | R1-1 | 集成脚本 `scripts/e2e.sh`：起 back(testbench/sqlite) + gateway + mynetd ×2 | — | ☑ |
 | 2 | | R1-2 | 节点注册 → 密钥登记（KeyExchange）→ 好友/连接/授权 链 | R1-1 | ☑ |
-| 3 | | R1-3 | BundleEnvelope 下发 → 节点 Apply → `ip route` 可见（可 dry-run） | R1-2 | ☐ |
+| 3 | | R1-3 | BundleEnvelope 下发 → 节点 Apply → `ip route` 可见（可 dry-run） | R1-2 | ☑ |
 | 4 | | R1-4 | 心跳 DH+HMAC 真签真验（Go↔PHP 联测用例） | R1-1 | ☑ |
-| 5 | | R1-5 | WS 命令下发 → mynet 执行 → 结果回传 | R1-1 | ☐ |
-| 6 | | R1-6 | **G1**：gnb 场景 + wg 场景 + 跨驱动 三场景 e2e 绿 | R1-2..5 | ☐ |
+| 5 | | R1-5 | WS 命令下发 → mynet 执行 → 结果回传 | R1-1 | ☑ |
+| 6 | | R1-6 | **G1**：gnb 场景 + wg 场景 + 跨驱动 三场景 e2e 绿 | R1-2..5 | ☑ |
 | 7 | **R2 执行器** | R2-1 | `mynet setup`：生成节点密钥 + 拉 `back_pub` + 写 `mynet.conf` | R1-4 | ☑ |
 | 8 | | R2-2 | `mynet status` / `check` / `nodes` / `platform` 只读实现 | — | ☑ |
 | 9 | | R2-3 | `mynet refresh-{routes,address,config,keys}` 对接 Bundle | R1-3 | ☑ |
-| 10 | | R2-4 | `mynet install/uninstall`（桌面 systemd/launchd + OpenWrt procd） | R3-1 | ☐ |
-| 11 | | R2-5 | `mynet update` 对接 ctl apps 索引（E-9） | R4-1 | ☐ |
+| 10 | | R2-4 | `mynet install/uninstall`（桌面 systemd/launchd + OpenWrt procd） | R3-1 | ☑ |
+| 11 | | R2-5 | `mynet update` 对接 ctl apps 索引（E-9） | R4-1 | ☑ |
 | 12 | **R3 平台** | R3-1 | OpenWrt 实机：ipk 装载 + mynetd procd + LuCI | — | ☐ |
 | 13 | | R3-2 | `verify_gnb_es_orphan.sh --crash` PASS → 切 `rc.mynet` GNB 到 procd | R3-1 | ☐ |
 | 14 | | R3-3 | `_gnb_peer_heal` 新判据实机 24h 无抖动 | R3-2 | ☐ |
 | 15 | | R3-4 | Lua 真收窄：结果回 mynetd，去掉自报心跳 | R3-1 | ☐ |
 | 16 | | R3-5 | desktop：macOS launchd / Linux systemd 装载冒烟 | — | ☐ |
-| 17 | **R4 分发** | R4-1 | `make dist` 三平台产物（`mynet_agent_*`） | R2-2 | ☐ |
-| 18 | | R4-2 | ctl `apps.json` 索引生成 + 版本单调 | R4-1 | ☐ |
+| 17 | **R4 分发** | R4-1 | `make dist` 三平台产物（`mynet_agent_*`） | R2-2 | ☑ |
+| 18 | | R4-2 | ctl `apps.json` 索引生成 + 版本单调 | R4-1 | ☑ |
 | 19 | | R4-3 | `mynet update` 升级一轮：旧版→新版→健康检查 | R4-2, R2-5 | ☐ |
 | 20 | | R4-4 | **G2**：冷装 → 业务可用 → 在线升级 全流程可重复 | R3-5, R4-3 | ☐ |
 | 21 | **R5 规模** | R5-1 | 多节点并行（放宽互斥，`nodes/switch` → 并行会话） | G1 | ☐ |
