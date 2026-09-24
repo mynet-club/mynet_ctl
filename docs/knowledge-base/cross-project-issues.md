@@ -72,7 +72,7 @@
 > **控制器本身 12 个 action 全通**，500 来自两个全站性问题；顺着真浏览器联调
 > 又挖出一串后端缺陷。全部按「记录在前、处置在后」入册。
 >
-> 本批 CPI-23 ~ CPI-29 已处置（见「已修复」表）；CPI-30 已于 2026-09-24 修复（见下方 ✅ 标记与「已修复」表）；CPI-31 ~ CPI-35 待处置。
+> 本批 CPI-23 ~ CPI-29 已处置（见「已修复」表）；CPI-30 与 CPI-30a 已于 2026-09-24 修复（见下方 ✅ 标记与「已修复」表）；CPI-31 ~ CPI-35 待处置。
 
 #### 已处置（本批）
 
@@ -341,16 +341,16 @@
 | 2026-09-22 | 本机能力面骨架落地（信封/token 鉴权/HTTP/传输无关 Service 层） | `ee5467e` |
 | 2026-09-22 | 本机能力面 service/config 两域 | `28afbb5` |
 | 2026-09-22 | 本机能力面 peers 域 | `790edbd` |
-| 2026-09-24 | **CPI-23** back 缺 `.env` → `APP_KEY` 空 → **全站每个请求 500**（测试全绿也发现不了） | 待提交 |
-| 2026-09-24 | **CPI-24** 未覆盖框架默认 `redirectGuestsTo` → 不带 `Accept` 头的未鉴权请求 500 而非 401 | 待提交 |
-| 2026-09-24 | **CPI-25** `Node` 只有 scope 无实例方法 → 两个好友节点端点 500 → **连接向导「可用设备」恒 0、下一步永远禁用** | 待提交 |
-| 2026-09-24 | **CPI-26** `SocialDomainService:397` 的 `nodes_count` 硬编码 0（原 `// TODO`） | 待提交 |
-| 2026-09-24 | **CPI-27** `config/cors.php` 默认值缺 scheme+port → 预检无 ACAO 头，浏览器全线拦（本地已配，生产白名单仍待办） | 待提交 |
-| 2026-09-24 | **CPI-28** Feature 套件（43 测试）长期游离在 `Default` 门禁外 → 已并入，`make check` 73/2253 → **126/2398** | 待提交 |
-| 2026-09-24 | **CPI-29** Testbench 不加载 `bootstrap/app.php` → 测试态/生产态分叉；已在 TestCase 镜像（走框架 `Middleware` 入口以对齐三个静态回调） | 待提交 |
-| 2026-09-24 | **CPI-30** `mynet_gui` 的 `.env.development`/`.env.production` 是死文件（Quasar 只认 `.env.dev`/`.env.prod`）→ `git mv` 改名（rename 56%/58%，历史保留）+ 同步 9 处引用点（`quasar.config.ts` 手工加载器、`deployment.sh`、`quick-deploy.sh`、`pre-deploy-check.sh`、`verify-debug-disabled.sh`、`.env.example`、`docs/UPGRADE-v2.md`、`docs/06-部署指南.md`、`.github/copilot-instructions-详细版.md`）。实测：dev 日志 `Using .env files: .env, .env.local, .env.dev`；build 日志 `… .env.prod`；`dist/spa` 里 `api.mynet.local` **0 次**、`https://my.mynet.club/api/v1` 已烘入 | 待提交 |
-| 2026-09-24 | **CPI-30 连带发现（未修，待裁定）** Quasar 的 env 优先级与 Vite **相反**：`.env.dev` 覆盖 `.env.local`（`env.js:101-116` 的 `Object.fromEntries(fileList.flatMap(…))`，fileList 里 `.env.local` 第 2 位、`.env.[buildType]` 第 3 位，后者胜出）。本地覆盖必须写 `.env.local.dev`，而它**不被 `.gitignore:13` 的 `.env.*.local` 匹配** → 有误提交风险 | 待提交 |
-| 2026-09-24 | **T2-6 达成**：mynet_gui 四页真打通新 back，连接向导四步走通并落库（`req=4456240307586718 status=pending`） | 待提交 |
+| 2026-09-24 | **CPI-23** back 缺 `.env` → `APP_KEY` 空 → **全站每个请求 500**（测试全绿也发现不了） | 本地操作（`.env` 不入库） |
+| 2026-09-24 | **CPI-24** 未覆盖框架默认 `redirectGuestsTo` → 不带 `Accept` 头的未鉴权请求 500 而非 401 | `c98a30b` |
+| 2026-09-24 | **CPI-25** `Node` 只有 scope 无实例方法 → 两个好友节点端点 500 → **连接向导「可用设备」恒 0、下一步永远禁用** | `30e3f88` |
+| 2026-09-24 | **CPI-26** `SocialDomainService:397` 的 `nodes_count` 硬编码 0（原 `// TODO`） | `30e3f88` |
+| 2026-09-24 | **CPI-27** `config/cors.php` 默认值缺 scheme+port → 预检无 ACAO 头，浏览器全线拦（本地已配，生产白名单仍待办） | 本地 `.env`；生产待办（H2 之后） |
+| 2026-09-24 | **CPI-28** Feature 套件（43 测试）长期游离在 `Default` 门禁外 → 已并入，`make check` 73/2253 → **126/2398** | `c98a30b` |
+| 2026-09-24 | **CPI-29** Testbench 不加载 `bootstrap/app.php` → 测试态/生产态分叉；已在 TestCase 镜像（走框架 `Middleware` 入口以对齐三个静态回调） | `c98a30b` |
+| 2026-09-24 | **CPI-30** `mynet_gui` 的 `.env.development`/`.env.production` 是死文件（Quasar 只认 `.env.dev`/`.env.prod`）→ `git mv` 改名（rename 56%/58%，历史保留）+ 同步 9 处引用点（`quasar.config.ts` 手工加载器、`deployment.sh`、`quick-deploy.sh`、`pre-deploy-check.sh`、`verify-debug-disabled.sh`、`.env.example`、`docs/UPGRADE-v2.md`、`docs/06-部署指南.md`、`.github/copilot-instructions-详细版.md`）。实测：dev 日志 `Using .env files: .env, .env.local, .env.dev`；build 日志 `… .env.prod`；`dist/spa` 里 `api.mynet.local` **0 次**、`https://my.mynet.club/api/v1` 已烘入 | `mynet_gui d0961bf` |
+| 2026-09-24 | **CPI-30a** Quasar 的 env 优先级与 Vite **相反**：`.env.dev` 覆盖 `.env.local`（`env.js:101-116` 的 `Object.fromEntries(fileList.flatMap(…))`，fileList 里 `.env.local` 第 2 位、`.env.[buildType]` 第 3 位，后者胜出）。本地覆盖必须写 `.env.local.dev`，而它**不被 `.gitignore:13` 的 `.env.*.local` 匹配** → 有误提交风险 | `mynet_gui d0961bf` |
+| 2026-09-24 | **T2-6 达成**：mynet_gui 四页真打通新 back，连接向导四步走通并落库（`req=4456240307586718 status=pending`） | 任务达成（载体 `mynet_gui`；产物散在 CPI-23~30 各行） |
 
 ---
 
@@ -386,7 +386,13 @@
 1. 在「待修复」加条目：ID / 位置 / 现状 / 证据 / 影响 / 修复建议 / 优先级
 2. 链接相关 spec / 代码位置；同类问题交叉引用已有文档（如
    mynet-back-namespace-drift.md），不要重复记账
-3. 修复完成后移到「已修复」表，commit message 里带上条目 ID
+3. 修复完成后移到「已修复」表，commit message 里带上条目 ID。
+   ⚠️ **但移表时通常还没提交**，于是第三列只能先写「待提交」占位。
+   这一步有个已真实发生的失效：**提交后没人回头把 sha 填上**。
+   2026-09-24 清理时发现「已修复」表里 **10 行**的占位从写下那天起就没再动过
+   （跨越 2 个仓、4 次提交），台账的「已修复」栏因此整体不可信。
+   → 规矩：**写「待提交」的同时就把它当成待办**，commit 完当轮回填短 sha；
+   或者干脆等 commit 完再移表（推荐，少一次往返）。
 4. 必要时更新 spec/* 或 conventions.md
 ```
 
