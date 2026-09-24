@@ -335,16 +335,70 @@ gateway: 已关闭（退出时连接数 0）                          ← 优雅
 
 | ID | 内容 | 前置 | 验收判据 | 证据形式 |
 |---|---|---|---|---|
-| V2-1 | ctl `PRODUCTS` 增 `agent` + `VALID_COMBINATIONS`（`:78-85`）+ `ManifestService::ALIASES`（`:33-35`）同步 | — | `validateProduct('agent')` 通过；上传 agent 产物返 201 | phpunit Feature 打**真端点** |
-| V2-2 | 修 `apps.json` 形状分歧：真实 `getAppsIndex()` 返回 map 且无 `releases[]`/`checksum`，而 fixture 与 Go 解析器要 array + `releases[]{version,platform,url,checksum}` | V2-1 | 二者一致；**`apps_index_test.go` 不再 `t.Skip`，改为打真端点** | Go 测试实测输出（非 skip） |
-| V2-3 | 版本注入：`-ldflags "-X .../utils.AppVersion=$(VER) -X .../mynet.Version=$(VER)"` + `-s -w` strip | — | 产物 `mynet --version` 输出真实版本而非 `dev`；体积下降 | 实测输出 + `ls -l` 对比 |
-| V2-4 | 打包：产物打 `.tgz`/`.zip`、文件名带版本（对齐 `ReleaseDomainService.php:108-119`）、生成 `checksums.txt`（可照抄 `build_openwrt.yml:198-225` 的合并逻辑） | V2-3 | 文件名与 ctl URL 形态一致；sha256 可核 | `sha256sum -c` 通过 |
-| V2-5 | 实现 `upgrade.Fetch`：真 HTTP GET `/d/apps.json` + `/d/{product}/manifest.json` | V2-2 | 从**本地真跑的 ctl** 拉到 artifact 列表 | e2e：起 ctl → 灌两版 → `mynet update --check` 列出新版 |
-| V2-6 | 实现 `upgrade.Install`：下载 → **sha256 校验**（`Artifact.Checksum` 现在无人读）→ 解包 → 备份旧二进制 → 原子替换 → 健康检查 → **失败回滚** | V2-5 | 正常升级成功；**故意喂错 checksum 必须拒绝并回滚** | e2e 两条：happy path + 校验失败回滚 |
-| V2-7 | 版本比较改 **semver**（`cmd_update.go:27` 现在是字典序，`0.10.0 < 0.9.0`） | — | `0.9.0 < 0.10.0`；单测覆盖边界 | 单测表驱动 |
-| V2-8 | **真升级一轮**（重做 R4-3） | V2-5..7 | 旧版进程 → 升级 → 新版进程 → 节点仍在线、心跳不断 | e2e 脚本 + 升级前后版本号对比 |
-| V2-9 | OpenWrt `mynet-agent` ipk：`Package/mynet-agent/install`（`Makefile:190-196`）现在 `[ -f ./files/mynetd ] && … \|\| true` → **文件缺失时静默产出空 ipk**；`PKGARCH:=all`（`:182`）无法区分 mips/mipsle | V2-4 | 缺 `files/mynetd` 时**构建失败而非产出空包**；按 arch 分包 | 构建日志 + `tar tf` 验内容 |
-| V2-10 | CI：`mynet_agent` 新建 `.github/workflows/`（该 repo 目前**一个都没有**），tag → 多平台出包 → 上传 ctl | V2-4, H11 | tag 触发后 ctl 能拉到该版本 | Actions 运行记录 + ctl manifest |
+| V2-1 | ctl `PRODUCTS` 增 `mynet_agent` | — | `validateProduct('mynet_agent')` 通过 | phpunit | ✅ 2026-09-24 |
+| V2-2 | 修 `apps.json` 形状分歧 | V2-1 | Go 解析器与服务端一致 | Go 测试打真端点 | ✅ 2026-09-24 |
+| V2-3 | 版本注入 + strip | — | 产物报真实版本而非 `dev`；体积下降 | 实测输出 | ✅ 2026-09-24 |
+| V2-4 | 打包 + `checksums.txt` | V2-3 | 文件名与 ctl 一致；sha256 可核 | `make dist` 实测 | ✅ 2026-09-24 |
+| V2-5 | 真 `upgrade.Fetch`（两步协议） | V2-2 | 拉到 artifact 列表 | e2e | ✅ 2026-09-24 |
+| V2-6 | 真 `upgrade.Install`（校验+备份+原子替换+自检+回滚） | V2-5 | 正常升级成功；错 checksum 必须拒绝且不回滚 | e2e 两条 | ✅ 2026-09-24 |
+| V2-7 | 版本比较改语义 | — | `0.9.0 < 0.10.0` | 单测表驱动 + 变异 | ✅ 2026-09-24 |
+| V2-8 | 真升级一轮（重做 R4-3） | V2-5..7 | 旧版 → 新版，版本号确实改变 | e2e | ✅ **V2-8a**：agent 侧真二进制跑通（见下）。**ctl 侧**（上传两版 + 真 ctl 拉取）待 V2-8b |
+| V2-9 | OpenWrt `mynet-agent` ipk：`Package/mynet-agent/install`（`Makefile:190-196`）现在是 `[ -f ./files/mynetd ] && … \|\| true` → **缺文件时静默产出空 ipk**；`PKGARCH:=all`（`:182`）无法区分 mips/mipsle | V2-4 | 缺 `files/mynetd` 时**构建失败而非产出空包**；按 arch 分包 | 构建日志 + `tar tf` | ☐ |
+| V2-10 | CI：`mynet_agent` 新建 `.github/workflows/`（该 repo 目前**一个都没有**） | V2-4, H11 | tag 触发后 ctl 能拉到该版本 | Actions 记录 + ctl manifest | ☐（需 H11） |
+
+#### V2 实测证据（2026-09-24）
+
+**真升级一轮（V2-8a）**——本机静态服务提供两步协议索引，跑**真的 `mynet` 二进制**
+（非注入假函数）：
+
+```
+升级前  mynet v0.0.1 / mynetd v0.0.1
+$ MYNET_APPS_INDEX=http://127.0.0.1:18090 mynet update
+  latest mynet v0.0.2 darwin/arm64        退出码 0
+升级后  mynet v0.0.2 / mynetd v0.0.2
+        bin/ 留下 mynet.bak / mynetd.bak（mynet_gateway 本次新增故无 .bak —— 正确）
+```
+
+负路径也验过：
+1. **旧 TUI 被忽略**：索引里另挂 `mynet`(TUI) 的 v9.9.9（版本号故意更高）→
+   未被选中，仍升到 v0.0.2。（`mynet` 是 tui 的别名且已 deprecated，
+   映射到 ComponentMynet 会去装那个废弃客户端 —— 这是刻意不映射，不是遗漏。）
+2. **校验和不符被拒**：篡改 v0.0.2 产物一个字节 → `sha256 不匹配`、
+   退出码 1、mynet **仍是 v0.0.1**、且无 `.bak` 残留（在动任何文件之前就拒了）。
+
+**版本注入**：三个二进制分别报出注入版本；`-s -w` 让 mynetd 由 9.7MB 降到 7.2MB。
+
+**打包**：`make dist` 产出 5 平台 × 3 二进制 + 5 行 `checksums.txt`。
+
+**过程中修掉的真问题**：
+- `shared/utils/constants.go` 的 `AppVersion` 是 **const**，而 `-X` 只能覆盖变量、
+  对常量无效**且不报错** —— 那句「构建时由 -ldflags 覆盖」从来没成立过。
+- `KeepBackup bool` 的零值是 false，会让默认行为（删备份）与字面意思（保留）相反；
+  已改为 `RemoveBackup`。
+- `safeJoin` 原先靠 `filepath.Clean` 把 `..` 归一化掉（逃不出去但静默接受畸形归档），
+  改为显式拒绝含 `..` 分量。
+- `DIST_MATRIX` 用空格分隔时，`for x in $(VAR)` 会按 IFS 切词、变量里的引号是字面量，
+  只得到一堆单词而非三元组；改用冒号分隔。
+
+**门禁**：`mynet_agent` `make check` ✓（16 包）；`mynet_ctl` `make check` ✓
+（**50 测试 / 378 断言**，1 项显式跳过 —— 见下）。
+
+#### 顺带修掉：mynet_ctl 的门禁此前是**假绿**
+
+装 `composer install` 后发现两处：
+1. **lint 从未跑过**：`make lint` 是 `if [ -x vendor/bin/pint ]; then pint --test;
+   else echo "(composer install 后启用 pint)"; fi` —— 本仓没有 `vendor/`，
+   一直走 else 分支打印一句话就算通过。pint 首跑：44 个文件不符合风格。
+2. **test 从未跑过**：`make test` 同样是「无 phpunit 就跳过」。首跑 50 项里
+   **20 个 error，全部是 `MissingAppKey`** —— 本仓也没有 `.env`。
+
+这与 mynet_back 的 **CPI-23 同源**：**两个 PHP 仓都缺 `.env`，而两边的门禁都发现不了**
+（back 是 phpunit.xml 自带 env 所以测试全绿；ctl 是静默跳过）。
+已分别建本地 dev `.env`（两个仓的 `.gitignore` 都已挡住）。
+
+> ⚠️ **教训**：「无工具时跳过」型门禁等于没有门禁 —— 它把「环境没装好」伪装成「检查通过」。
+> 新增门禁时，缺依赖应当**报错**而不是跳过；确实要跳过也必须打印明确的「已跳过」标记。
+
 
 ### V3 · 生产落地
 
