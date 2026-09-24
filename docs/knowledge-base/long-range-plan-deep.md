@@ -45,7 +45,7 @@
 | **数据面隧道** | ✅ **真通**。gnb + wg + 跨驱动桥三场景 e2e PASS，三节点拓扑（2×LAN + 1×QEMU OpenWrt） | `scripts/e2e/g3_tunnel.sh`、`u1_mesh.sh` 6/6 |
 | **社区业务面（back）** | ✅ **真通**。注册/登录/节点/密钥/好友/连接申请/服务 CRUD 实测 200/201/422/410 各就各位；`make check` 126 tests / 2398 assertions | 本文同日 T2-6 实测；`long-range-plan-t.md` §3 T2-6 证据表 |
 | **用户前端（mynet_gui）** | ✅ **四页真打通**，连接向导四步走通并落库 | `long-range-plan-t.md` §3 T2-6 |
-| **gateway** | ❌ **不是可执行程序**。`gateway/` 是无 main 的库包，只有 `Handler() http.Handler`；`handleConnect` 是占位（自陈「真实 WS 握手在 ws.go」，**ws.go 不存在**）；`handleRelay` 恒 502；`Makefile` dist 不产它；compose 里是 `alpine sleep infinity` | `gateway/server.go:157,241-247,249-266`；`cmd/` 只有 `mynet`/`mynetd`；`mynet_back/deploy/docker-compose.yml:23-27`；`scripts/e2e/up.sh:78` 自陈「gateway 二进制…cmd 待接 — 跳过」 |
+| **gateway** | ❌ **不是可执行程序**。`gateway/` 是无 main 的库包，只有 `Handler() http.Handler`；`handleConnect` 是占位（自陈「真实 WS 握手在 ws.go」，**ws.go 不存在**）；`handleRelay` 恒 502；`Makefile` dist 不产它；当时的 compose 里是 `alpine sleep infinity`（该 compose 已于 V3-0 删除） | `gateway/server.go:157,241-247,249-266`；`cmd/` 只有 `mynet`/`mynetd`；`scripts/e2e/up.sh:78` 自陈「gateway 二进制…cmd 待接 — 跳过」 |
 | **在线升级** | ❌ **纸面**（见 §0 第 1 条）。另：版本比较是**字典序非 semver**（`0.10.0 < 0.9.0`） | `mynet/cmd_update.go:27` |
 | **版本与校验** | ❌ 产物版本**恒为 `dev`**（无 `-ldflags`）；agent 侧无 checksum 生成；客户端从不校验 | `shared/utils/constants.go:6`、`mynet/doc.go:10`、`Makefile:39-52` |
 | **分发中心（ctl）** | ⚠️ **服务端完备、客户端未接**。`releases` 表有 `sha256`、上传即算校验和、manifest 输出 `artifacts[].sha256` + `checksums`；但 `PRODUCTS` 无 `agent`，且 `apps.json` 的 `products` 形状（map）与 fixture/Go 解析器（array + `releases[]`）**不匹配**，Go 测试读 fixture 且缺失即 `t.Skip` → **从未打过真端点** | `ReleaseService.php:32-38`；`ManifestService.php:268-270,279,282,300`；`apps_index_test.go:12-16` |
@@ -127,7 +127,7 @@ T3-5（G4 外网可用）、T4-4（双 gateway）、T4-6（真节点压测）、
 | **H4b** | **`gw` vs `gw1`/`gw2` 未裁定**（H4 只答了 admin/adm）。建议：现阶段单入口 `gw`，等 V4-5/V4-6（presence 真接线）做完再开 `gw1`/`gw2`——现在开两个入口是空的 | 命名与多实例时机是产品决策 | T4-4 | V4 前 |
 | **H5** | **DBA 建库建表**：生产是 MySQL 8，而 `deployment-registry.md:63` 明写「**mynet_back 禁止 migration，需 DBA 走 database/sql/**」 | 生产库变更权限 | T3-4 | H1 之后 |
 | **H6** | **生成 `back_priv` / `back_pub` 并入凭证库**：当前 `.env` 无 `MYNET_BACK_FACE_*` 任何键 → 节点面 DH+HMAC **直接失败**（`NodeHeartbeatAuthMiddleware.php:189-192` 仅 Log::error）。⚠️ 保护等级 **高于**节点私钥（泄露可冒充**所有**节点） | 红线「不碰生产密钥/crt」；且必须走 `crt` 凭证库 | T3-4 · T3-5 | H5 同时 |
-| **H7** | ~~裁定 `back_priv` 形态~~ ✅ **已裁定（2026-09-24）：0600 文件，按原规范**。现实现是 env 注入（`config/mynet.php:25-26`、`docker-compose.yml:16-17`）**须改**；`spec/node-keying.md` 无 back_priv 条目**须补** | — | — | 已决 → 落成 V3-6a/V3-6b 两项工程 |
+| **H7** | ~~裁定 `back_priv` 形态~~ ✅ **已裁定（2026-09-24）：0600 文件，按原规范**。原实现是 env 注入（`config/mynet.php`）**已改**（V3-6a：`BackFaceKeys`，文件优先且权限过宽即拒绝）；`spec/node-keying.md` 无 back_priv 条目**须补**（V3-6b） | — | — | 已决 → 落成 V3-6a/V3-6b 两项工程 |
 | **H8** | **一台非 VM 真机** + 外网可达的 api 域名 | 硬件 | T3-4 | G4 前 |
 | **H9** | **一台 Windows 主机**（且需先确认 gnb/wireguard 在 Windows 的驱动可用性） | 硬件。无它则 Windows 只能交叉编译出包、**运行不可测** | T5-1 | T5 开工前 |
 | **H10** | **50+ 节点或等价容器集群** | 物理约束。现有真实资产仅 **3 台**（`scripts/inventory/hosts.sh:3`） | T4-6 | 见 §5 |
@@ -433,7 +433,7 @@ $ MYNET_APPS_INDEX=http://127.0.0.1:18090 mynet update
 三者**共置同机、各是独立 nginx server block**，证书在
 `/etc/letsencrypt/live/mynet.club/`，**主机 nginx 终结 TLS**。部署方式是 **rsync**。
 
-而 `deploy/docker-compose.yml` 把 app/db/gateway 装进容器、暴露 8080，
+而那三个已删的文件（`deploy/docker-compose.yml` 等）把 app/db/gateway 装进容器、暴露 8080，
 与这个拓扑不符（caddy-compose 更直接占宿主 80/443，与现有
 `listen 172.26.3.227:443` + 前置公网 LB 冲突 —— H1 已裁定复用现有 nginx）。
 

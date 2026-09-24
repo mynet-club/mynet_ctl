@@ -33,7 +33,7 @@ U1-C T3 生产部署 ──► 备份/清单（**主机 + nginx + rsync**；域�
 | 10 | | U1-B2 | proxy：经节点访问对端内网段 | ☐ |
 | 11 | | U1-B3 | `demo_t2.sh` 一键：注册→好友→连接→服务 | ☐ |
 | 12 | | U1-B4 | UI 四页静态验收（登录/向导/节点/好友） | ☐ |
-| 13 | U1-C | U1-C1 | `deploy/docker-compose.yml`（back+gateway） | ☐ |
+| 13 | U1-C | U1-C1 | ~~`deploy/docker-compose.yml`（back+gateway）~~ 已作废（V3-0 撤容器路线；改为主机部署） | ⛔ |
 | 14 | | U1-C2 | 备份脚本：DB + 密钥（高权限文件） | ☐ |
 | 15 | | U1-C3 | 部署清单 README（步骤可重复） | ☐ |
 | 16 | | U1-C4 | 若有可用域名/证书 → TLS 尝试；否则留接口 | ☐ |
