@@ -1,6 +1,16 @@
 # 过夜报告 U1（进行中）
 
 > 2026-09-24 00:30– · 自动执行
+>
+> ⚠️ **后续更正（2026-09-24，V3-0）**：本报告中 U1-C 那段记录的
+> `deploy/docker-compose.yml` + `caddy-compose.yml` + `Caddyfile` **已全部删除**——
+> 核查 `deployment-registry.md` 后确认**生产不用容器编排**：ctl/back/gui 三者在
+> `10.182.236.180` 上各是独立 nginx server block、证书由主机 nginx 终结、
+> 部署方式是 rsync。详见 `mynet-overview.md` §15 的 V3-0 条目与
+> `long-range-plan-deep.md` §4「为什么撤 Docker」。
+>
+> 本报告的正文**保留原样**（它是那次过夜执行的真实记录，不该改写）；
+> 读到 U1-C 相关段落时请连同本条一并理解。
 
 ## 已达成
 
@@ -10,7 +20,7 @@
 | **U1-A3** | 三机 gnb 网 3001/3002/3003 一度 **6/6 全通** |
 | **U1-A5** | wg 三机 10.23.0.0/24 **6/6 全通**（含 handshake） |
 | **U1-B1** | 服务：A:8080 → C 经 gnb 可达 `hello-from-A` |
-| **U1-C1/C2/C3** | compose + backup.sh + 部署清单 |
+| **U1-C1/C2/C3** | compose + backup.sh + 部署清单 〔compose 部分已撤回，见文首〕 |
 
 ## 关键发现
 
@@ -124,7 +134,7 @@ A 经 C 桥访问 B wg 侧多文件（`/p.txt` → `proxy-target-ok`）。
 |---|---|
 | U1-A 多节点 | ✅ gnb mesh · wg mesh · **G3 三场景 PASS** |
 | U1-B 产品 | ✅ 服务可达 · proxy · demo 脚本 · UI 静态验收 |
-| U1-C 生产 | ✅ compose · 备份 · 部署清单 |
+| U1-C 生产 | ✅ backup.sh · 部署清单 〔compose 已撤回，见文首〕 |
 | U1-Z 回归 | ✅ go/php/security_audit 全绿 |
 | U1-A7 稳定性 | ⏳ 监视中（目前 0% loss） |
 
@@ -153,9 +163,9 @@ reachabilityPlan → target 10.31.0.1:8080, allowed=false, warnings=[无授权�
 | 长稳 2h | 进行中（目前 0% loss + bridge OK） |
 
 ## T3-2 TLS（接口就绪，证书待人工）
-- compose 已留 HTTPS 入口位
+- ~~compose 已留 HTTPS 入口位~~ 〔V3-0 已删 compose；HTTPS 入口改由 `deploy/nginx.conf` 承担〕
 - **红线**：DNS/证书变更走人工（过夜授权口径）
-- 有证书后：caddy/nginx 终结 TLS → app:8080 / gateway:8710
+- ~~有证书后：caddy/nginx 终结 TLS~~ 〔H1 裁定复用现有 nginx，Caddy 方案不用〕
 
 ## 已知待续（交班）
 
@@ -172,14 +182,14 @@ reachabilityPlan → target 10.31.0.1:8080, allowed=false, warnings=[无授权�
 - `scripts/e2e/cross_driver_bridge.py` — 跨驱动桥
 - `scripts/e2e/t23_social.sh` / `demo_t2.sh` — 产品链
 - `scripts/security_audit.sh` — 安全复检
-- `deploy/docker-compose.yml` + `backup.sh` + `README.md`
+- ~~`deploy/docker-compose.yml`~~（已删）+ `backup.sh` + `README.md`
 
 ### 巡检 2026-09-24T01:27:58+08:00
 - 长稳: 2026-09-24T01:25:54+08:00 gnb_ab:0% packet loss wg_bc:0% packet loss bridge:hello-from-B-via-bri
 - G3: G3 TUNNEL PASS
 
 ## T3-2 TLS 骨架（新增）
-`deploy/Caddyfile` + `caddy-compose.yml`：api/gw 双域名 + 安全响应头。
+~~`deploy/Caddyfile` + `caddy-compose.yml`~~（已删）：api/gw 双域名 + 安全响应头 → 已转为 `deploy/nginx.conf`。
 证书签发留给人工（红线）。
 
 ## T3-3 备份脚本实测

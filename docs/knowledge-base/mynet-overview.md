@@ -91,7 +91,9 @@
 
 ⚠️ **2026-09-24 裁定（H1）**：生产入口**复用现有 nginx**（`172.26.3.227:443`，前置公网 LB，
 证书 `/etc/letsencrypt/live/mynet.club/`），**不引入 Caddy**。
-`mynet_back/deploy/{Caddyfile,caddy-compose.yml}` 归档或删除；api/gw/console/admin 各加 nginx server block。
+`mynet_back/deploy/{Caddyfile,caddy-compose.yml}` **已删除**（2026-09-24，V3-0）；
+Caddyfile 的意图（TLS + api/gw 反代 + 安全头）已转为 `mynet_back/deploy/nginx.conf`。
+api/gw/console 各加 nginx server block。
 
 ---
 
@@ -797,7 +799,7 @@ gnb 靠协议层自己兜底，wg 必须靠上层观测切换。硬压成一套�
 | **multi_tenant_saas 框架只使用不修改**（2026-09-24） | `vendor/dsplat/**` 只读。框架缺陷或新需求**回上游 `github.com/dsplat/*` 改**，这边 `composer update` 拉进来。定位问题先判根因在 `app/`（可改）还是 `vendor/dsplat/`（只出报告），别把框架 bug 当自己的 bug 绕过去。详见 `AGENTS.md` §1.8 |
 | **H1 生产入口复用现有 nginx，不引入 Caddy**（2026-09-24） | 生产已有 nginx（`listen 172.26.3.227:443`，前置公网 LB）+ Let's Encrypt 证书（`/etc/letsencrypt/live/mynet.club/`）。`deploy/caddy-compose.yml` 直接占宿主 80/443 与该拓扑冲突，且该文件本身是坏的（跨文件 `depends_on` 报 `invalid compose project`）。→ 只加 server block，Caddy 方案归档 |
 | **H4 `console` = 租户管理，`admin` = 平台管理**（2026-09-24） | 用户原话：「back管理是租户管理，租户管理是console，admin 是平台管理」。→ back 管理面称 `console.mynet.club`；`admin.mynet.club` 让给框架 platform/operator SPA；`adm` 弃用。`deployment-registry.md:13` / `ecosystem.md:125` / `brand-guide.md:152` 三处待同步 |
-| **H7 `back_priv` 用 0600 文件，不用 env**（2026-09-24） | 按原规范（`product-form/index.html:1121,1134`：不进代码库、不进 BundleEnvelope、有条件上 KMS）。现实现是 env 注入（`config/mynet.php:25-26`、`docker-compose.yml:16-17`）**与规范不符，须改**。理由：`back_priv` 保护等级**高于**节点私钥（泄露可冒充**所有**节点），而 env 会出现在 `docker inspect`、compose 文件与进程环境里。`spec/node-keying.md` 现无 back_priv 条目，须补 |
+| **H7 `back_priv` 用 0600 文件，不用 env**（2026-09-24） | 按原规范（`product-form/index.html:1121,1134`：不进代码库、不进 BundleEnvelope、有条件上 KMS）。原先是 env 注入（`config/mynet.php`）**与规范不符，已改**：新增 `App\Modules\VPN\Domain\Services\BackFaceKeys`，**文件优先**且**权限过宽即拒绝、不回退到 env**（否则这条控制可被「顺手在 env 里再放一份」绕过）。理由：`back_priv` 保护等级**高于**节点私钥（泄露可冒充**所有**节点），而 env 会出现在容器编排工具的 inspect、compose 文件与 `/proc/<pid>/environ` 里。`spec/node-keying.md` 现无 back_priv 条目，须补（V3-6b） |
 | **V3-0 撤掉 Docker 路线，生产走主机 + nginx + rsync**（2026-09-24） | 用户问「我们为什么使用 docker」后核查发现：**Docker 不是本项目的部署模型**。`deployment-registry.md` 写的是主机 `10.182.236.180`、三个项目各是独立 nginx server block、证书在 `/etc/letsencrypt/live/mynet.club/`、部署命令是 rsync。原 `deploy/docker-compose.yml` + `caddy-compose.yml` + `Caddyfile` 与此拓扑不符（caddy 直接占宿主 80/443，与现有 `listen 172.26.3.227:443` + 前置 LB 冲突，H1 已裁定复用现有 nginx）。→ 三个文件删除；Caddyfile 的意图（TLS + api/gw 反代 + 安全头）转为 `deploy/nginx.conf`；补上 registry 声称「推荐」却**不存在**的 `manage-prod.sh`。**教训：先确认技术选型是否成立再补实现——计划表里的条目也可能定错，不是免检的** |
 
 ---

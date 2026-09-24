@@ -58,7 +58,7 @@ T1 真连通 ──────────────► G3：双节点 gnb/wg
 | 11 | | T2-5 | proxy 意图：经 gnb 节点访问对方内网段 | T1-3 | ☑ |
 | 12 | | T2-6 | Quasar 真 UI：登录/向导/节点/好友四页走通（**载体 = `mynet_gui`**，非 mynet_web） | T2-3 | ☑ |
 | 13 | | T2-7 | **演示脚本** `demo_t2.sh` 一键全程 | T2-4..6 | ☑ |
-| 14 | **T3 生产** | T3-1 | back+gateway 部署清单（compose/systemd） | T2-1 | ☑ |
+| 14 | **T3 生产** | T3-1 | back+gateway 部署清单（**主机 + nginx + rsync**；原写「compose/systemd」，compose 路线已于 V3-0 撤） | T2-1 | ⚠️ 部分（V3-1 已补 `manage-prod.sh` + `deploy/nginx.conf`；gateway 侧主机部署待 V3-3） |
 | 15 | | T3-2 | 域名 + TLS：`api/gw/ctl.mynet.club` | T3-1 | ☐ |
 | 16 | | T3-3 | 备份/恢复：DB + 密钥（back_priv 高保护） | T3-1 | ☐ **撤勾** |
 | 17 | | T3-4 | 真机注册一台（非 VM）走完 T2 流程 | T3-2 | ☐ |
@@ -85,9 +85,10 @@ T1 真连通 ──────────────► G3：双节点 gnb/wg
 > `:11` 用 `-p"$DB_PASSWORD"` 命令行传密（进 `ps`）。重做计划见 `long-range-plan-deep.md` §4 的 **V3-5**。
 >
 > **G4 的前置能力有一半不存在**：`mynet_gateway` 二进制**从未被构建**（`gateway/` 是无 main 的库包，
-> `cmd/` 只有 `mynet`/`mynetd`，compose 里是 `alpine sleep infinity`），`handleRelay` 恒 502、
+> `cmd/` 只有 `mynet`/`mynetd`，当时的 compose 里是 `alpine sleep infinity` 占位），`handleRelay` 恒 502、
 > `relaypolicy` 白名单只在注释里。G4 判据中「可互通」在生产**不可能通**。
 > 详见 `long-range-plan-deep.md` §0/§1/§2（拱顶石 = gateway 可执行化）。
+> （V1-1..V1-5 已把它做成真二进制；compose 文件本身已于 V3-0 删除，部署改走主机。）
 >
 > **T2-6 已达成**（2026-09-24）：四页真打通新 back，证据见本文件 §3。
 
