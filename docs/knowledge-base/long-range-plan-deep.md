@@ -133,7 +133,7 @@ T3-5（G4 外网可用）、T4-4（双 gateway）、T4-6（真节点压测）、
 | **H4b** | **`gw` vs `gw1`/`gw2` 未裁定**（H4 只答了 admin/adm）。建议：现阶段单入口 `gw`，等 V4-5/V4-6（presence 真接线）做完再开 `gw1`/`gw2`——现在开两个入口是空的 | 命名与多实例时机是产品决策 | T4-4 | V4 前 |
 | **H5** | **DBA 建库建表**：生产是 MySQL 8，而 `deployment-registry.md:63` 明写「**mynet_back 禁止 migration，需 DBA 走 database/sql/**」 | 生产库变更权限 | T3-4 | H1 之后 |
 | **H6** | **生成 `back_priv` / `back_pub` 并入凭证库**：当前 `.env` 无 `MYNET_BACK_FACE_*` 任何键 → 节点面 DH+HMAC **直接失败**（`NodeHeartbeatAuthMiddleware.php:189-192` 仅 Log::error）。⚠️ 保护等级 **高于**节点私钥（泄露可冒充**所有**节点） | 红线「不碰生产密钥/crt」；且必须走 `crt` 凭证库 | T3-4 · T3-5 | H5 同时 |
-| **H7** | ~~裁定 `back_priv` 形态~~ ✅ **已裁定（2026-09-24）：0600 文件，按原规范**。原实现是 env 注入（`config/mynet.php`）**已改**（V3-6a：`BackFaceKeys`，文件优先且权限过宽即拒绝）；`spec/node-keying.md` 无 back_priv 条目**须补**（V3-6b） | — | — | 已决 → 落成 V3-6a/V3-6b 两项工程 |
+| **H7** | ~~裁定 `back_priv` 形态~~ ✅ **已裁定（2026-09-24）：0600 文件，按原规范**。原实现是 env 注入（`config/mynet.php`）**已改**（V3-6a：`BackFaceKeys`，文件优先且权限过宽即拒绝）；`spec/node-keying.md` 现无 back_priv 条目，**已补**（V3-6b：§4.6） | — | — | 已决 → V3-6a / V3-6b 均已完成 |
 | **H8** | **一台非 VM 真机** + 外网可达的 api 域名 | 硬件 | T3-4 | G4 前 |
 | **H9** | **一台 Windows 主机**（且需先确认 gnb/wireguard 在 Windows 的驱动可用性） | 硬件。无它则 Windows 只能交叉编译出包、**运行不可测** | T5-1 | T5 开工前 |
 | **H10** | **50+ 节点或等价容器集群** | 物理约束。现有真实资产仅 **3 台**（`scripts/inventory/hosts.sh:3`） | T4-6 | 见 §5 |
@@ -420,7 +420,7 @@ $ MYNET_APPS_INDEX=http://127.0.0.1:18090 mynet update
 | V3-4 | ~~compose healthcheck~~ **随 V3-0 作废**；健康检查改由 nginx 的 `/up` 与脚本 verify 承担 | V3-0 | `curl https://api.mynet.club/up` → 200 | ✅ 已并入 V3-1 的 verify_deployment |
 | V3-5 | **重做 T3-3**：备份加密 + 恢复脚本 + **恢复演练** + 密码不走命令行 + cron 真装（原先是明文 tar.gz、无 restore、`-p"$DB_PASSWORD"` 进 `ps`、cron 只在 README 注释里） | — | 从备份**真恢复出一个可用库**；`ps` 里看不到密码 | ✅ 2026-09-24。新增 `deploy/{restore.sh,backup-drill.sh,install-cron.sh}` 并重写 `backup.sh`。演练在**隔离临时 MySQL 实例**里跑：造库→加密备份→恢复→**逐表 7/5/2 行数一致 + 内容一致**；另两条断言（备份确实加密、DB 口令不在 `mysqldump` argv）各做了一次**变异测试**，注入「不加密」与「口令进 argv」后都被抓住（见 §V3-5 实测证据） |
 | V3-6a | **按 H7 裁定把 `back_priv` 改为 0600 文件**：文件优先，**权限过宽即拒绝且不回退 env** | H7 ✅ | 代码只从文件读；权限实测；缺/空文件明确报错 | ✅ 2026-09-24（10 测试；「不回退」那条是被测试抓出来的） |
-| V3-6b | **补 `spec/node-keying.md` 的 back_priv 条目**（现在该文件 grep 0 命中 → 规范缺位）：形态、权限、轮换、泄露处置、为什么保护等级高于节点私钥 | V3-6a | 规范与实现一致 | ☐ |
+| V3-6b | **补 `spec/node-keying.md` 的 back_priv 条目**（原先该文件 grep 0 命中 → 规范缺位）：形态、权限、轮换、泄露处置、为什么保护等级高于节点私钥 | V3-6a | 规范与实现一致 | ✅ 2026-09-24。新增 **§4.6 `back_face` 密钥**：形态与权限（含「权限过宽即拒绝」）、**不回退 env 的四种走向**（这条是控制成败所在）、轮换、泄露处置、以及为什么它比节点私钥更该保护。⚠️ 明确写出**轮换能力尚未实现**（无新旧并存、无工具），不含糊过去。顺带修 §5.2「back 侧尚未校验」（与 §4.5 矛盾）与 §8 一条已落地的待决 |
 | V3-6 | `back_priv`/`back_pub` 生成并入 `crt` 凭证库、注入生产 | H6, V3-6a | 节点面 DH+HMAC 在生产真验通过 | 真机心跳 200 | ☐（需 H6） |
 | V3-7 | 补 `deployment-registry.md` 的 stale 项（**`manage-prod.sh` 已由 V3-1 补上**，可勾掉）、www 服务器/监控待补；并按 H4 把 back 管理面从 `admin` 改称 `console`（同步 `ecosystem.md:125` / `brand-guide.md:152`） | V3-1..6 | 文档每条都能在盘上找到对应物；子域命名全库一致 | 逐条 `ls` + grep 核对 | ☐ |
 | V3-8 | **T3-4 真机注册**：非 VM 真机走完「注册→密钥→连接→互通」 | H2, H5, H6, H8, V1, V3-6 | 真机 `node_id` 落库、心跳在线、与另一节点互通 | 真机实测 + back 数据 | ☐（需人工闸门） |

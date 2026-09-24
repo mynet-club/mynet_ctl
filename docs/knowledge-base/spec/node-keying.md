@@ -235,6 +235,97 @@ HMAC 密钥 = **节点公钥**。而公钥：
 3. 该中间件所在的路由组还曾被模块级 `auth:sanctum` 覆盖、且请求体 gzip 从未被解压，
    两者都会让请求在到达验签之前就失败——见 `control-plane.md` §6.2 缺口 1b/1c。
 
+### 4.6 `back_face` 密钥（`back_priv` / `back_pub`）
+
+§4.1–4.5 讲的是「节点怎么向 back 证明自己」。这一节讲**back 自己那把**——
+两者是**不同的密钥**，但常被混作一谈。
+
+#### 它是什么
+
+`back_face` 是 back 侧的 X25519 密钥对，用于节点面 DH：
+
+```
+节点持 node_priv / node_pub（= 驱动密钥，见 §1、§6）
+back 持 back_priv / back_pub
+共享秘密  shared = X25519(node_priv, back_pub) = X25519(back_priv, node_pub)
+```
+
+两把私钥都不出本端，交换的只是两个公钥。
+
+#### ⚠️ 为什么它的保护等级**高于**节点私钥
+
+| 泄露的东西 | 能冒充谁 |
+|---|---|
+| 某个节点的 `node_priv` | 那**一个**节点 |
+| `back_priv` | **所有**节点（对每个 `node_pub` 都能算出各自的 `shared`） |
+
+节点私钥是「一把钥匙开一扇门」，`back_priv` 是「一把钥匙开所有门」。
+因此 H7 裁定（2026-09-24）：**`back_priv` 用 0600 文件，不用环境变量**。
+env 会出现在 `docker inspect`、编排文件、`/proc/<pid>/environ` 里，
+读得到的面比一个 0600 文件大得多。
+
+#### 形态与权限
+
+| 项 | 要求 |
+|---|---|
+| 私钥路径 | `MYNET_BACK_FACE_PRIV_FILE` → `config('mynet.back_face.private_key_file')`，建议 `/etc/mynet/back_face_priv` |
+| 公钥路径 | `MYNET_BACK_FACE_PUB_FILE` → `/etc/mynet/back_face_pub` |
+| 内容 | 一行 hex，无前后空白（读取时 `trim`） |
+| **私钥权限** | **必须 0600**。比它宽（0640 / 0644 …）即**拒绝加载** |
+| 属主 | Web 进程用户（php-fpm 的 user），否则读不到 |
+| 入 git | **绝不**。`.gitignore` + guard A2/A3 双拦 |
+
+「权限过宽即拒绝」是把约定变成机制——否则某次部署 `umask` 不对，密钥静默变成
+0644，没人会发现。实现：`mynet_back/app/Modules/VPN/Domain/Services/BackFaceKeys.php`。
+部署侧另有一道守卫：`manage-prod.sh` 在 rsync 之前会检查**生产机上**该文件的权限
+（`mynet_back/deploy/README.md` §2）—— 两道闸，一道在读密钥时、一道在部署时。
+
+#### ⚠️ 不回退：文件在但权限不合规 → 硬停
+
+`BackFaceKeys::resolve()` 有四种走向，**区分它们就是这条控制的成败**：
+
+| 情形 | 行为 |
+|---|---|
+| 文件在、权限 0600、非空 | ✅ 用文件 |
+| **文件在但权限过宽** | ❌ **硬停，且不回退 env** |
+| 文件在但内容为空 | ❌ 硬停 |
+| 没配路径、或文件尚未就位 | ⚠️ 允许退到 env（迁移窗口），记 warning |
+
+第二行是关键：若「权限不合规」时退到 env，这条控制就能被「顺手在 env 里再放一份」
+绕过——等于没有控制。env 形式（`MYNET_BACK_FACE_PRIV` / `PUB`）只是**迁移窗口**的
+兼容，每次使用都会记 warning，迁移完成后应删除这条回退。
+
+#### 轮换
+
+> ⚠️ **现状：没有轮换工具，也没有「新旧并存」能力** —— `resolve()` 只读**一个**
+> 文件。所以轮换目前只能人工按顺序做，且存在一个**所有节点都得换到新 `back_pub`
+> 的窗口**。下面第 2 步所依赖的「节点侧并列持有多把 `back_pub`」**尚未实现**；
+> 在它实现之前，轮换等于一次有中断窗口的操作，必须挑可接受时段。
+> **别把这句含糊过去** —— 含糊的后果是真出事时才发现没有回退路径。
+
+1. **准备**：生成新密钥对，私钥 `chmod 600` 放临时位置（先不覆盖现有文件）
+2. **先分发公钥**：把新 `back_pub` 下发到所有节点，节点侧新旧并存（需上述未实现能力）
+3. **再换私钥**：确认所有节点已拿到新公钥后，替换 back 侧私钥文件
+4. **验证**：`monitor/heartbeat` 有真实节点鉴权通过（不是「进程还活着」）
+5. **归档旧密钥**：确认无节点再用旧公钥后销毁
+
+#### 泄露处置
+
+`back_priv` 泄露 = **所有节点可被冒充**。按事故处理，不按「换密码」处理：
+
+1. **立即**生成新密钥对并替换 back 侧私钥（宁可中断，不要继续用泄露的密钥）
+2. 按上面的顺序把新 `back_pub` 分发到所有节点
+3. **查暴露面**：泄露从哪来（env？镜像？日志？备份？）——同一路径上可能还有别的凭据
+4. 记入 `cross-project-issues.md` 台账，并核对「谁可能已经用过它」
+5. 节点私钥**不需要**因此轮换 —— 反向不成立：拿到 `back_priv` 推不出 `node_priv`
+
+#### 与 V3-6 / H6 的关系
+
+生成 `back_priv` / `back_pub` 并入凭证库（`crt`）是 **H6**（人工闸门，红线「不碰生产
+密钥」）。生产注入后节点面 DH+HMAC 才可能验通 —— 当前 `.env` 里**没有任何**
+`MYNET_BACK_FACE_*` 键，所以是直接失败（`NodeHeartbeatAuthMiddleware.php:189-192`
+只 `Log::error`，不阻断）。
+
 ---
 
 ## 5. gateway 鉴权方案（设计稿）
@@ -259,7 +350,7 @@ gateway 校验：ed25519_verify(sig, challenge, node_keys.public_key)
 |------|------|---------|
 | **GNB 数据面**（节点↔节点） | `ed25519_key_exchange` → `shared_secret` → `crypto_key` | 密钥协商 + 加密 |
 | **GNB 控制帧**（节点↔节点） | `ed25519_sign` / `verify` | 帧完整性/身份 |
-| **节点 ↔ back/gateway**（控制面） | **目标**：Ed25519 challenge-response<br>**现状**：HMAC-SHA256（公钥作密钥，back 侧尚未校验） | 控制面鉴权 |
+| **节点 ↔ back/gateway**（控制面） | **目标**：Ed25519 challenge-response<br>**现状**：HMAC-SHA256（公钥作密钥）。back 侧**已实现校验**（§4.5，2026-09），gateway 侧仍是设计稿 | 控制面鉴权 |
 
 ### 5.3 过渡
 
@@ -301,7 +392,7 @@ gateway 校验：ed25519_verify(sig, challenge, node_keys.public_key)
 
 - [ ] 控制面身份密钥的归属：是否独立于驱动密钥（建议独立，避免 wg/gnb 混用）
 - [ ] gateway challenge 的参数（nonce 长度、ts 窗口、重放缓存 TTL）
-- [ ] back 心跳 HMAC 验签的具体格式确认（base64/hex、消息拼接与 `plugins.md` 对齐）
+- [x] ~~back 心跳 HMAC 验签的具体格式确认（base64/hex、消息拼接与 `plugins.md` 对齐）~~ ✅ **已落地**（§4.5，2026-09）：`node_keys.public_key` 是 base64、须 decode 后用；除心跳外的端点签的就是发送体本身，用**原始字节**不重编码
 - [ ] WG 节点接入时控制面鉴权密钥如何下发（BundleEnvelope 字段）
 
 ---
