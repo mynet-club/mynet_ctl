@@ -63,6 +63,23 @@
 - **⚠️ 一处需要更正的旧说法**：本条目初稿（以及更早的记录）写「**三份** `guard.sh` 字节一致（`templates/` · `mynet_agent` · `mynet_utc`）」—— 实际是 **9 份**：`templates/` + 8 个仓的 `.githooks/guard.sh`。其中 8 份 SHA256 完全相同（`86897f6379f5…`），`mynet_gnb` 那份因 B1 规则不同而 SHA 不同、但 **A1 段落一致**。所以改 A1 要同步 9 份，本次已用脚本同步并逐份核对。
 - **优先级**：🟡 P2 → ✅ 已修（`mynet_back 52374e6`，9 份 guard.sh 随各仓同批提交）
 
+#### CPI-37. `node_keys.algorithm` 与密钥实际类型不符 → 节点面**全 401**，且症状不指向真因
+- **位置**：`mynet_back/app/Modules/VPN/Domain/Services/NodeFaceAuthService.php:40-57`（`sharedSecret`）+ `node_keys.algorithm` 列
+- **现状**：`sharedSecret()` 按 `algorithm` 字段选分支 —— `ed25519` 会先做 `edwardsToMontgomeryBin($peer)`，`x25519` 直接用。但**没有任何机制保证这个字段与密钥的实际类型一致**。本地库实测：5 行标着 `algorithm='ed25519'` 的密钥，其 `public_key` 实际是 X25519（montgomery）形式 —— 用 `sodium_crypto_scalarmult_base(priv) == pub` 验证成立，而 ed25519 公钥不会满足这个等式。
+- **后果**：back 对一个**已经是 montgomery** 的点又做一次 edwards→montgomery 转换，得到错误的点 → `shared` 与节点侧算出的不一致 → HMAC 不匹配 → **每个节点面请求都 401**。
+- **为什么难查**：症状是「鉴权失败」，日志里没有「algorithm 标错了」这一说。V4-2 全链路验证时第一个撞上的就是它（401），排到密钥配对、排到签名体、最后才定位到这个字段。
+- **修复建议**：① 写入 `node_keys` 时**校验** algorithm 与实际密钥一致（公钥可以反推：满足 `scalarmult_base(priv)==pub` 的是 X25519）；② DH 失败时把 `algorithm` 与公钥形态（长度/编码）一起记进日志，让症状指向真因；③ 补文档说明「节点面密钥与驱动密钥」的真实关系 —— §1.4 写「复用驱动密钥（同一套）」，但 gnb 的 128-hex `clamp(SHA512(seed))` 布局**不能**直接用于 X25519 DH，wg 的 32B 可以。这条差异目前没有任何文档写清。
+- **优先级**：🟠 P1（会让节点面整体不可用，且极难定位）
+
+#### CPI-38. 心跳里**缺** `vpn_interfaces` 段被判成「节点离线」，而该字段本是可选的
+- **位置**：`mynet_back/app/Modules/VPN/Controllers/Api/V1/NodeHeartbeatController.php:421-432`（`isVpnInterfaceDown`）+ `:88-108` 的调用处
+- **现状**：`isVpnInterfaceDown()` 的第一条是 `if (empty($vpnInterface)) return true;`（注释写「如果没有 VPN 接口信息，视为网络不可用」）。调用处一旦为真就 `markNodeOffline()` 并**直接 return**，连 `node_monitor` 都不处理。
+- **矛盾点**：`vpn_interfaces` 在 `HeartbeatRequest::rules()` 里是 **`nullable|array`（可选）**。也就是说「客户端没报这个可选字段」被当成了「节点故障」—— 这两件事不是一回事。
+- **实际触发路径**（V4-2 验证时撞到）：agent 侧非 root 时 `wg show <iface> dump` 会 Permission denied，拿不到 peer；而 `ifname` 是 `required_with`，空值会 422，所以整个 `vpn_interfaces` 段不发 → back 判离线 → **指标数据全丢**。表现为「节点明明在发心跳、back 也返 200，但 Redis 里没有它」。
+- **已做的规避**：agent 侧改为「读不到 peer 也照报接口存在」（`mynet 141b9ed`）—— 少报一个数字只是数据不全，误报离线是**状态错误**，后者严重得多。但 back 侧的语义仍在，任何不发这个段的客户端都会中招。
+- **修复建议**：区分「没报接口信息」与「报了且 `status=down`」。前者应只记 warning 并**照常处理 node_monitor**；后者才判离线。
+- **优先级**：🟠 P1（静默丢数据 + 误报离线，且 HTTP 层返回 200 看不出异常）
+
 ---
 
 ### 📝 控制面落地发现的缺陷（2026-09-22 记录，发现即记）
