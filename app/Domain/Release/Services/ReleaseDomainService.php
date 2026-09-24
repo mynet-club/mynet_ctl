@@ -17,24 +17,25 @@ class ReleaseDomainService
     // 产品
     // ═══════════════════════════════════════════════════════════════════════
     const PRODUCTS = [
-        'tui'    => ['name' => 'MyNet TUI',    'alias' => 'mynet', 'lang' => 'go',   'desc' => 'Go 终端客户端（旧版，对外别名 mynet）'],
-        'gnb'    => ['name' => 'GNB',          'alias' => null,    'lang' => 'c',    'desc' => 'GNB P2P 组网核心'],
-        'utc'    => ['name' => 'UTC',          'alias' => null,    'lang' => 'c',    'desc' => 'UDP→TCP 隧道转换器'],
+        'mynet_agent' => ['name' => 'MyNet Agent', 'alias' => null, 'lang' => 'go', 'desc' => '节点侧全套（mynetd + mynet + mynet_gateway）'],
+        'tui' => ['name' => 'MyNet TUI',    'alias' => 'mynet', 'lang' => 'go',   'desc' => 'Go 终端客户端（旧版，对外别名 mynet）'],
+        'gnb' => ['name' => 'GNB',          'alias' => null,    'lang' => 'c',    'desc' => 'GNB P2P 组网核心'],
+        'utc' => ['name' => 'UTC',          'alias' => null,    'lang' => 'c',    'desc' => 'UDP→TCP 隧道转换器'],
         'client' => ['name' => 'MyNet Client', 'alias' => null,    'lang' => 'node', 'desc' => 'Node.js 跨平台客户端（计划中）'],
-        'proxy'  => ['name' => 'MyNet Proxy',  'alias' => null,    'lang' => 'node', 'desc' => 'Mihomo 代理管理器'],
-        'lua'    => ['name' => 'MyNet Lua',    'alias' => null,    'lang' => 'lua',  'desc' => 'OpenWrt LuCI 插件（.ipk）'],
+        'proxy' => ['name' => 'MyNet Proxy',  'alias' => null,    'lang' => 'node', 'desc' => 'Mihomo 代理管理器'],
+        'lua' => ['name' => 'MyNet Lua',    'alias' => null,    'lang' => 'lua',  'desc' => 'OpenWrt LuCI 插件（.ipk）'],
     ];
 
     // ═══════════════════════════════════════════════════════════════════════
     // 平台
     // ═══════════════════════════════════════════════════════════════════════
     const PLATFORMS = [
-        'linux'       => ['label' => 'Linux',          'ext' => 'tgz'],
-        'openwrt'     => ['label' => 'OpenWrt',        'ext' => 'tgz'],
+        'linux' => ['label' => 'Linux',          'ext' => 'tgz'],
+        'openwrt' => ['label' => 'OpenWrt',        'ext' => 'tgz'],
         'openwrt-sdk' => ['label' => 'OpenWrt SDK',    'ext' => 'tgz'],
-        'darwin'      => ['label' => 'macOS',          'ext' => 'tgz'],
-        'windows'     => ['label' => 'Windows',        'ext' => 'zip'],
-        'freebsd'     => ['label' => 'FreeBSD',        'ext' => 'tgz'],
+        'darwin' => ['label' => 'macOS',          'ext' => 'tgz'],
+        'windows' => ['label' => 'Windows',        'ext' => 'zip'],
+        'freebsd' => ['label' => 'FreeBSD',        'ext' => 'tgz'],
     ];
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -47,39 +48,39 @@ class ReleaseDomainService
     // ═══════════════════════════════════════════════════════════════════════
     const ARCHITECTURES = [
         // x86
-        'amd64'         => ['family' => 'x86',   'bits' => 64, 'goarch' => 'amd64',   'goarm' => null, 'label' => 'x86 64-bit'],
-        'i386'          => ['family' => 'x86',   'bits' => 32, 'goarch' => '386',     'goarm' => null, 'label' => 'x86 32-bit'],
+        'amd64' => ['family' => 'x86',   'bits' => 64, 'goarch' => 'amd64',   'goarm' => null, 'label' => 'x86 64-bit'],
+        'i386' => ['family' => 'x86',   'bits' => 32, 'goarch' => '386',     'goarm' => null, 'label' => 'x86 32-bit'],
         // ARM 64-bit
-        'arm64'         => ['family' => 'arm',   'bits' => 64, 'goarch' => 'arm64',   'goarm' => null, 'label' => 'ARM 64-bit (hard-float)'],
-        'arm64-softfp'  => ['family' => 'arm',   'bits' => 64, 'goarch' => 'arm64',   'goarm' => null, 'label' => 'ARM 64-bit (soft-float)'],
+        'arm64' => ['family' => 'arm',   'bits' => 64, 'goarch' => 'arm64',   'goarm' => null, 'label' => 'ARM 64-bit (hard-float)'],
+        'arm64-softfp' => ['family' => 'arm',   'bits' => 64, 'goarch' => 'arm64',   'goarm' => null, 'label' => 'ARM 64-bit (soft-float)'],
         // ARM 32-bit
-        'armv7'         => ['family' => 'arm',   'bits' => 32, 'goarch' => 'arm',     'goarm' => '7',  'label' => 'ARMv7 (hard-float)'],
-        'armv7-hardfp'  => ['family' => 'arm',   'bits' => 32, 'goarch' => 'arm',     'goarm' => '7',  'label' => 'ARMv7 (explicit hard-float, GNB)'],
-        'armv7-softfp'  => ['family' => 'arm',   'bits' => 32, 'goarch' => 'arm',     'goarm' => '7',  'label' => 'ARMv7 (soft-float)'],
-        'armv6-softfp'  => ['family' => 'arm',   'bits' => 32, 'goarch' => 'arm',     'goarm' => '6',  'label' => 'ARMv6 (soft-float, GNB)'],
+        'armv7' => ['family' => 'arm',   'bits' => 32, 'goarch' => 'arm',     'goarm' => '7',  'label' => 'ARMv7 (hard-float)'],
+        'armv7-hardfp' => ['family' => 'arm',   'bits' => 32, 'goarch' => 'arm',     'goarm' => '7',  'label' => 'ARMv7 (explicit hard-float, GNB)'],
+        'armv7-softfp' => ['family' => 'arm',   'bits' => 32, 'goarch' => 'arm',     'goarm' => '7',  'label' => 'ARMv7 (soft-float)'],
+        'armv6-softfp' => ['family' => 'arm',   'bits' => 32, 'goarch' => 'arm',     'goarm' => '6',  'label' => 'ARMv6 (soft-float, GNB)'],
         // MIPS 64-bit
-        'mips64'        => ['family' => 'mips',  'bits' => 64, 'goarch' => 'mips64',  'goarm' => null, 'label' => 'MIPS 64-bit BE'],
-        'mips64el'      => ['family' => 'mips',  'bits' => 64, 'goarch' => 'mips64le','goarm' => null, 'label' => 'MIPS 64-bit LE'],
+        'mips64' => ['family' => 'mips',  'bits' => 64, 'goarch' => 'mips64',  'goarm' => null, 'label' => 'MIPS 64-bit BE'],
+        'mips64el' => ['family' => 'mips',  'bits' => 64, 'goarch' => 'mips64le', 'goarm' => null, 'label' => 'MIPS 64-bit LE'],
         // MIPS 32-bit
-        'mips'          => ['family' => 'mips',  'bits' => 32, 'goarch' => 'mips',    'goarm' => null, 'label' => 'MIPS 32-bit BE (hard-float)'],
-        'mips-softfp'   => ['family' => 'mips',  'bits' => 32, 'goarch' => 'mips',    'goarm' => null, 'label' => 'MIPS 32-bit BE (soft-float)'],
-        'mipsel'        => ['family' => 'mips',  'bits' => 32, 'goarch' => 'mipsle',  'goarm' => null, 'label' => 'MIPS 32-bit LE (hard-float)'],
+        'mips' => ['family' => 'mips',  'bits' => 32, 'goarch' => 'mips',    'goarm' => null, 'label' => 'MIPS 32-bit BE (hard-float)'],
+        'mips-softfp' => ['family' => 'mips',  'bits' => 32, 'goarch' => 'mips',    'goarm' => null, 'label' => 'MIPS 32-bit BE (soft-float)'],
+        'mipsel' => ['family' => 'mips',  'bits' => 32, 'goarch' => 'mipsle',  'goarm' => null, 'label' => 'MIPS 32-bit LE (hard-float)'],
         'mipsel-softfp' => ['family' => 'mips',  'bits' => 32, 'goarch' => 'mipsle',  'goarm' => null, 'label' => 'MIPS 32-bit LE (soft-float)'],
         'mipsel-muslsf' => ['family' => 'mips',  'bits' => 32, 'goarch' => 'mipsle',  'goarm' => null, 'label' => 'MIPS 32-bit LE (musl soft-float, GNB)'],
-        'mipsel-sf'     => ['family' => 'mips',  'bits' => 32, 'goarch' => 'mipsle',  'goarm' => null, 'label' => 'MIPS 32-bit LE (soft-float, GNB SDK)'],
-        'mips-sf'       => ['family' => 'mips',  'bits' => 32, 'goarch' => 'mips',    'goarm' => null, 'label' => 'MIPS 32-bit BE (soft-float, GNB SDK)'],
+        'mipsel-sf' => ['family' => 'mips',  'bits' => 32, 'goarch' => 'mipsle',  'goarm' => null, 'label' => 'MIPS 32-bit LE (soft-float, GNB SDK)'],
+        'mips-sf' => ['family' => 'mips',  'bits' => 32, 'goarch' => 'mips',    'goarm' => null, 'label' => 'MIPS 32-bit BE (soft-float, GNB SDK)'],
         // RISC-V
-        'riscv64'       => ['family' => 'riscv', 'bits' => 64, 'goarch' => 'riscv64', 'goarm' => null, 'label' => 'RISC-V 64-bit'],
+        'riscv64' => ['family' => 'riscv', 'bits' => 64, 'goarch' => 'riscv64', 'goarm' => null, 'label' => 'RISC-V 64-bit'],
     ];
 
     // ═══════════════════════════════════════════════════════════════════════
     // 平台×架构 有效组合
     // ═══════════════════════════════════════════════════════════════════════
     const VALID_COMBINATIONS = [
-        'linux'   => ['amd64', 'arm64', 'armv7', 'armv7-hardfp', 'armv7-softfp', 'armv6-softfp', 'i386', 'mips', 'mips64', 'mipsel', 'mips64el', 'mips-softfp', 'mipsel-softfp', 'arm64-softfp', 'riscv64'],
-        'openwrt'     => ['amd64', 'arm64', 'armv7', 'armv7-hardfp', 'armv7-softfp', 'armv6-softfp', 'i386', 'mips', 'mips64', 'mipsel', 'mips64el', 'mips-softfp', 'mipsel-softfp', 'mipsel-muslsf', 'arm64-softfp', 'riscv64'],
+        'linux' => ['amd64', 'arm64', 'armv7', 'armv7-hardfp', 'armv7-softfp', 'armv6-softfp', 'i386', 'mips', 'mips64', 'mipsel', 'mips64el', 'mips-softfp', 'mipsel-softfp', 'arm64-softfp', 'riscv64'],
+        'openwrt' => ['amd64', 'arm64', 'armv7', 'armv7-hardfp', 'armv7-softfp', 'armv6-softfp', 'i386', 'mips', 'mips64', 'mipsel', 'mips64el', 'mips-softfp', 'mipsel-softfp', 'mipsel-muslsf', 'arm64-softfp', 'riscv64'],
         'openwrt-sdk' => ['amd64', 'arm64', 'armv7', 'mips', 'mips-sf', 'mipsel', 'mipsel-sf'],
-        'darwin'      => ['amd64', 'arm64'],
+        'darwin' => ['amd64', 'arm64'],
         'windows' => ['amd64', 'arm64'],
         'freebsd' => ['amd64', 'arm64'],
     ];
@@ -88,17 +89,17 @@ class ReleaseDomainService
     // uname -m → arch 映射（用于检测脚本）
     // ═══════════════════════════════════════════════════════════════════════
     const UNAME_MAP = [
-        'x86_64'  => 'amd64',
-        'amd64'   => 'amd64',
-        'i386'    => 'i386',
-        'i686'    => 'i386',
+        'x86_64' => 'amd64',
+        'amd64' => 'amd64',
+        'i386' => 'i386',
+        'i686' => 'i386',
         'aarch64' => 'arm64',
-        'arm64'   => 'arm64',
-        'armv7l'  => 'armv7',
-        'mips64'  => 'mips64',
-        'mips64el'=> 'mips64el',
-        'mips'    => 'mips',
-        'mipsel'  => 'mipsel',
+        'arm64' => 'arm64',
+        'armv7l' => 'armv7',
+        'mips64' => 'mips64',
+        'mips64el' => 'mips64el',
+        'mips' => 'mips',
+        'mipsel' => 'mipsel',
         'riscv64' => 'riscv64',
     ];
 
@@ -107,8 +108,8 @@ class ReleaseDomainService
     //
     //   {product}_{platform}_{arch}_{version}.{ext}
     //
-    //   product  = tui / gnb / utc / client / proxy / lua
-    //   platform = linux / openwrt / darwin / windows / freebsd
+    //   product  = mynet_agent / tui / gnb / utc / client / proxy / lua
+    //   platform = linux / openwrt / openwrt-sdk / darwin / windows / freebsd
     //   arch     = amd64 / arm64 / armv7-softfp / mipsel / ...
     //   version  = v1.0.0 / v1.6.0.a（允许 . 和 - 分隔预发布标识）
     //   ext      = tgz (default) / zip (Windows) / ipk (OpenWrt Lua)
@@ -117,6 +118,10 @@ class ReleaseDomainService
     //   tui 对外别名 mynet → 文件名用 mynet 而非 tui
     //   例: mynet_linux_amd64_v0.9.8.10.tgz
     //       gnb_openwrt_mipsel-softfp_v1.6.0.a.tgz
+    //       mynet_agent_linux_amd64_v1.0.0.tgz
+    //
+    // ⚠️ agent 侧产物名必须用 **ctl 的 arch 名**：Go 的 `mipsle` 在这里叫 `mipsel`
+    //    （见 ARCHITECTURES 表），写错会被 validateArch() 拒收。
     // ═══════════════════════════════════════════════════════════════════════
 
     public function validateProduct(string $product): bool
@@ -164,7 +169,8 @@ class ReleaseDomainService
     public function generateFilename(string $product, string $platform, string $arch, string $version, string $ext = ''): string
     {
         $name = $this->getProductFilenamePrefix($product);
-        $ext  = $ext ?: $this->getDefaultExtension($platform);
+        $ext = $ext ?: $this->getDefaultExtension($platform);
+
         return "{$name}_{$platform}_{$arch}_{$version}.{$ext}";
     }
 
@@ -177,15 +183,25 @@ class ReleaseDomainService
     {
         // Pattern: {name}_{platform}_{arch}_{version}.{ext}
         // arch 可含连字符 (armv7-softfp)，version 以 v 开头
-        if (!preg_match('/^([a-z0-9]+)_([a-z][a-z0-9-]*)_([a-z0-9\-]+)_(v[0-9a-z.\-]+)\.(tgz|zip|tar\.gz|ipk)$/i', $filename, $m)) {
+        //
+        // name 允许下划线：产物前缀的 SSOT 是 `mynet_agent_*`
+        // （mynet_agent 侧的 guard C3 强制，AGENTS.md §1.5），
+        // 而 `mynet_agent` 含下划线 —— 原先的 `[a-z0-9]+` 会让
+        // mynet_agent_linux_amd64_v1.0.0.tgz 解析失败、下载 404。
+        //
+        // platform 改为**显式枚举**：name 放开下划线后，若 platform 仍是
+        // `[a-z][a-z0-9-]*`，正则要靠回溯猜「name 到哪结束、platform 从哪开始」，
+        // 可能把 `mynet_agent` 切成 name=mynet + platform=agent。
+        // 枚举后切分唯一。注意 openwrt-sdk 必须排在 openwrt 之前。
+        if (! preg_match('/^([a-z0-9_]+)_(linux|openwrt-sdk|openwrt|darwin|windows|freebsd)_([a-z0-9\-]+)_(v[0-9a-z.\-]+)\.(tgz|zip|tar\.gz|ipk)$/i', $filename, $m)) {
             return null;
         }
 
-        $name     = $m[1];
+        $name = $m[1];
         $platform = $m[2];
-        $arch     = $m[3];
-        $version  = $m[4];
-        $ext      = $m[5];
+        $arch = $m[3];
+        $version = $m[4];
+        $ext = $m[5];
 
         // Reverse alias: mynet → tui
         $product = $name;
@@ -219,6 +235,7 @@ class ReleaseDomainService
         $name = $this->getProductFilenamePrefix($product);
         $ext = $this->getDefaultExtension($platform);
         $filename = $this->generateFilename($product, $platform, $arch, $version, $ext);
+
         return "/d/{$name}/{$filename}";
     }
 
@@ -254,24 +271,24 @@ class ReleaseDomainService
 
         return [
             'naming' => [
-                'pattern'  => '{product}_{platform}_{arch}_{version}.{ext}',
+                'pattern' => '{product}_{platform}_{arch}_{version}.{ext}',
                 'examples' => [
                     'mynet_linux_amd64_v0.9.8.10.tgz',
                     'gnb_openwrt_mipsel-softfp_v1.6.0.a.tgz',
                     'gnb_windows_amd64_v1.6.0.zip',
                 ],
                 'rules' => [
-                    'default_ext_tgz'     => 'tgz 用于 linux/openwrt/darwin/freebsd',
-                    'windows_ext_zip'     => 'zip 用于 windows',
-                    'softfp_suffix'       => '默认 hard-float 不加后缀，soft-float 加 -softfp',
-                    'tui_alias'           => 'tui 产品对外文件名前缀使用 mynet（历史兼容）',
-                    'version_prefix_v'    => '版本号始终带 v 前缀',
+                    'default_ext_tgz' => 'tgz 用于 linux/openwrt/darwin/freebsd',
+                    'windows_ext_zip' => 'zip 用于 windows',
+                    'softfp_suffix' => '默认 hard-float 不加后缀，soft-float 加 -softfp',
+                    'tui_alias' => 'tui 产品对外文件名前缀使用 mynet（历史兼容）',
+                    'version_prefix_v' => '版本号始终带 v 前缀',
                 ],
             ],
-            'products'      => $productList,
-            'platforms'     => $platformList,
+            'products' => $productList,
+            'platforms' => $platformList,
             'architectures' => $archList,
-            'uname_map'     => self::UNAME_MAP,
+            'uname_map' => self::UNAME_MAP,
         ];
     }
 }
