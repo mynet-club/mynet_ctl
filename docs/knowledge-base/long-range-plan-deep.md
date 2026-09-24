@@ -40,32 +40,38 @@
 
 按能力域给出实测状态。「纸面」= 有文档/有类型定义/有测试，但无可运行实现。
 
+> ⚠️ 本表是 **V 段开工时的基线快照**，不是「现状」。V 段推进中已解决的行，就地在行内
+> 划掉并补上**现证**——读的时候别只看前半句，后半句才是现在。
+
 | 能力域 | 真实状态 | 关键证据 |
 |---|---|---|
 | **数据面隧道** | ✅ **真通**。gnb + wg + 跨驱动桥三场景 e2e PASS，三节点拓扑（2×LAN + 1×QEMU OpenWrt） | `scripts/e2e/g3_tunnel.sh`、`u1_mesh.sh` 6/6 |
-| **社区业务面（back）** | ✅ **真通**。注册/登录/节点/密钥/好友/连接申请/服务 CRUD 实测 200/201/422/410 各就各位；`make check` 126 tests / 2398 assertions | 本文同日 T2-6 实测；`long-range-plan-t.md` §3 T2-6 证据表 |
+| **社区业务面（back）** | ✅ **真通**。注册/登录/节点/密钥/好友/连接申请/服务 CRUD 实测 200/201/422/410 各就各位；`make check` **154 tests / 2503 assertions**（2026-09-24 清理时实测；基线为 126/2398，差额来自 CPI-28 把 Feature 套件并入门禁） | 本文同日 T2-6 实测；`long-range-plan-t.md` §3 T2-6 证据表；`mynet_back` 的 `make check` 输出 |
 | **用户前端（mynet_gui）** | ✅ **四页真打通**，连接向导四步走通并落库 | `long-range-plan-t.md` §3 T2-6 |
-| **gateway** | ❌ **不是可执行程序**。`gateway/` 是无 main 的库包，只有 `Handler() http.Handler`；`handleConnect` 是占位（自陈「真实 WS 握手在 ws.go」，**ws.go 不存在**）；`handleRelay` 恒 502；`Makefile` dist 不产它；当时的 compose 里是 `alpine sleep infinity`（该 compose 已于 V3-0 删除） | `gateway/server.go:157,241-247,249-266`；`cmd/` 只有 `mynet`/`mynetd`；`scripts/e2e/up.sh:78` 自陈「gateway 二进制…cmd 待接 — 跳过」 |
-| **在线升级** | ❌ **纸面**（见 §0 第 1 条）。另：版本比较是**字典序非 semver**（`0.10.0 < 0.9.0`） | `mynet/cmd_update.go:27` |
-| **版本与校验** | ❌ 产物版本**恒为 `dev`**（无 `-ldflags`）；agent 侧无 checksum 生成；客户端从不校验 | `shared/utils/constants.go:6`、`mynet/doc.go:10`、`Makefile:39-52` |
-| **分发中心（ctl）** | ⚠️ **服务端完备、客户端未接**。`releases` 表有 `sha256`、上传即算校验和、manifest 输出 `artifacts[].sha256` + `checksums`；但 `PRODUCTS` 无 `agent`，且 `apps.json` 的 `products` 形状（map）与 fixture/Go 解析器（array + `releases[]`）**不匹配**，Go 测试读 fixture 且缺失即 `t.Skip` → **从未打过真端点** | `ReleaseService.php:32-38`；`ManifestService.php:268-270,279,282,300`；`apps_index_test.go:12-16` |
+| **gateway** | ✅ **可执行（V1 已完成，2026-09-24）**。V1 开工时的基线是「无 main 的库包 + `handleConnect` 占位 + `handleRelay` 恒 502 + `Makefile` dist 不产它 + compose 里 `alpine sleep infinity`」，V1-1~V1-5 已逐项解决（实测证据见 §4 各段） | 现证：`cmd/mynet_gateway/`、`gateway/ws.go`（真握手）、`Makefile:95`（五平台产 `mynet_gateway`）。⚠️ 残留：`scripts/e2e/up.sh:78` 仍自陈「cmd 待接 — 跳过」，该自陈**已过期** |
+| **在线升级** | ~~❌ 纸面（`upgrade.Fetch`/`Install` 是返回 error 的桩）、版本比较是**字典序非 semver**（`0.10.0 < 0.9.0`）~~ → ✅ **V2 已解决**（V2-5 两步协议 Fetch、V2-6 Install 含校验+备份+原子替换+回滚、V2-7 改语义比较、V2-8a 真二进制升一轮） | 现证见 §4「V2 实测证据」：真 `mynet` v0.0.1→v0.0.2；负路径校验和不符被拒且不落 `.bak` |
+| **版本与校验** | ~~❌ 产物版本**恒为 `dev`**（无 `-ldflags`）；agent 侧无 checksum 生成；客户端从不校验~~ → ✅ **V2 已解决**（V2-3 版本注入 + strip、V2-4 `make dist` 出 5 平台 × 3 二进制 + `checksums.txt`、V2-6 客户端校验且不符即拒） | 现证见 §4：三个二进制分别报出注入版本；`-s -w` 让 mynetd 由 9.7MB 降到 7.2MB |
+| **分发中心（ctl）** | ⚠️ **服务端完备**（`releases` 表有 `sha256`、上传即算校验和、manifest 输出 `artifacts[].sha256` + `checksums`）。原先「客户端未接」的五项里，**V2-1/V2-2 已解决两项**：`PRODUCTS` 注册 `mynet_agent`、`apps.json` 形状分歧修正（Go 解析器改打**真端点**，不再读 fixture 后 `t.Skip`）。仍缺：节点面 bundle 拉取与心跳上报（V1-10）、ctl 侧真拉两版（V2-8b） | `ReleaseService.php:32-38`；`ManifestService.php:268-270,279,282,300`；§4 V2 各项 |
 | **可观测性** | ❌ **零**。无 Prometheus/metrics 端点；`mynet metrics` 的 `CPUPercent`/`InterfaceUp`/`Peers`/`PeersUp`/`Addrs` **全仓从未被赋值**；`metrics_vpn.go:20-30` 解析循环空转（`_ = fields`）；darwin 分支读了就丢 → **macOS 全 0**；心跳采完 `_ = out` 直接丢弃；`shared/logger` **零消费者**；告警全仓 0 处 | `mynet/cmd_metrics.go:21,26,36,65`；`metrics_vpn.go:20-30`；`metrics_system.go:55-60`；`cmd/mynetd/main.go:151-157`；`transport/dial_websocket.go:59`（WS 只发 `{"t":"ping"}`） |
 | **back 侧指标** | ⚠️ 有一条真链路：`POST /api/v1/monitor/heartbeat` → Redis（pipeline + 全节点 zset + 离线扫描）。但 `ApiRequestLogger` **未在任何地方注册**（死代码） | `VPN/Routes/api.php:49`；`Monitor/Domain/Services/NodeHeartbeatDomainService.php:54,138,182`；`VPN/Middleware/ApiRequestLogger.php:92` |
 | **压测** | ⚠️ `bench_1k.go` 是**纯进程内合成**（map attach + 桩执行器 `return "ok"`），无网络/无 WS/无心跳/无 back。224k/s 测的是 map+分派吞吐，**与心跳无关** | `scripts/load/bench_1k.go:26-34,37,49,93` |
 | **多平台** | linux ✅ 真跑（U1 三机）· openwrt ✅ 真跑（VM）· darwin ⚠️ 仅能构建（metrics 全 0）· windows ❌ 从未构建。`mynet_desktop` 只有 12 行 plist + 21 行 unit + 22 行脚本，**无任何 .msi/.nsis/.pkg/.dmg/.deb/.rpm**；`mynet install` 只拷二进制、不装 unit、不 enable；`uninstall` 是 print-only | `mynet_desktop/`；`mynet/cmd_install.go:12-48,50-53,55-64` |
-| **移动 relay** | ❌ `/v1/relay` 恒 502、白名单未接线、**无任何客户端使用**（mynet_gui grep `v1/relay` 0 命中，直连 back）；spec 要求的 **mynetd 侧** `GET /api/v1/relay?path=` 在 localapi 路由表里也不存在；移动端载体只有 cordova/capacitor 配置壳，从未产出 | `gateway/server.go:163,241-247`；`spec/control-plane.md:278-289`；`mynetd/localapi/server.go:55-67`；`quasar.config.ts:205,210` |
+| **移动 relay** | ⚠️ ~~`/v1/relay` 恒 502、白名单未接线~~ → **V1-4 已解决这两项**（现真转发、`relaypolicy` 已接线，见 §4）。仍缺：① **移动端 / GUI 侧零消费**（`mynet_gui` grep `v1/relay` 0 命中，仍直连 back）——注意这与**节点面**不同，节点面已复用 `/v1/relay`（V1-9）；② spec 要求的 **mynetd 侧** `GET /api/v1/relay?path=` 在 localapi 路由表里不存在（V1-8）；③ 移动端载体只有 cordova/capacitor 配置壳，从未产出 | `spec/control-plane.md:278-289`；`mynetd/localapi/server.go:55-67`；`quasar.config.ts:205,210`；V1-4 证据见 §4 |
 | **用户文档** | ❌ `mynet_gui/docs/help/index.json` 引用 **47** 个文件、实际只有 **5** 篇正文（`lastUpdated: 2025-09-15`），`HelpPage.vue` 消费它 → 绝大多数链接悬空。**无任何安装指南**。全仓**无隐私政策** | `mynet_gui/docs/help/index.json`；`mynet_desktop/README.md`（8 行，开发向） |
-| **生产环境** | ⚠️ **服务器与证书已存在**：`10.182.236.180`（公网 `52.77.179.176`），ctl/back/gui 共置同机不同 nginx server block，证书 `/etc/letsencrypt/live/mynet.club/{fullchain,privkey}.pem`。但 **back 未部署**（`deploy/` 下**无 Dockerfile**，`build: .` 上下文即 deploy/ → build 必失败）、`manage-prod.sh` 文档里写了但**文件不存在** | `deployment-registry.md:12-15,20`；`mynet_ctl/scripts/deploy/nginx.conf:12-13,21-22`；`mynet_back/deploy/`（仅 5 文件） |
+| **生产环境** | ⚠️ **服务器与证书已存在**：`10.182.236.180`（公网 `52.77.179.176`），ctl/back/gui 共置同机不同 nginx server block，证书 `/etc/letsencrypt/live/mynet.club/{fullchain,privkey}.pem`。但 **back 尚未部署过**（无部署记录）——V3-1/V3-2 已把入口备好（`manage-prod.sh` + `deploy/nginx.conf`），剩余前置是 H5（DBA 建库）与 H6（`back_priv` 入凭证库） | `deployment-registry.md:12-15,20`；`mynet_back/manage-prod.sh`；`mynet_back/deploy/`（4 文件：`.rsyncignore` / `backup.sh` / `nginx.conf` / `README.md`） |
 | **CI/CD** | ❌ `mynet_agent`/`mynet_back` **无 `.github`**；ctl/gui/utc 只有 `copilot-instructions.md`、**无 workflows**；`mynet_openwrt/release.yml` 存在但**该 repo tag 为空 → 从未跑过**；gnb 的 10 个 workflow 产物 rsync 到 **`download.mynet.club`（已废弃链路）不是 ctl** | `mynet_openwrt/.github/workflows/release.yml:1-35`；`mynet_gnb/.github/workflows/build_linux.yml:11,548-555`；`v2-upgrade-plan.md:18` |
 
 ---
 
 ## 2. 拱顶石与关键路径
 
-**一切卡在同一个点上：gateway 从未被构建成可执行程序。**
+**拱顶石已通（V1，2026-09-24）。** gateway 可执行化已完成：`cmd/mynet_gateway` 在、
+`gateway/ws.go` 真握手、`handleRelay` 真转发且 `relaypolicy` 已接线、`Makefile:95`
+五平台产 `mynet_gateway`（V1-1~V1-5 / V1-7 / V1-9 的实测证据见 §4）。
 
 T3-5（G4 外网可用）、T4-4（双 gateway）、T4-6（真节点压测）、T5-3（移动 relay）
-四项的前置都是「有一个能跑、能连、能转发的 gateway 进程」。而它现在是一个库。
+四项共同的前置——「有一个能跑、能连、能转发的 gateway 进程」——**现已具备**。
+它们各自的剩余前置（含人工闸门）见 §3 与 §4。
 
 ```
                     ┌─────────────────────────────────────┐
@@ -79,9 +85,9 @@ T3-5（G4 外网可用）、T4-4（双 gateway）、T4-6（真节点压测）、
           ▼                         ▼                         ▼
   ┌───────────────┐        ┌────────────────┐        ┌────────────────┐
   │ V2 交付链真跑  │        │ V3 生产落地     │        │ V4 规模化       │
-  │ 版本注入/打包  │        │ Dockerfile      │        │ 双 gateway      │
-  │ 校验/真升级    │        │ compose 修好    │        │ presence 接线   │
-  │ ctl 接通 agent │        │ back_priv 注入  │        │ 指标采集→暴露   │
+  │ 版本注入/打包  │        │ 主机部署入口    │        │ 双 gateway      │
+  │ 校验/真升级    │        │ nginx 反代      │        │ presence 接线   │
+  │ ctl 接通 agent │        │ back_priv 文件  │        │ 指标采集→暴露   │
   └───────┬───────┘        └───────┬────────┘        └───────┬────────┘
           │                        │                         │
           │              ┌─────────┴──────────┐              │
@@ -100,7 +106,7 @@ T3-5（G4 外网可用）、T4-4（双 gateway）、T4-6（真节点压测）、
                           └────────────────┘
 ```
 
-**关键路径**：`V1 gateway 可执行化` → `V2 ctl 接通 + 真升级一轮` → `V3 生产部署` → `G4`。
+**关键路径**：`V1 gateway 可执行化` ✅ → `V2 ctl 接通 + 真升级一轮` ✅ → `V3 生产部署`（**进行中**）→ `G4`。
 其中 V3 有一半是人工闸门，**必须尽早启动人工流程**（见 §3），否则工程做完了也上不了线。
 
 **可并行的独立轨道**（不依赖拱顶石，可立即开工，适合派子代理）：

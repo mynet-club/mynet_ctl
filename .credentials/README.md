@@ -8,11 +8,11 @@
 集中保存 mynet 生态全部凭证元数据，使「凭证去哪里查」有唯一入口。  
 本目录是 **ctl 作为统一配置中心**的体现：所有项目的部署信息、域名、数据库连接、API token、第三方服务配置都从这里查阅。
 
-## 目录结构（建立后）
+## 目录结构
 
 ```
 .credentials/
-├── .gitignore                    # 强制忽略
+├── .gitignore                    # 强制忽略（`*` + 白名单，见文件内注释）
 ├── README.md                     # 本文件（入仓）
 ├── _templates/                   # 模板（入仓，不含敏感数据）
 │   ├── servers.md
@@ -21,19 +21,22 @@
 │   ├── third-party.md
 │   ├── domains.md
 │   └── env/
-│       ├── ctl.env.example
-│       ├── back.env.example
-│       └── gui.env.example
-├── servers.md                    # 实际凭证（不入仓，本地维护）
-├── databases.md
-├── api-tokens.md
-├── third-party.md
-├── domains.md
-└── env/
-    ├── ctl.env                   # 生产 .env 真实备份
-    ├── back.env
-    └── gui.env
+│       └── README.md             # 索引：指向各项目自身的 .env.example
+└── （以下本地按需创建，均不入仓）
+    ├── servers.md                # 实际凭证
+    ├── databases.md
+    ├── api-tokens.md
+    ├── third-party.md
+    ├── domains.md
+    └── env/
+        ├── ctl.env               # 生产 .env 真实备份
+        ├── back.env
+        └── gui.env
 ```
+
+> `_templates/env/` 下**只有一份索引 README，不放 `.env.example`**：各项目自己已有
+> `.env.example`，在这里再放一份就是第二处真源，必然漂移。索引只记「哪个项目的
+> `.env.example` 在哪个路径、生产备份该叫什么名字」。
 
 ## 使用约定
 
