@@ -173,6 +173,28 @@
   翻完后 `gen-schema.sh` 第 6 步的警告应自动消失 —— 那就是验收判据。
 - **优先级**：🟠 P1（G4「可互通」的直接阻塞；且它让测试全绿具有误导性）
 
+#### CPI-48. 框架迁移是 **MySQL 专用**的，本机 sqlite 开发库无法由 `migrate` 建出来
+- **位置**：`vendor/dsplat/multi-tenant-saas-module-auth/Database/migrations/2025_01_01_000003_auth_module.php`（`SET FOREIGN_KEY_CHECKS=0`）· `…-module-infrastructure/…000008_infrastructure_module.php`（裸 `CREATE TABLE … ENGINE=InnoDB`）
+- **实测**：全新 sqlite 上 `php artisan migrate --force` 停在第 2 个迁移 ——
+  `SQLSTATE[HY000]: General error: 1 near "SET": syntax error (SQL: SET FOREIGN_KEY_CHECKS=0)`。
+  sqlite 不支持该语句，也不认 `ENGINE=InnoDB` / `unsignedBigInteger` 之外的 MySQL 方言。
+- **后果**：`database/database.sqlite`（39 张表）**不是 migrate 建的**，是手工/测试机制建出来的局部 schema ——
+  实测它缺 `email_verification_tokens` 与 `password_reset_tokens`，于是本机 `php artisan serve` 后
+  **注册接口直接 500**（`no such table: email_verification_tokens`）。
+  而 `make check` 全绿（154/2503），因为测试走 `tests/Schema` 自建表、不碰这个文件。
+- **性质**：与 CPI-47 同族（测试态 / 本机开发态 / 生产态三套 schema 各自漂移），
+  但根因不同：这条是**框架的迁移不可移植**，我方无法在 vendor 侧修（§1.8）。
+- **对 0→1 的影响（重要）**：**本机 sqlite 不是验证 0→1 的可行路径** ——
+  它连注册都跑不通，且无法用 migrate 重建。0→1 必须在 **staging(MySQL 8)** 上验，
+  这也印证了「独立 staging」这个裁定是对的。
+- **修复建议**：① 上游把 `SET FOREIGN_KEY_CHECKS` 与裸 DDL 包在
+  `if ($connection->getDriverName() === 'mysql')` 里（或改用 Schema Builder）；
+  ② 我方短期：给本机开发库也走 MySQL（docker 或 brew services），
+  别再用 sqlite —— 否则「本机能跑」永远不代表生产能跑；
+  ③ 或提供 `scripts/setup-local-db.sh`，从 `deploy/schema/mynet_back-schema.sql`
+  建一个本机 MySQL 库，与生产同一份 DDL。
+- **优先级**：🟠 P1（它让「本机验证」这个最便宜的反馈回路整体失效）
+
 ---
 
 ### 📝 控制面落地发现的缺陷（2026-09-22 记录，发现即记）
