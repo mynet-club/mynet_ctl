@@ -262,7 +262,12 @@ pre-push 才是「不推坏东西」的关口（DoD 要求「测试通过」，�
 ### 4.3 `mynet_web`（新建合并）—— **本节已作废（2026-09-24）**
 
 > ⚠️ D-4 作废：`mynet_web` 只是**官网/项目主页**，`mynet_gui` 才是用户交互前端，**两仓不合并**。
-> `mynet_gui` 已按「挂载，不动结构」纳入 workspace（origin 仍指 `luoyueliang/mynet_gui`）。
+> `mynet_gui` 已按「挂载，不动结构」纳入 workspace。origin 原指 `luoyueliang/mynet_gui`，
+> **2026-09-24 该仓已 transfer 到 `mynet-club/mynet_gui`**，本地 remote 已同步
+> （`git remote set-url`）。至此 workspace 9 个仓全部在 org 下。
+> ⚠️ 但 `mynet_gnb` 的上游 fork `luoyueliang/opengnb` **没有一起迁** —— 实测
+> org 下 not found、旧地址仍有 `main` / `dev-2026-01`，所以
+> `mynet_ctl/scripts/import_gnb_*.sh` 的 `GH_BASE` 仍指个人仓，别顺手改。
 > 下表仅保留作历史记录——实际只执行了 `mynet_ui/src/views/*` → `mynet_web/src/pages/local/` 这一行，
 > `mynet_gui` 的 102 个页面一页未搬，也**不需要**搬。T2-6 一律在 `mynet_gui` 上做。
 
