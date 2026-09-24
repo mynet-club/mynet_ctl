@@ -3,7 +3,7 @@
 | 属性 | 值 |
 |------|-----|
 | **技术栈** | Laravel 12 / PHP 8.2 / MySQL 8.0 |
-| **域名** | api.mynet.club (API) / admin.mynet.club (管理) |
+| **域名** | api.mynet.club (API) / console.mynet.club (租户管理，H4 裁定) |
 | **本地** | api.mynet.local |
 | **角色** | MyNet 组网服务核心后端 |
 

@@ -62,7 +62,7 @@ v1 全景图把 `mynet_client`(Node) / `mynet_tui`(Go) / `mynet_lua` 列为设�
 
 | 项目 | 技术栈 | 域名/部署 | 核心职责 |
 |------|--------|----------|---------|
-| **mynet_back** | Laravel 12 / PHP 8.2 / MySQL | api.mynet.club, admin.mynet.club | 用户·Zone·节点·路由·心跳·密钥管理（REST API） |
+| **mynet_back** | Laravel 12 / PHP 8.2 / MySQL | api.mynet.club, console.mynet.club | 用户·Zone·节点·路由·心跳·密钥管理（REST API） |
 | **mynet_ctl** | Laravel 12 / PHP 8.2 / SQLite | ctl.mynet.club | 软件分发中心：binary/脚本/插件/manifest/设备检测 |
 | **mynet_gui** | Quasar v2 / Vue 3 / TypeScript | my.mynet.club | Web 管理前端（SPA + Electron + Capacitor） |
 | **mynet_web** | Vue 3 / TypeScript / Vite | www.mynet.club | 官网落地页：产品介绍·下载·文档 |
@@ -122,7 +122,9 @@ mynet_client (heartbeat plugin)
 | 域名 | 项目 | 环境 |
 |------|------|------|
 | api.mynet.club / api.mynet.local | mynet_back | prod / dev |
-| admin.mynet.club | mynet_back (admin) | prod |
+| console.mynet.club | mynet_back（**租户管理**，H4 裁定） | prod |
+| gw.mynet.club | mynet_gateway（节点面 WS + `/v1/relay`） | prod |
+| admin.mynet.club | 框架 platform/operator SPA（**不是** back 的管理面） | prod |
 | ctl.mynet.club / ctl.mynet.local | mynet_ctl | prod / dev |
 | my.mynet.club / my.mynet.local | mynet_gui | prod / dev |
 | www.mynet.club / www.mynet.local | mynet_web | prod / dev |
