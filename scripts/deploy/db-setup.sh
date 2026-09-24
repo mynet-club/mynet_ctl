@@ -160,7 +160,7 @@ fix_domains_in_dump() {
     log_info "替换 SQL 中的本地域名为生产域名..."
 
     if [ ! -f "$DUMP_FILE" ]; then
-        log_error "找不到 $DUMP_FILE，请先运行 dump-local"
+        log_error "找不到 ${DUMP_FILE}，请先运行 dump-local"
         exit 1
     fi
 
@@ -190,7 +190,7 @@ fix_domains_in_dump() {
 
 import_to_remote() {
     if [ ! -f "$DUMP_FILE" ]; then
-        log_error "找不到 $DUMP_FILE，请先运行 dump-local"
+        log_error "找不到 ${DUMP_FILE}，请先运行 dump-local"
         exit 1
     fi
 
