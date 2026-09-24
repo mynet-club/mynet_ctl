@@ -99,7 +99,14 @@
   复现工具：`mynet_back/deploy/gen-schema.sh`（失败时会点名撞车表并给出两侧建表名的取法）。
 - **为什么一直没暴露**：本地开发用 sqlite 且库是既有的；`phpunit` 走测试库；生产**禁止 migration**（`deployment-registry.md:63`）。只有「从零建一个 MySQL 库」这条路会撞上 —— 而 H5 恰恰就是它。所以 **B-1 的验收判据「新库可从零建」实测不成立**。
 - **修复方向（属归属决策，不在本轮替人定）**：vendor 只读（§1.8），所以只能动我方那 5 个迁移。**删之前必须逐列比对**我方定义与框架定义的差异 —— 我方可能加了业务列，直接删会静默丢字段。
-- **优先级**：🟠 P1（H5 → T3-4 → G4 全链阻塞）
+- **✅ 已修**（`mynet_back 3466a76`）：删掉 11 个重复 create 迁移 + 1 个无守卫的 ALTER
+  （`add_auth_security_fields_to_users` 加的三列框架 users 全有）；新增
+  `2026_09_25_000001_add_mynet_columns_to_framework_tables` 用 `hasColumn` 守卫把
+  3 个我方独有列补回（`tenants.custom_domain`、`tenant_users.role`、`users.role`）。
+  实测：`deploy/gen-schema.sh` 在隔离临时 MySQL 8.4.8 上 migration 从「第 6 个即失败」
+  变成 **56 条全 DONE**，导出 DDL 135352 字节 / 105 张表，18 张期望表与
+  `node_keys` 的三个生命周期列全在；`make check` 仍 154 tests / 2503 assertions 全绿。
+- **优先级**：🟠 P1 → ✅ 已修（H5 的建库阻塞解除，DDL 已产出 `deploy/schema/mynet_back-schema.sql`）
 
 #### CPI-41. 生产 `api.mynet.club` 上跑的 back **没有业务面**，V2 从未上线
 - **实测（2026-09-25 外网探测）**：`/api/v1/nodes`、`/api/v1/mynet/health`、`/api/v1/social/friends`、`/api/v1/monitor/node/info`、`/api/v1/services`、`/api/v1/users/onboarding` **全 404**（新旧两种路径形状都试过）；只有框架的 `/api/v1/auth/me` 返 401、`/api/v1/auth/login` 返 405（说明路由存在）。`/up` 返回标题为 `MyNetBackNew` 的页面。
@@ -142,6 +149,29 @@
 - **仍未修**：`build.sh` 断链 —— 是删是补需要裁定（删跟踪文件不替人决定）。门禁以「已知缺陷」每次打印。
 - **教训**：**装门禁不要覆盖构建 Makefile，要 include**。
 - **优先级**：🟡 P2 → ⚠️ 部分已修
+
+#### CPI-47. **17 张表只在 `tests/Schema` 里、迁移没有** → 生产库建不出来，相关端点会 500
+- **位置**：`mynet_back/tests/Schema/{CoreModule,MonitorModule,SocialModule,VpnModule}.php` ↔ `database/migrations/`
+- **实测**（`deploy/gen-schema.sh` 第 6 步，本轮新增的检查）：测试 schema 建了而生产 DDL 里没有的表 **17 张** ——
+  `friendships` `friend_requests` `invitations` `social_connections` `node_monitor_snapshots`
+  `monitor_rt_cmds` `node_configs` `node_devices` `node_ips` `node_access_rules`
+  `node_peer_connections` `node_services` `service_approvals` `service_connection_logs`
+  `service_shares` `binary_assets` `customers`
+- **被 app/ 代码引用的**（即生产上会直接 500，不是「死表」）：`invitations`(5 个文件)、
+  `friendships`(4)、`node_configs`(4)、`monitor_rt_cmds`(3)、`friend_requests`(1)、`node_access_rules`(1)
+- **性质**：与 AGENTS.md §4 记的「Testbench 不加载 `bootstrap/app.php` → 测试态与生产态
+  **静默分叉**」同一类，只是分叉点在 schema 而不是中间件。测试全绿（154/2503）
+  恰恰因为它验的是一套生产不存在的表结构。
+- **对计划表的影响**：**B-1「补 create migration（VPN/Monitor/Social 全部表）」只完成了 VPN 业务表那一半**
+  （`2026_09_23_000001_create_vpn_business_tables` 建了 11 张），Monitor 与 Social 两域仍是测试专用 schema。
+  按 §7.1 D1/D4，B-1 的 ☑ 应降级为「部分」。
+- **对 G4 的影响**：V4-2 的心跳证据（`node_monitor_snapshots` 落 `uptime_seconds`）是在
+  **本地 sqlite + 测试 schema** 上取得的；生产库目前建不出这张表，所以「可互通」在生产仍不成立。
+- **修复建议**：把 `tests/Schema/{MonitorModule,SocialModule}.php` 的定义翻成真迁移
+  （注意本项目「主键 = 16 位全局 ID」的约定，以及 `node_monitor_tables.sql:32` 与
+  `tests/Schema/MonitorModule.php:33-48` 那个**秒精度唯一键两处定义不一致**的老问题 P0-6）。
+  翻完后 `gen-schema.sh` 第 6 步的警告应自动消失 —— 那就是验收判据。
+- **优先级**：🟠 P1（G4「可互通」的直接阻塞；且它让测试全绿具有误导性）
 
 ---
 

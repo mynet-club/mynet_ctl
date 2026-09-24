@@ -248,3 +248,40 @@ LOG_CHANNEL=json php artisan tinker --execute="Log::info('probe');"
 框架的 `TenantOnboardingService` 是**租户开通引导**（Operator 驱动，
 基础信息→域名→套餐→支付→创建 Tenant），与这里的**用户新手引导**
 （`completed`/`currentStage`/`selectedPath`/`stages`）是两个概念，不能混用。
+
+---
+
+## 缺陷 3：核心包的 init_data 给**可选模块**的表插种子，且外键在 `FOREIGN_KEY_CHECKS=0` 下静默悬空
+
+- **位置**：
+  - `vendor/dsplat/multi-tenant-saas-module-infrastructure/Database/migrations/2025_01_01_000008_infrastructure_module.php:235`
+    —— `CONSTRAINT tenants_subscription_plan_id_foreign FOREIGN KEY (subscription_plan_id) REFERENCES subscription_plans (subscription_plan_id)`
+  - 同文件 `:11` `SET FOREIGN_KEY_CHECKS=0` / `:239` 置回 1
+  - `vendor/dsplat/multi-tenant-saas/database/migrations/2025_01_01_000018_framework_init_data.php`
+    —— 往 `subscription_plans` 插 **4 条**种子（basic / … / enterprise）
+- **问题**：`subscription_plans` 的建表语句在**已安装的三个包里一个都没有**
+  （全 vendor grep `CREATE TABLE.*subscription_plans` 与 `Schema::create('subscription_plans'` 均 0 命中）——
+  它属于按需裁剪（§1.6：31 个模块只留 3~4 个）时被移除的 billing/subscription 模块。
+  于是：① 000008 在 `FOREIGN_KEY_CHECKS=0` 下把外键建成**指向不存在的表**，不报错；
+  ② 报错被推迟到 000018 的种子插入 —— `SQLSTATE[42S02] 1146 Table '…subscription_plans' doesn't exist`，
+  **全新库上 `migrate` 到此为止**。
+- **为什么是上游的锅**：核心包（必装）无条件依赖一个可选模块的表。裁剪模块是框架**鼓励**的用法
+  （§1.6），而裁剪后核心迁移就跑不完 —— 这两件事不能同时成立。
+- **建议上游怎么修**（任选其一）：
+  1. `framework_init_data` 对每张表先 `Schema::hasTable()` 再插（最小改动，且与其它种子的幂等风格一致）；
+  2. 把 `subscription_plans` 的建表移进核心/infrastructure（既然 `tenants` 的外键指向它，它就是核心的依赖）；
+  3. 去掉 `tenants.subscription_plan_id` 的外键约束，改为应用层校验。
+- **我方处置**（§1.8：不在 vendor 打补丁）：新增
+  `database/migrations/2025_01_01_000010_create_subscription_plans_table.php` 本地兜底 ——
+  带 `hasTable` 守卫（上游哪天自己建了就自动让位）、列型从种子 INSERT 反推（无权威定义可抄，
+  故约束从宽）、文件头写明「上游给出真定义后以它为准并删除本迁移」。
+- **可粘贴给上游的复现**：
+  ```
+  composer require dsplat/multi-tenant-saas dsplat/multi-tenant-saas-module-auth \
+      dsplat/multi-tenant-saas-module-infrastructure   # 只装这三个，不装 billing/subscription
+  php artisan migrate --force
+  # 期望：迁移跑完
+  # 实际：2025_01_01_000018_framework_init_data 失败
+  #       SQLSTATE[42S02]: 1146 Table '…subscription_plans' doesn't exist
+  ```
+
