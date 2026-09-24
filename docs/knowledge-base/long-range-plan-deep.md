@@ -418,7 +418,7 @@ $ MYNET_APPS_INDEX=http://127.0.0.1:18090 mynet update
 | V3-2 | **按 H1 裁定改走 nginx**：`deploy/Caddyfile` 已删，其意图（TLS + api/gw 反代 + 安全头）转为 `deploy/nginx.conf` | H1 ✅, H2, H3 | `nginx -t` 通过 | ✅ 2026-09-24（语法实测通过，仅缺生产机的证书文件）；四个子域 curl 实测待 H2/H3 |
 | V3-3 | ~~compose 收敛~~ **随 V3-0 一并作废**（不再有 compose）。gateway 在主机上以 systemd 运行，redis 由主机提供 | V1-5 | gateway 主机可跑 + redis 可达 | ☐（改为主机侧待办） |
 | V3-4 | ~~compose healthcheck~~ **随 V3-0 作废**；健康检查改由 nginx 的 `/up` 与脚本 verify 承担 | V3-0 | `curl https://api.mynet.club/up` → 200 | ✅ 已并入 V3-1 的 verify_deployment |
-| V3-5 | **重做 T3-3**：备份加密（现在明文 tar.gz）+ 恢复脚本 + **恢复演练** + 密码不走命令行（现在 `-p"$DB_PASSWORD"` 进 `ps`）+ cron 真装（现在只是 README 注释） | — | 从备份**真恢复出一个可用库**；`ps` 里看不到密码 | ☐ |
+| V3-5 | **重做 T3-3**：备份加密 + 恢复脚本 + **恢复演练** + 密码不走命令行 + cron 真装（原先是明文 tar.gz、无 restore、`-p"$DB_PASSWORD"` 进 `ps`、cron 只在 README 注释里） | — | 从备份**真恢复出一个可用库**；`ps` 里看不到密码 | ✅ 2026-09-24。新增 `deploy/{restore.sh,backup-drill.sh,install-cron.sh}` 并重写 `backup.sh`。演练在**隔离临时 MySQL 实例**里跑：造库→加密备份→恢复→**逐表 7/5/2 行数一致 + 内容一致**；另两条断言（备份确实加密、DB 口令不在 `mysqldump` argv）各做了一次**变异测试**，注入「不加密」与「口令进 argv」后都被抓住（见 §V3-5 实测证据） |
 | V3-6a | **按 H7 裁定把 `back_priv` 改为 0600 文件**：文件优先，**权限过宽即拒绝且不回退 env** | H7 ✅ | 代码只从文件读；权限实测；缺/空文件明确报错 | ✅ 2026-09-24（10 测试；「不回退」那条是被测试抓出来的） |
 | V3-6b | **补 `spec/node-keying.md` 的 back_priv 条目**（现在该文件 grep 0 命中 → 规范缺位）：形态、权限、轮换、泄露处置、为什么保护等级高于节点私钥 | V3-6a | 规范与实现一致 | ☐ |
 | V3-6 | `back_priv`/`back_pub` 生成并入 `crt` 凭证库、注入生产 | H6, V3-6a | 节点面 DH+HMAC 在生产真验通过 | 真机心跳 200 | ☐（需 H6） |
