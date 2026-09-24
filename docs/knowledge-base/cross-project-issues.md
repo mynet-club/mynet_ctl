@@ -90,6 +90,59 @@
 - **已记入** `upstream-dsplat-issues.md`（框架缺陷走上游）
 - **优先级**：🟡 P2（不影响功能，但持续污染日志、削弱告警信号）
 
+#### CPI-40. 我方迁移与框架模块迁移**建同一张表** → 全新库 `migrate` 必失败（H5 的硬阻塞）
+- **位置**：`mynet_back/database/migrations/`（我方 25 张建表）↔ `vendor/dsplat/*/database/migrations/`（框架 23 张，用**裸 `CREATE TABLE`** 写，所以 grep `Schema::create` 找不到）
+- **撞车的 5 张**：`tenants` · `tenant_users` · `users` · `system_settings` · `tenant_settings`
+- **实测**：在隔离的临时 MySQL 8.4.8 上跑 `php artisan migrate --force`，第 6 个迁移即
+  `SQLSTATE[42S01]: Base table or view already exists: 1050 Table 'tenant_settings' already exists`
+  （我方 `2025_01_01_000003_create_tenant_settings_table` 先跑，框架 `2025_01_01_000008_infrastructure_module` 后撞）。
+  复现工具：`mynet_back/deploy/gen-schema.sh`（失败时会点名撞车表并给出两侧建表名的取法）。
+- **为什么一直没暴露**：本地开发用 sqlite 且库是既有的；`phpunit` 走测试库；生产**禁止 migration**（`deployment-registry.md:63`）。只有「从零建一个 MySQL 库」这条路会撞上 —— 而 H5 恰恰就是它。所以 **B-1 的验收判据「新库可从零建」实测不成立**。
+- **修复方向（属归属决策，不在本轮替人定）**：vendor 只读（§1.8），所以只能动我方那 5 个迁移。**删之前必须逐列比对**我方定义与框架定义的差异 —— 我方可能加了业务列，直接删会静默丢字段。
+- **优先级**：🟠 P1（H5 → T3-4 → G4 全链阻塞）
+
+#### CPI-41. 生产 `api.mynet.club` 上跑的 back **没有业务面**，V2 从未上线
+- **实测（2026-09-25 外网探测）**：`/api/v1/nodes`、`/api/v1/mynet/health`、`/api/v1/social/friends`、`/api/v1/monitor/node/info`、`/api/v1/services`、`/api/v1/users/onboarding` **全 404**（新旧两种路径形状都试过）；只有框架的 `/api/v1/auth/me` 返 401、`/api/v1/auth/login` 返 405（说明路由存在）。`/up` 返回标题为 `MyNetBackNew` 的页面。
+- **`gw` / `console` / `admin` 三个子域返回同一个 `{"name":"MyNetBackNew","version":"1.0.0","status":"ok"}`** —— `*.mynet.club` 是泛解析，全部落到同一个 server block，**gateway 并未部署**（`/healthz` 404）。
+- **影响**：`long-range-plan-deep.md:61` 写「back 尚未部署过」，实况更具体：**部署过，但是更早的、只含框架 auth 面的实例**。G4 的三条判据（外网可注册/可互通/可升级）里，「可互通」在生产不可能成立。
+- **顺带核正两条文档事实**：① H2（DNS）与 H3（证书 SAN）**实际已满足** —— 泛解析生效、线上证书 SAN = `*.mynet.club, mynet.club`、notAfter 2026-12-11；② 公网 IP 不是文档写的 `52.77.179.176`，实测解析到 `52.221.22.241`（`deployment-registry.md:23` 等待同步）。
+- **优先级**：🟠 P1（G4 的直接阻塞）
+
+#### CPI-42. `MYNET_GATEWAY_ENABLED` 是个**无文档的总闸**，默认 false → back 一个推送都发不出
+- **位置**：`mynet_back/config/gateway.php:17`（默认 false）→ `app/Services/Gateway/GatewayNotifier.php:83`（`if (! config('gateway.enabled')) return;`）
+- **后果**：`command_queued` / `bundle_changed` / `route_changed` 三类事件全不发。而命令入队仍返 200，**从 API 完全看不出异常** —— 节点只能等下次心跳轮询。V1-9 勾「命令链已通」时未记这个前提。
+- **已做**：`.env.example` 补全 5 个键并写清后果（`mynet_back c28b482`）；`manage-prod.sh` 新增远端守卫 4，部署时检查是否显式设置并打印后果。
+- **仍未做**：生产 `.env` 未设（要等 gateway 真部署，见 CPI-41）。
+- **优先级**：🟠 P1
+
+#### CPI-43. `db-setup.sh` 硬编码本地库口令，且口令上命令行；guard A1 **漏报**裸 `PASS=`
+- **位置**：`mynet_ctl/scripts/deploy/db-setup.sh:30`（明文口令）+ `:135`（`mysqldump -p"$LOCAL_DB_PASS"` → 进 `ps`）
+- **guard 为什么没拦住**：A1 的关键字表是 `password|passwd|pwd`，`LOCAL_DB_PASS` 一个都匹配不到。
+- **✅ 已修**（`mynet_ctl 84c7cba`）：口令改为 `LOCAL_DB_PASSWORD_FILE` 优先 / `LOCAL_DB_PASSWORD` 次之，缺则退出码 1 并提示走 `crt use`；mysqldump 改 `--defaults-extra-file`（0600 临时文件 + RETURN trap 清理 + option-file 转义），与 `backup.sh` 的 V3-5 做法一致；去掉 `2>/dev/null` 并校验 `Dump completed` 结束标记。A1 关键字表补 `pass`（实测零误报），诊断改用与判定同一套正则（此前打印的是 guard.sh 自己的定义行，**指错方向**）。
+- **🔴 遗留人工动作**：那个口令**已进 git 历史，需要轮换** —— 从文件里删掉不等于失效。
+- **优先级**：🟠 P1 → ✅ 代码已修，待轮换
+
+#### CPI-44. `refresh-nodes` 是执行器**不存在**的域 → bundle_changed 链始终以退出码 2 收尾
+- **位置**：`mynet_agent/mynetd/commands/commands.go:80`（`OpNodeRefresh/OpNodeUpdate` → `refresh-nodes --auto`）↔ `mynet/cmd_refresh.go:43-55`（只支持 `routes|address|config|keys`）
+- **后果**：报「未知 refresh 域: nodes」。而 `bundle_changed` 恰恰映射到 `OpNodeRefresh`（`cmd/mynetd/events.go:28`），所以「配置包变更 → 刷新节点配置」这条链**从来没通过**，且失败信息看起来像执行器坏了而不是映射错了。
+- **为什么没被测出来**：`TestEveryBackCommandMapsToKnownOp` 只验「能展开成 argv」，不验 argv 有效；执行器与命令表在两个包里，各自的测试都绿 —— 典型**跨包契约漂移**。
+- **✅ 已修**（`mynet_agent aa7090d`）：改为 `refresh-config`（语义依据 `spec/unified-platform-architecture.md:741`：node.refresh 的职责是写 node.conf）；新增守护 `TestPlanRefreshDomainsExistInExecutor`，用 go/ast 从执行器源码取真实支持的域再逐个 op 比对（变异测试：改回 `refresh-nodes` 立刻红）。
+- **优先级**：🟡 P2 → ✅ 已修
+
+#### CPI-45. mynet_web 没有真构建管线，而 embed 进 mynetd 的 WebUI 与 `src/` 无关
+- **实测**：`package.json` 的 `build` 是 `mkdir -p dist && cp dist/index.html dist/index.html 2>/dev/null; echo "static dist/ 已可被 mynetd embed"` —— **cp 自己到自己**，源不存在时被 `2>/dev/null` 吞掉，什么都不产出却 exit 0 并报「已可被 embed」（§7.1 D1 的桩）。`lint`/`test:unit` 同为 echo 占位。
+- **后果**：`mynet_agent/mynetd/localapi/webui/index.html`（5401 字节）是**手写静态页**，grep 无 vue/quasar 痕迹；而 `mynet_web/src/` 有 10 个 Vue 页面 + router + api 层，**从未被构建进去**。两边字节一致只是因为 `sync-embed` 手工跑过一次。D-3「WebUI embed」的机制是真的，但 embed 的不是那份 Vue 应用。
+- **已做**：`scripts/check.sh` 把这条以「已知缺陷」每次打印（`mynet_web 498019b`）；`src/api/local.test.ts` 从 3 行空壳写成 6 个真用例。
+- **优先级**：🟡 P2（不阻塞 G4，但 D-3/D-4 的完成度要按此重述）
+
+#### CPI-46. mynet_utc 的构建 Makefile 曾被门禁模板**整个覆盖**；build.sh 仍断链
+- **实测**：提交 `4300a92`「安装 .githooks 守护 + Makefile.guard」把根 `Makefile` 从 **490 行**（多平台构建、消费 config.mk、plugins/libs/server/client/install/uninstall 全套）覆盖成 **25 行**门禁模板；`configure` 生成的 `config.mk` 从此无人消费；`build.sh` 是指向 `scripts/dev/build.sh` 的**断链**（该目录不存在）。
+- **连带**：`tests/README.md` 从 v1.3.1 起写着「cd tests && make」，而 `tests/Makefile` **从来不存在** —— 4 个测试程序一次都没被编译过。
+- **✅ 大部分已修**（`mynet_utc b9c8678`）：从 `4300a92~1` 恢复 Makefile 并末尾 `include Makefile.guard`（target 零冲突，默认目标仍是 `all`）；补 `tests/Makefile`，4 个测试实测编译+链接+运行通过（**1054 条断言，0 失败**）；顺带修两个缺头缺陷（`mynet_handshake.h` 用 `htons()` 却没 include `<arpa/inet.h>`、`test_event_loop.c` 用 `struct timespec` 却没 include `<time.h>`）。
+- **仍未修**：`build.sh` 断链 —— 是删是补需要裁定（删跟踪文件不替人决定）。门禁以「已知缺陷」每次打印。
+- **教训**：**装门禁不要覆盖构建 Makefile，要 include**。
+- **优先级**：🟡 P2 → ⚠️ 部分已修
+
 ---
 
 ### 📝 控制面落地发现的缺陷（2026-09-22 记录，发现即记）
