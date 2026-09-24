@@ -29,3 +29,6 @@
 Homestead.json
 Homestead.yaml
 Thumbs.db
+
+# 部署产物（scripts/deploy/deploy.sh:98 每次部署重写，不入库）
+/.deployment-info
