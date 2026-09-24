@@ -285,3 +285,47 @@ LOG_CHANNEL=json php artisan tinker --execute="Log::info('probe');"
   #       SQLSTATE[42S02]: 1146 Table '…subscription_plans' doesn't exist
   ```
 
+---
+
+## 缺陷 4：迁移是 **MySQL 专用**的，换任何别的驱动都跑不起来
+
+- **位置**：
+  - `vendor/dsplat/multi-tenant-saas-module-auth/Database/migrations/2025_01_01_000003_auth_module.php`
+    —— `DB::statement('SET FOREIGN_KEY_CHECKS=0')`
+  - `vendor/dsplat/multi-tenant-saas-module-infrastructure/Database/migrations/2025_01_01_000008_infrastructure_module.php`
+    —— 裸 `CREATE TABLE … ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`，同样带 `SET FOREIGN_KEY_CHECKS`
+- **问题**：这两处都是 MySQL 方言，**没有按驱动分支**。实测在 sqlite 上
+  `php artisan migrate --force` 停在第 2 个迁移：
+  `SQLSTATE[HY000]: General error: 1 near "SET": syntax error (SQL: SET FOREIGN_KEY_CHECKS=0)`。
+- **后果（对我方很实际）**：本机开发库无法用 `migrate` 建出来，只能靠
+  `tests/Schema/*.php` 自建一套 —— 于是**测试态 / 本机开发态 / 生产态三套 schema 各自漂移**
+  （CPI-47 / CPI-48 就是这么来的）。staging 上实测 MariaDB 10.11 可以跑通
+  （59 条迁移全 DONE、120 张表），所以问题限于非 MySQL 系驱动。
+- **建议上游怎么修**：把 `SET FOREIGN_KEY_CHECKS` 与裸 DDL 包在驱动判断里
+  （`if ($connection->getDriverName() === 'mysql')`），或改用 Schema Builder 表达同样的结构。
+  退一步，至少在文档里写明「本框架的迁移只支持 MySQL/MariaDB」。
+- **可粘贴给上游的复现**：
+  ```
+  # .env: DB_CONNECTION=sqlite, DB_DATABASE=/tmp/x.sqlite（空文件即可）
+  touch /tmp/x.sqlite && php artisan migrate --force
+  # 期望：迁移跑完（或在 sqlite 上明确报「不支持」）
+  # 实际：2025_01_01_000003_auth_module FAIL
+  #       SQLSTATE[HY000]: General error: 1 near "SET": syntax error
+  ```
+
+---
+
+## 缺陷 5：`ModuleRegistry` 的依赖检查按**完整模块表**做，裁剪后每请求刷 8 条 WARNING
+
+- **位置**：`vendor/dsplat/multi-tenant-saas-module-infrastructure/Services/ModuleRegistry.php:317`
+- **问题**：按需裁剪（我方按 AGENTS.md §1.6 从 31 个模块只留 3~4 个）之后，框架仍按完整模块表
+  检查依赖，于是**每个请求**都记 8 条形如
+  `[ModuleManager] 模块 [activity_plan] 依赖 [ai], 但该模块未安装` 的 WARNING。
+  实测一天 2224 条（8 × 278 次请求）。
+- **后果**：① 真错误被淹；② **WARNING 级别失去信号价值**（一天两千多条等于没有 WARNING）；
+  ③ 日志膨胀 —— 我方生产上 `storage/logs/laravel.log` 涨到 **14 GB**、把 40G 磁盘吃到 91%，
+  这类噪音是主要贡献者之一（2026-09-25 已清理，磁盘回到 25%）。
+- **建议上游怎么修**：只对**已启用**的模块做依赖检查；或把「模块本身未启用」这种情况降到 debug。
+- **我方处置**：不在 vendor 打补丁（§1.8）；已清理日志并计划给日志加轮转与级别过滤。
+- **对应台账**：CPI-39
+
