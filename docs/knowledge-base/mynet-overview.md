@@ -76,9 +76,22 @@
 |---|---|
 | `api.mynet.club` | `mynet_back`（业务 API） |
 | `ctl.mynet.club` | `mynet_ctl`（分发 + 知识库） |
-| `my.mynet.club` | `mynet_gui`（社区管理前端） |
-| `www.mynet.club` | `mynet_web`（官网，已归档） |
+| `my.mynet.club` | `mynet_gui`（**用户交互前端**） |
+| `www.mynet.club` | `mynet_web`（官网 / 项目主页） |
 | `idx.mynet.club` | GNB index 节点（`address.conf` 里的索引服务） |
+| `console.mynet.club` | **租户管理**（= back 的管理面） |
+| `admin.mynet.club` | **平台管理**（框架 platform/operator SPA） |
+| `gw.mynet.club` | `mynet_gateway` 公网入口（单入口；多实例时再开 `gw1`/`gw2`） |
+
+⚠️ **2026-09-24 裁定（H4）**：`console` = 租户管理，`admin` = 平台管理。
+此前 `deployment-registry.md:13` / `ecosystem.md:125` / `brand-guide.md:152` 把 **back 管理面**
+写作 `admin`，与 `unified-platform-architecture.md:100,130`（`adm` = 框架 platform/operator SPA，
+「不在 back」）冲突。裁定后：**back 管理面改称 `console`**，`admin` 让给平台管理，`adm` 弃用。
+上述三处文档待同步。
+
+⚠️ **2026-09-24 裁定（H1）**：生产入口**复用现有 nginx**（`172.26.3.227:443`，前置公网 LB，
+证书 `/etc/letsencrypt/live/mynet.club/`），**不引入 Caddy**。
+`mynet_back/deploy/{Caddyfile,caddy-compose.yml}` 归档或删除；api/gw/console/admin 各加 nginx server block。
 
 ---
 
@@ -780,6 +793,11 @@ gnb 靠协议层自己兜底，wg 必须靠上层观测切换。硬压成一套�
 | **多节点并行分两步**（2026-09-23） | 短期互斥切换 `POST /api/v1/nodes/switch`；并行作为后续增量，不阻塞 M0–M1 |
 | **连接「已鉴权」置位时机**（2026-09-23） | gateway 维护连接状态表；back 验证通过**任意一次**节点通道请求即置位。回传机制：back 响应头 `X-Node-Verified: <node_id>`，gateway 解析后置位；伪造 node_id 不被置位 |
 | **mynet_back 按需 module 砍 logging**（2026-09-23） | 只留 `multi-tenant-saas` + `infrastructure` + `auth`；MyNet 不用审计日志，`logging` 一并砍 |
+| **D-4 作废：`mynet_gui` 才是用户交互前端**（2026-09-24） | `mynet_web` 只是**官网/项目主页**（`www.mynet.club`），`mynet_gui`（`my.mynet.club`，Vue3+Quasar，102 个页面）才是真正提供给用户交互的地方。原「合并 `mynet_ui`+`mynet_gui` → `mynet_web` 一份 WebUI」的 D-4 **作废**；S 段只搬了 `mynet_ui` 的 `local/` 6 页进 `mynet_web`，`mynet_gui` 一页未搬。**T2-6 的载体是 `mynet_gui`**，已挂载进 workspace（origin 仍指 `luoyueliang/mynet_gui`，不新建 org 仓） |
+| **multi_tenant_saas 框架只使用不修改**（2026-09-24） | `vendor/dsplat/**` 只读。框架缺陷或新需求**回上游 `github.com/dsplat/*` 改**，这边 `composer update` 拉进来。定位问题先判根因在 `app/`（可改）还是 `vendor/dsplat/`（只出报告），别把框架 bug 当自己的 bug 绕过去。详见 `AGENTS.md` §1.8 |
+| **H1 生产入口复用现有 nginx，不引入 Caddy**（2026-09-24） | 生产已有 nginx（`listen 172.26.3.227:443`，前置公网 LB）+ Let's Encrypt 证书（`/etc/letsencrypt/live/mynet.club/`）。`deploy/caddy-compose.yml` 直接占宿主 80/443 与该拓扑冲突，且该文件本身是坏的（跨文件 `depends_on` 报 `invalid compose project`）。→ 只加 server block，Caddy 方案归档 |
+| **H4 `console` = 租户管理，`admin` = 平台管理**（2026-09-24） | 用户原话：「back管理是租户管理，租户管理是console，admin 是平台管理」。→ back 管理面称 `console.mynet.club`；`admin.mynet.club` 让给框架 platform/operator SPA；`adm` 弃用。`deployment-registry.md:13` / `ecosystem.md:125` / `brand-guide.md:152` 三处待同步 |
+| **H7 `back_priv` 用 0600 文件，不用 env**（2026-09-24） | 按原规范（`product-form/index.html:1121,1134`：不进代码库、不进 BundleEnvelope、有条件上 KMS）。现实现是 env 注入（`config/mynet.php:25-26`、`docker-compose.yml:16-17`）**与规范不符，须改**。理由：`back_priv` 保护等级**高于**节点私钥（泄露可冒充**所有**节点），而 env 会出现在 `docker inspect`、compose 文件与进程环境里。`spec/node-keying.md` 现无 back_priv 条目，须补 |
 
 ---
 

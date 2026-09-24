@@ -5,7 +5,10 @@
 > 状态：**契约 SSOT**（跨仓引用此处；实现细节仍以 `mynet_agent/docs/API.md` 为最新）
 > 关联：[`control-plane.md`](control-plane.md)（GUI 接入模型与 `relay` 域）
 >
-> **实现进度**（2026-09-22 起，落在 `mynet_agent/internal/localapi`）：
+> **实现进度**（2026-09-22 起，落在 `mynet_agent/mynetd/localapi`）：
+>
+> ⚠️ 2026-09-24 更正：本行原写 `mynet_agent/internal/localapi`，但 V2 树里**没有 `internal/` 目录**，
+> 实际路径是 `mynetd/localapi`。下表各行的「✅ 已实现」按此路径复核，relay 一行已更正为 ❌。
 >
 > | 域 | 状态 | 说明 |
 > |----|------|------|
@@ -16,7 +19,7 @@
 > | nodes / zones | ✅ 已实现 | **zone ≡ tenant**（用户确认；back 亦把 tenant 切换写作「切换当前区域」）。两域是 relay 之上的具名薄封装：数据源在 back，并**合并本机态**——当前区域＝本节点所属租户、当前节点＝`mynet.conf` 的 NodeID（裸 relay 给不了）。`GET /zones`、`GET /nodes`、`POST /zones/switch` 均已实现并真环境实测。「切换当前**节点**」（改 `mynet.conf` + 重载）未做，与 CPI-11 同块依赖 |
 > | peers | ✅ 已实现 | 复用驱动的 `GetAllPeers` / `GetNetworkSummary`（即 `gnb_ctl -s` 的解析结果），不重复解析 |
 > | logs | ✅ 已实现 | 读日志环形缓冲（与写往文件/控制台的是同一份格式化行） |
-> | relay | ✅ 已实现 | 平台态经网关中继；路径白名单默认拒绝、`relaypolicy` 单一来源；已对**真 back** 实测（`/api/v1/nodes` 200 + admin 403） |
+> | relay | ❌ **未实现（2026-09-24 复核更正）** | 本行原写「✅ 已实现…已对真 back 实测（`/api/v1/nodes` 200 + admin 403）」——**不成立**。V2 树里 `mynetd/localapi/server.go:56-65` 的路由表**没有** `/api/v1/relay`，全仓也搜不到任何 relay 实现（只有 `gateway/server.go` 的注释与 `cmd_setup.go:129` 的一句打印）。原记录描述的是 V1 的工作，从未搬进 V2。见 `long-range-plan-deep.md` §4 的 **V1-8**。<br>⚠️ 注意区分：**gateway 侧**的 `/v1/relay`（C-7 用户面入口）已于 2026-09-24 真实现并对真 back 实测通过（login 200 / nodes 200 / 未鉴权 401 / admin 403）；缺的是 **mynetd localapi 侧**这一跳 |
 >
 > 传输：HTTP 已实现（`127.0.0.1:<port>`，token 0600 鉴权，写操作强制 POST）。
 > **ubus 传输未实现**——按本文件 §1 的「同一能力面，两种传输，一份实现」，

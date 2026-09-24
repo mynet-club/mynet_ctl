@@ -14,11 +14,22 @@
 |---|---|---|
 | `docs/mynet-overview.md` | **为什么这么设计**（九条主线、L1–L7、决策记录） | 本文档同级 |
 | `docs/repo-migration.md` | **仓库怎么建、代码怎么搬**（9 阶段 + 搬运清单 + 隐性知识） | 同上 |
-| `docs/dev-plan.md` | **建完做什么** —— 含 **64 项计划顺序表**（唯一跟踪入口） | 同上 |
+| `docs/dev-plan.md` | **建完做什么** —— 含 **64 项计划顺序表**（S 段跟踪入口） | 同上 |
+| `docs/long-range-plan-deep.md` | **现在真正该做什么** —— 基线校正（五处假勾选）+ V0–V5 波次编排 + 人工闸门清单 + 反纸面达成五条 | 同上 |
+| `docs/cross-project-issues.md` | **欠了什么债** —— CPI 台账（发现即记，修好移入「已修复」） | 同上 |
+| `docs/upstream-dsplat-issues.md` | **哪些是框架的锅** —— 上游缺陷报告 + 可粘贴提示词（§1.8：不改 vendor） | 同上 |
 
-**任务 ID 以 `docs/dev-plan.md` §3 计划顺序表为唯一标识。**
+**任务 ID 以 `docs/dev-plan.md` §3 计划顺序表为唯一标识**（S 段）；
+R/T 段见 `long-range-plan.md` / `long-range-plan-t.md`，
+**V 段（当前）见 `long-range-plan-deep.md` §4**。
 推进方式：按序号勾掉「状态」列；「前置」列告诉你什么时候能动它。
-两个硬门槛：**M0**（测试基绿）· **M1**（双驱动验证通过）。
+
+⚠️ **勾选前必读 §7.1 反纸面达成五条（D1–D5）**。2026-09-24 的基线校正发现
+R4-1/R4-2/R4-3+G2、T3-3、C-6、F-4 共五处是纸面达成——桩代码、skip 掉的测试、
+把 502 断言成 PASS，都曾被当成「完成」。
+
+硬门槛：**M0**（测试基绿）· **M1**（双驱动验证）· **G3**（真隧道，已达成）·
+**G2**（可分发可升级，**已撤勾**）· **G4**（生产可用）。
 
 ---
 
@@ -87,6 +98,19 @@ operator / platform / plugin / ticket / sms / form / knowledge / conversation �
 **新 repo + 新结构，从旧代码「搬运正确部分」**。旧代码里有踩坑得来的隐性知识，
 从零重写会丢。搬运清单见 `repo-migration.md` §4；隐性知识清单见其 §0。
 **不搬**：死代码、重复实现、bug 产物（如 `driver/gnb/conf/*/ed25519/%!d(string=...).pub`）。
+
+### 1.8 multi_tenant_saas 框架只使用、不修改
+
+`mynet_back` 建立在 `dsplat/multi-tenant-saas`（+ `-module-infrastructure` / `-module-auth`）之上，
+经 `composer.json` 的 VCS repository 从 `github.com/dsplat/*` 装进 `vendor/dsplat/`。
+
+**我们只使用，不直接修改。** 具体规则：
+
+- `vendor/dsplat/**` 一律**只读**——不打补丁、不 patch-package、不改完就 commit。
+- 发现框架缺陷或需要新能力时：**回上游 `github.com/dsplat/*` 改**，改完这边 `composer update` 拉进来。
+- 定位问题时先判**根因落在哪一侧**：`app/`（我们的，可改）还是 `vendor/dsplat/`（框架的，只出报告）。
+  判定结论要写进任务记录，别把框架 bug 当自己的 bug 绕过去。
+- 我们自己的业务代码在 `app/Modules/VPN/` 等 `app/` 路径下，**这些可以改**。
 
 ---
 
@@ -182,6 +206,27 @@ operator / platform / plugin / ticket / sms / form / knowledge / conversation �
 | **gnb_es 子进程不会自动退出** | Lua 现在靠 PPID 匹配清理——说明 gnb 崩溃时会留孤儿。procd 接管前必须验证 |
 | **`_gnb_peer_heal` 的判据依赖已下架的 `mynet_proxy`** | 判据是 `proxy_state.json` + `PROXY_GATEWAYS`。**先改造判据**（改用 `gnb_ctl -s` 的 PONG / ping 对端 VPN IP）再搬 |
 
+**后端配置 / 前端类**（2026-09-24 T2-6 实测新增，每条都曾真实卡住联调）：
+
+| 坑 | 后果 |
+|---|---|
+| **`mynet_back` 缺 `.env`** | `APP_KEY` 为空 → **全站每个请求 500**（`MissingAppKeyException`），连 `/` 都不通。而 `phpunit` 走 `phpunit.xml` 的 env，**测试全绿也照样发现不了**。新克隆第一步必须 `cp .env.example .env && php artisan key:generate` |
+| **框架默认 `redirectGuestsTo(fn () => route('login'))`** | back 是纯 API 后端、无 `login` 命名路由。`Authenticate.php:104` 仅在请求**未**声明 `expectsJson` 时才调 `redirectTo`，于是**不带 `Accept: application/json` 的未鉴权请求 500 而非 401**。修：`bootstrap/app.php` 里 `$middleware->redirectGuestsTo(null)` |
+| **Testbench 不加载 `bootstrap/app.php`** | 测试态与生产态**静默分叉**——`bootstrap/app.php` 里的中间件/异常配置在测试里一律不生效。`tests/TestCase.php` 必须逐条镜像（现有两处：`IdentifyTenant` prepend、`redirectGuestsTo(null)`）。镜像 `redirectGuestsTo` 要走框架的 `(new Middleware)->redirectGuestsTo(null)`，因为它一次设**三个**静态回调（`Middleware.php:571-575`），而异常渲染路径读的是 `AuthenticationException` 那个 |
+| **Quasar 的 env 命名法与优先级都 ≠ Vite 惯例** | ① 命名：`@quasar/app-vite/lib/utils/env.js:31` 是 `buildType = ctx.dev ? 'dev' : 'prod'`，查找序为 `.env → .env.local → .env.dev → .env.local.dev → .env.spa → …`，所以 **`.env.development` / `.env.production` 永远不会被加载**（曾是仓内被跟踪的死文件，已 `git mv` 为 `.env.dev`/`.env.prod`，CPI-30）。② **优先级与 Vite 相反**：`env.js:101-116` 是 `Object.fromEntries(fileList.flatMap(…))`，**后面的覆盖前面的** → `.env.local` 会被 `.env.dev` 压成 no-op，**本地覆盖必须用 `.env.local.dev`**（且 `.gitignore` 的 `.env.*.local` 匹配不到它，需另加 `.env.local.*`） |
+| **`config/cors.php` 默认值对浏览器永远失效** | 默认 `'localhost,127.0.0.1'` 缺 scheme+port，而 `Origin` 头永远是完整的 `http://localhost:5173`，精确匹配永不相等 → 预检 204 但**无 `Access-Control-Allow-Origin`**，浏览器全线拦。必须配 `CORS_ALLOWED_ORIGINS` 为完整 origin |
+| **Eloquent scope 与实例方法不同名同义** | `Node` 只有 `scopeOnline()`/`scopeEnabled()`，没有 `isOnline()`/`isEnabled()`；按实例方法调用抛 `BadMethodCallException`（是 `\Error`，**不被 `catch (\Exception)` 捕获**）。症状在前端（向导「可用设备」恒 0），故障在后端 |
+| **业务规则拒绝返回 500** | `DomainException` 经 `serverErrorResponse` 一律变 HTTP 500（如「该连接已经建立，无需重复申请」）。应是 409/422，否则监控全是假告警 |
+
+**Go / agent 类**（2026-09-24 V1 拱顶石实测新增）：
+
+| 坑 | 后果 |
+|---|---|
+| **包装 `http.ResponseWriter` 必须透传 `Hijacker`** | gateway 的 `withVerifiedHook` 用 `verifiedRecorder` 包了一层只重写 `WriteHeader`，`http.Hijacker` 没被提升 → WebSocket 升级拿不到底层 TCP 连接，`websocket.Accept` 直接返 **501 Not Implemented**。⚠️ **用 `httptest.NewRecorder` 测不出来**（它本来就不支持 Hijack），只有真握手才暴露。同理需要时还要透传 `Flusher` |
+| **踢旧连接只摘表 = goroutine 泄漏** | 连接表里替换掉旧 `*Conn` 不够：旧 handler 的读循环仍阻塞在 `conn.Read`、写循环仍阻塞在 `select`。必须让 `Conn` 持有 `context.CancelFunc`，`Close()` 时一并取消，读循环才会返回 |
+| **无条件 `Unregister` 会误摘新连接** | 节点重连时新连接先登记、旧连接的收尾 defer 后跑。旧连接若无条件 `Unregister(nodeID)`，会把刚登记的新连接摘掉，表现为「节点明明连着却显示离线」。要用 `UnregisterIf(nodeID, c)` 比对指针 |
+| **有缓冲 channel 不等于消息会送达** | `Conn.send` 是 `make(chan []byte, 16)`，`Notify` 投进去就返回 nil。没有 writeLoop 排空时，投满 16 条后一律 `errSendFull`，而前 16 条**永远发不出去**——推送看起来「成功」了，节点却什么都收不到 |
+
 ---
 
 ## 5. 项目地图
@@ -189,13 +234,19 @@ operator / platform / plugin / ticket / sms / form / knowledge / conversation �
 | repo | 角色 | 决策 |
 |---|---|---|
 | `mynet_agent` | Go — mynetd（纯通信）+ mynet（执行器）+ mynet_gateway + mynet-updater | **新建 + 整理式搬运** |
-| `mynet_web` | Vue3+Quasar — 一份 WebUI（本机域 + 社区域） | **新建**（合并 `mynet_ui` + `mynet_gui`，Quasar 基线） |
+| `mynet_gui` | Vue3+Quasar — **用户交互前端**（社区域，服务 back，`my.mynet.club`） | **挂载，不动结构** ⚠️ T2-6 的载体 |
+| `mynet_web` | **官网 / 项目主页**（`www.mynet.club`） | 挂载；**不是** WebUI |
 | `mynet_desktop` | 非 OpenWrt 平台适配 | **新建** |
 | `mynet_back` | Laravel — 业务权威 | **新建 + 整理式搬运**，**按需 module（31→3~4）** |
 | `mynet_openwrt` | LuCI 壳 + ubus 薄桥 + ipk | **改造** |
 | `mynet_ctl` | 分发中心 + **知识库中枢**（`docs/knowledge-base/`） | **挂载，不动** |
 | `mynet_gnb` | opengnb fork + 补丁包 | **挂载，不动** ⚠️ git 历史必须保留（rebase 上游） |
 | `mynet_utc` | UDP→TCP 隧道 | **挂载，不动** |
+
+⚠️ **D-4 已作废**（原「合并 `mynet_ui` + `mynet_gui` → `mynet_web` 一份 WebUI」）。
+用户 2026-09-24 裁定：`mynet_web` 只是官网/项目主页，**`mynet_gui` 才是真正提供给用户交互的地方**。
+S 段执行 D-4 时只把 `mynet_ui` 的 `local/` 6 页搬进了 `mynet_web`，`mynet_gui` 的 102 个页面一页未搬——
+那 6 页属本机控制台素材，**不是** T2-6 的落点。T2-6 一律在 `mynet_gui` 上做。
 
 **mynetctl 的 `docs/knowledge-base/` 是文档中枢**——查规范先去那里：
 `spec/unified-platform-architecture.md`（L1–L7 权威）、`spec/control-plane.md`、
@@ -222,3 +273,21 @@ operator / platform / plugin / ticket / sms / form / knowledge / conversation �
 4. **顺序表已勾选**：更新 `docs/dev-plan.md` §3 对应行的「状态」列；
 5. **证据可查**：结论带 `file:line` 或实测输出；
 6. **安全红线未触**：无硬编码凭据、无私钥出口、embed 必校验 Origin/Host。
+
+### 7.1 反纸面达成五条（2026-09-24 新增，硬规矩）
+
+> 起因：基线校正发现**五处已勾项是纸面的**（R4-1/R4-2/R4-3+G2、T3-3、C-6、F-4），
+> 详见 `long-range-plan-deep.md` §0。问题不在「某几个功能没做」，
+> 而在**验收机制没能拦住纸面达成**。勾选任何一项前，先逐条自问 D1–D5。
+
+| # | 规矩 | 针对的真实案例 |
+|---|---|---|
+| **D1** | **返回 error 的桩不算实现**。凡 `return fmt.Errorf("…未注入…")` 这类占位，所属项**一律不得勾选** | `mynet/upgrade/service.go:47-52` 两个桩，R4-3 却勾了 ☑ |
+| **D2** | **测试必须打真端点**，不许「读 fixture，缺失即 `t.Skip`」——skip 掉的测试等于没有测试 | `apps_index_test.go:12-16` 从未打过真 ctl 端点，`apps.json` 形状分歧因此潜伏 |
+| **D3** | **不得把未实现的行为断言成期望值**。锁死错误状态的测试比没有测试更糟 | `gateway/server_test.go:72-83` 把恒 502 判为 PASS |
+| **D4** | **勾选必须附实测输出**，「代码已写」不是证据 | 五处假勾选无一附实测输出 |
+| **D5** | **字符串 grep ≠ 行为正确**。只 grep 注释/关键字的安全审计必须标注为「静态检查」，不得计入「安全复检通过」 | `security_audit.sh` E 项靠 `server.go:3` 有「不鉴权」注释即通过 |
+
+**无法给出实测输出时**：记为 `<ID>a`（部分达成，如 T4-6a 合成 / T5-1a 可构建），
+**不要勾掉原 ID**。合成压测、交叉编译出包、mock 测试都属此类——
+`long-range-plan-t.md` §5 早就写过「合成压测不能替代真集群」，判据对了，勾选时必须也遵守。

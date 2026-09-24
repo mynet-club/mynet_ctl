@@ -259,9 +259,14 @@ pre-push 才是「不推坏东西」的关口（DoD 要求「测试通过」，�
 | `TransportPlannerDomainService` | plan/planAll |
 | X25519 DH + HMAC 的节点面鉴权中间件 | 替代现 HMAC（公钥当密钥） |
 
-### 4.3 `mynet_web`（新建合并）
+### 4.3 `mynet_web`（新建合并）—— **本节已作废（2026-09-24）**
 
-**搬**：
+> ⚠️ D-4 作废：`mynet_web` 只是**官网/项目主页**，`mynet_gui` 才是用户交互前端，**两仓不合并**。
+> `mynet_gui` 已按「挂载，不动结构」纳入 workspace（origin 仍指 `luoyueliang/mynet_gui`）。
+> 下表仅保留作历史记录——实际只执行了 `mynet_ui/src/views/*` → `mynet_web/src/pages/local/` 这一行，
+> `mynet_gui` 的 102 个页面一页未搬，也**不需要**搬。T2-6 一律在 `mynet_gui` 上做。
+
+**搬**（历史计划，勿再执行）：
 
 | 旧位置 | 新位置 |
 |---|---|

@@ -56,11 +56,11 @@ T1 真连通 ──────────────► G3：双节点 gnb/wg
 | 9 | | T2-3 | 加好友 → 连接请求 → 授权 → Bundle 下发 | T2-2 | ☑ |
 | 10 | | T2-4 | 节点服务：发布 web → 访问控制 → 浏览器可达 | T1-3, T2-3 | ☑ |
 | 11 | | T2-5 | proxy 意图：经 gnb 节点访问对方内网段 | T1-3 | ☑ |
-| 12 | | T2-6 | Quasar 真 UI：登录/向导/节点/好友四页走通 | T2-3 | ☐ |
+| 12 | | T2-6 | Quasar 真 UI：登录/向导/节点/好友四页走通（**载体 = `mynet_gui`**，非 mynet_web） | T2-3 | ☑ |
 | 13 | | T2-7 | **演示脚本** `demo_t2.sh` 一键全程 | T2-4..6 | ☑ |
 | 14 | **T3 生产** | T3-1 | back+gateway 部署清单（compose/systemd） | T2-1 | ☑ |
 | 15 | | T3-2 | 域名 + TLS：`api/gw/ctl.mynet.club` | T3-1 | ☐ |
-| 16 | | T3-3 | 备份/恢复：DB + 密钥（back_priv 高保护） | T3-1 | ☑ |
+| 16 | | T3-3 | 备份/恢复：DB + 密钥（back_priv 高保护） | T3-1 | ☐ **撤勾** |
 | 17 | | T3-4 | 真机注册一台（非 VM）走完 T2 流程 | T3-2 | ☐ |
 | 18 | | T3-5 | **G4**：外网可注册、可互通、可升级 | T3-2..4 | ☐ |
 | 19 | **T4 交付** | T4-1 | CI：tag → build 三平台 → 传 ctl | T3-1 | ☐ |
@@ -78,6 +78,19 @@ T1 真连通 ──────────────► G3：双节点 gnb/wg
 
 **里程碑**：G3 = #6 · G4 = #18 · 全表完 = 可公测。
 
+> ⚠️ **2026-09-24 基线校正**
+>
+> **T3-3 撤勾**：`deploy/backup.sh` **无加密**（明文 tar.gz，而本文件 §6 风险表自己要求
+> 「T3-3 备份加密」）、**无恢复脚本、无恢复演练**、cron 只是 `README.md:34` 的注释、
+> `:11` 用 `-p"$DB_PASSWORD"` 命令行传密（进 `ps`）。重做计划见 `long-range-plan-deep.md` §4 的 **V3-5**。
+>
+> **G4 的前置能力有一半不存在**：`mynet_gateway` 二进制**从未被构建**（`gateway/` 是无 main 的库包，
+> `cmd/` 只有 `mynet`/`mynetd`，compose 里是 `alpine sleep infinity`），`handleRelay` 恒 502、
+> `relaypolicy` 白名单只在注释里。G4 判据中「可互通」在生产**不可能通**。
+> 详见 `long-range-plan-deep.md` §0/§1/§2（拱顶石 = gateway 可执行化）。
+>
+> **T2-6 已达成**（2026-09-24）：四页真打通新 back，证据见本文件 §3。
+
 ---
 
 ## 3. 出口判据
@@ -87,6 +100,35 @@ T1 真连通 ──────────────► G3：双节点 gnb/wg
 - `gnb_ctl -s` 显示 PONG；wg `latest handshake` 有效
 - 跨驱动：gnb 节点 ping 通 wg 节点网段
 - e2e 脚本可重复（`scripts/e2e/g3_tunnel.sh`）
+
+### T2-6 四页走通（2026-09-24 实测，载体 = `mynet_gui`）
+
+真浏览器（Playwright）+ 真 back（`127.0.0.1:8080`，sqlite）逐页验证：
+
+| 页 | 路径 | 判据 |
+|---|---|---|
+| 登录 | `/auth/login` | 提交后跳 `/app/dashboard`；控制台 `Raw login response: {success: true}`，token 刷新已排程 |
+| 节点 | `/app/nodes` | 控制台 `节点列表API响应: {success: true, code: 200}`，列表为 back 真数据 |
+| 好友 | `/app/social/friends` | `GET /api/v1/social/friends` 200，「好友列表」渲染出真好友 UserB |
+| 向导 | `/app/routes/create/prev_1..4` | 四步全走通：选好友（`设备: 1`）→ 选好友设备（`t23-b · online`）→ 选我的设备（`t23-a`）→ 提交申请 |
+
+**提交申请落库证据**：`POST /api/v1/route/send-request` → HTTP 200 `路由申请发送成功`，
+`node_route_requests` 新增 `req=4456240307586718 src=2217163829607286 tgt=4336588521958812 status=pending`。
+重复申请被业务规则正确拦下（`该连接已经建立，无需重复申请`，`RouteRequestDomainService.php:103`）。
+
+**为打通所修的真实缺陷**（都在我方，非框架）：
+
+| 缺陷 | 位置 | 症状 |
+|---|---|---|
+| 缺 `.env` → `APP_KEY` 空 | 项目根 | **全站每个请求 500**（`MissingAppKeyException`），连 `/` 都不通 |
+| 未覆盖框架默认 `redirectGuestsTo(fn () => route('login'))` | `bootstrap/app.php` | 不带 `Accept: application/json` 的未鉴权请求 → `RouteNotFoundException` 500 而非 401 |
+| `Node` 只有 scope 没有实例方法 | `app/Modules/VPN/Models/Node.php` | `SocialDomainService:547/:700/:840` 调 `isOnline()`/`isEnabled()` → `BadMethodCallException` → 两个好友节点端点 500 → **向导「可用设备」恒 0、下一步永远禁用** |
+| `nodes_count` 硬编码 0 | `SocialDomainService.php:397`（原 `// TODO`） | 好友列表永远报 0 个节点，与 `getAllFriendsNodes():857` 口径不一致 |
+| CORS 默认值失效 | `config/cors.php` | 默认 `'localhost,127.0.0.1'` 缺 scheme+port，与真实 `Origin` 精确匹配永不相等 → 浏览器全线被拦 |
+
+门禁：`make check` **126 tests / 2398 assertions** 全绿（含新增 `TenantServiceApiTest` 20 项、
+`SocialFriendNodesTest` 7 项、`NodeTest` 状态判定 3 项）。Feature 套件已并入 `Default`，
+不再游离于 `make check` / pre-push 之外。
 
 ### G4 生产可用（T3）
 - 外网 `https://api.mynet.club` 注册登录

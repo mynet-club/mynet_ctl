@@ -208,7 +208,7 @@ mynet（配置工具 + 系统能力）
 | D-1 | **本地 token**：首次 `GET /` 种 `HttpOnly`+`SameSite=Strict` cookie | `internal/localapi/` | 浏览器可调本机 API |
 | D-2 | **Origin / Host 校验**（防 DNS rebinding） | 同上 | 恶意网页请求被拒 |
 | D-3 | **WebUI embed**（`embed.FS` + `http.FileServer`） | `internal/localapi/` + `mynet_ui` 产物 | 装完即用，零配置 |
-| D-4 | **UI 合并**（以 `mynet_gui` 的 Quasar 为基线，迁 `mynet_ui` 本机域页面） | 新仓库或 mynet_gui 扩展 | 一份 UI，两个功能域（本机 / 社区） |
+| D-4 | ~~**UI 合并**（以 `mynet_gui` 的 Quasar 为基线，迁 `mynet_ui` 本机域页面）~~ **已作废（2026-09-24）**：`mynet_web` = 官网/项目主页，**`mynet_gui` 才是用户交互前端**，不合并。见 `mynet-overview.md` §15 | — | — |
 | D-5 | **echarts 按需引入** | `mynet_gui` | 那个 1MB chunk 压到 100–200 KB |
 | D-6 | **内化 `bin/mynet` 的 5 条命令链** | `conf/command.linux.json` + mynetd handler | `mynet` 降级为可选运维 CLI |
 | D-7 | **`mynet` 子命令收口**（配置工具 + 系统能力） | `cmd/` | `setup`/`install`/`uninstall`/`update`/`config` + **`detector`**/**`metrics`**/**`apply`**/**`service`**/**`driver`** + `status`/`monitor`/`refresh-*`/`check`/`nodes`/`platform` |
@@ -313,7 +313,7 @@ P0 ──┬──────────────────────�
 | 13 | | F-6 | `system.json` 机制（`mynet detector` 产出 + 双端消费 + 指纹重跑） | F-1 | ☑ |
 | 14 | | S2-1 | `mynet metrics`（心跳数据源：系统指标 + VPN/peer 状态） | S1-2 | ☑ |
 | 15 | | F-2 | 写入移到 `mynet apply`（OS 路由/防火墙，从 shell/Lua 迁） | F-6 | ☑ |
-| 16 | | F-4 | 平台实现（linux / darwin / windows / openwrt） | F-2 | ☑ |
+| 16 | | F-4 | 平台实现（linux / darwin / windows / openwrt） | F-2 | ⚠️ 部分 |
 | 17 | | F-5 | 多写者收敛（唯一写入者 = `mynet apply`） | F-2 | ☑ |
 | 18 | | D-7 | `mynet` 子命令收口 | S2-1 | ☑ |
 | 19 | **S3 纯通信 mynetd** | D-11 | mynetd 默认瘦（只留 `embed` 开关） | S1-2 | ☑ |
@@ -327,7 +327,7 @@ P0 ──┬──────────────────────�
 | 27 | | C-5 | 推送 / presence 只按状态路由 | C-4 | ☑ |
 | 28 | | C-8 | relay 白名单细粒度（放行 auth 会话 5 条，删 3 个 fragment） | — | ☑ |
 | 29 | | C-7 | gateway 加用户面 HTTPS 入口 `/v1/relay` | C-8 | ☑ |
-| 30 | | C-6 | presence 走 Redis pub/sub | C-4 | ☑ |
+| 30 | | C-6 | presence 走 Redis pub/sub | C-4 | ☐ **撤勾** |
 | 31 | **S5 back 业务层** | B-1 | create migration 全套 + baseline 策略 | S1-1 | ☑ |
 | 32 | | B-2 | `node_keys` 加 `algorithm`/`key_version`/`status` | B-1 | ☑ |
 | 33 | | B-3 | 公钥编码统一 hex | B-2 | ☑ |
@@ -366,6 +366,20 @@ P0 ──┬──────────────────────�
 | | | | **▶ M2 控制面完成 · M3 产品面可用 · M4 平台面收口** | | |
 
 **里程碑对照**：M0 = #4–11 · M1 = #12–49 · M2 = #25–30 + #46–47 · M3 = #50–54 · M4 = #55–64。
+
+> ⚠️ **2026-09-24 基线校正：C-6 撤勾、F-4 降为「部分」。** 依据见 **`long-range-plan-deep.md` §0**。
+>
+> - **C-6（presence 走 Redis pub/sub）**：代码写了但**全是死代码**——`Registry.SetPresence` 无调用方、
+>   `Registry.Notify`（`gateway/server.go:112-130`）只查本地 `conns`、**从不调 `presence.Publish`**、
+>   `NewRedisPresence`（`presence_redis.go:22`）仅被测试调用 → 实际恒为 `NewMemoryPresence()`（`server.go:44`）。
+>   且 `presence_multi_test.go:6` 断言的恰恰是两实例**互不共享**。真 Redis 的 HSet/Publish/Subscribe **零测试**。
+>   更根本的是：**gateway 二进制不存在**（`gateway/` 无 `package main`，`cmd/` 只有 `mynet`/`mynetd`）。
+>   重做见 `long-range-plan-deep.md` §4 的 **V4-5/V4-6/V4-7**。
+> - **F-4（平台实现）**：**Windows 是纸面**——`Makefile:43` dist 矩阵不构建 windows；
+>   `detector/routing_win.go:46` 硬编码 `NetworkInterface{Name:"stub"}`、`:45` netstat 输出被丢弃；
+>   无 `firewall_win.go`/`service_win.go`；`cmd_install.go:55-64` 的 `unitPath` 只有 linux/darwin。
+>   darwin 仅能构建（`metrics_system.go:55-60` 读了就丢 → **macOS 指标全 0**）。
+>   真跑过的只有 linux（U1 三机）与 openwrt（VM）。重做见 **V5-1/V5-2**。
 
 ## 4. 已知坑的应对（开发前必读）
 

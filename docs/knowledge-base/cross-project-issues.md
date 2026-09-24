@@ -65,12 +65,119 @@
 
 ---
 
+### 📝 T2-6 联调发现的缺陷（2026-09-24 记录，发现即记）
+
+> 来源：T2-6「mynet_gui 四页真打通新 back」过程中撞出来的。
+> 触发点是一个被误记为「TenantServiceController HTTP 500」的旧账——实测证明
+> **控制器本身 12 个 action 全通**，500 来自两个全站性问题；顺着真浏览器联调
+> 又挖出一串后端缺陷。全部按「记录在前、处置在后」入册。
+>
+> 本批 CPI-23 ~ CPI-29 已处置（见「已修复」表）；CPI-30 已于 2026-09-24 修复（见下方 ✅ 标记与「已修复」表）；CPI-31 ~ CPI-35 待处置。
+
+#### 已处置（本批）
+
+| ID | 位置 | 现象 → 处置 |
+|---|---|---|
+| **CPI-23** | `mynet_back/.env`（缺失） | 仓库无 `.env` → `APP_KEY` 空 → **全站每个请求 500**（`MissingAppKeyException`，`EncryptionServiceProvider.php:83`），连 `/` 都不通。`phpunit` 走 `phpunit.xml` 的 env，**73/73 全绿也发现不了**。→ 建本地 dev `.env`（sqlite + file/sync）+ `key:generate`；`.env` 已被 `.gitignore:16` 挡住 |
+| **CPI-24** | `mynet_back/bootstrap/app.php` | 未覆盖框架默认 `redirectGuestsTo(fn () => route('login'))`（`ApplicationBuilder.php:291`）。back 是纯 API 后端、无 `login` 命名路由，而 `Authenticate.php:104` 仅在请求**未**声明 `expectsJson` 时才调 `redirectTo` → **不带 `Accept: application/json` 的未鉴权请求抛 `RouteNotFoundException` → 500 而非 401**。→ 加 `$middleware->redirectGuestsTo(null)` |
+| **CPI-25** | `mynet_back/app/Modules/VPN/Models/Node.php` | 只有 `scopeOnline()`/`scopeEnabled()` 两个**查询作用域**，无同名实例方法；`SocialDomainService` 三处（`:547`/`:700`/`:840`）按实例方法调用 → `BadMethodCallException` → `/social/friends/{id}/nodes` 与 `/social/friends/all/nodes` **双双 500**。GUI 捕获后回退空数组，表现为**连接向导「可用设备」恒 0、下一步永远禁用**——故障在后端、症状在前端。→ 补 `isOnline()`/`isEnabled()`，语义与 scope 对齐 |
+| **CPI-26** | `SocialDomainService.php:397` | `'nodes_count' => 0, // TODO: 计算好友的节点数量` —— 硬编码 0，与 `getAllFriendsNodes():857` 的真算法口径不一致，好友列表永远谎报 0 节点。→ 改为批量查询，口径与 `:776-777` 一致（只计 ENABLED/ONLINE） |
+| **CPI-27** | `mynet_back/config/cors.php` | 默认值 `'localhost,127.0.0.1'` **缺 scheme+port**，而浏览器 `Origin` 头永远是完整的 `http://localhost:5173`，精确匹配永不相等 → 预检返 204 但**无 `Access-Control-Allow-Origin`**，浏览器全线拦。→ 本地 `.env` 配 `CORS_ALLOWED_ORIGINS`；**生产白名单仍待办**（与本文件 P1 第 3 条同源，那条记录的 `['*']` 已过时） |
+| **CPI-28** | `mynet_back/phpunit.xml` | `Default` suite（= `make test` = DoD 门禁 = pre-push）**不含** `app/Modules/VPN/tests/Feature`，43 个 HTTP 层测试长期游离在门禁外。「TenantServiceController 500」被误记成控制器缺陷正是因此无人把守。→ Feature 并入 `Default`，`make check` 从 73/2253 变为 **126/2398** |
+| **CPI-29** | `mynet_back/tests/TestCase.php` | Orchestra Testbench **不加载 `bootstrap/app.php`** → 测试态与生产态静默分叉（`TestCase.php:65` 原有注释已承认，`long-range-plan.md:129` 也写过「e2e 用真实 bootstrap，不走 Testbench」）。→ 在 TestCase 里镜像 `redirectGuestsTo(null)`；**必须走框架的 `(new Middleware)->redirectGuestsTo(null)`**，因为它一次设三个静态回调（`Middleware.php:571-575`），异常渲染路径读的是 `AuthenticationException` 那个 |
+
+#### 待处置（本批）
+
+#### CPI-30. `mynet_gui` 的 `.env.development` / `.env.production` 是**永远不会被加载的死文件** ✅ 已修复（2026-09-24）
+
+| 项 | 内容 |
+|---|---|
+| **位置** | `mynet_gui/.env.development`、`mynet_gui/.env.production`（两者均被 git 跟踪） |
+| **证据** | `@quasar/app-vite/lib/utils/env.js:31` → `buildType: ctx.dev ? 'dev' : 'prod'`；`:59-94` 的查找序为 `.env → .env.local → .env.[buildType] → .env.local.[buildType] → .env.[quasarMode] → …`。即 Quasar 认的是 **`.env.dev` / `.env.prod`**，不是 Vite/CRA 惯例的 `.env.development` / `.env.production`。实测 `quasar dev` 日志只报 `Using .env files: .env`，且注入值 `VITE_API_BASE_URL=http://api.mynet.local`（取自 `.env`）而非 `.env.development` 里的 `http://localhost:8000` |
+| **处置** | 采纳建议 ①：`git mv .env.development .env.dev`、`git mv .env.production .env.prod`（rename 相似度 56%/58%，历史保留），并同步全部 9 处引用点。两个文件顶部各加注释说明 Quasar 的命名法，防止再按 Vite 惯例建死文件 |
+| **实测验证** | ① dev 启动日志：`Using .env files: .env, .env.local, .env.dev`（改前为 `.env, .env.local`）② build 启动日志：`Using .env files: .env, .env.local, .env.prod`，`Build succeeded`，exit 0 ③ `grep -ro 'api\.mynet\.local' dist/spa/` → **0 次**；`dist/spa/assets/index-DQx2KfW3.js` 内含 `https://my.mynet.club/api/v1`，`websocket-DZ-9vTY9.js` 内含 `wss://my.mynet.club/wss` ④ dev 注入值 `curl http://localhost:5173/src/services/api.ts` → `VITE_API_BASE_URL: "http://localhost:8000"`、`VITE_ENABLE_HTTPS: "false"`、`VITE_CACHE_TIMEOUT: "30000"`、`VITE_LOG_LEVEL: "debug"`（全部是 `.env.dev` 的值，`.env` 里对应为 true/300000/error）→ `.env.dev` 确已生效 |
+| **优先级** | 🟠 P1 → ✅ 已修 |
+
+> ⚠️ **两处对原记录的实测更正**（都推翻了当初的推断，按 §2.1「下判断前先实测」补记）：
+>
+> 1. **生产侧原本并没有坏。** 原「影响」栏断言「`quasar build` 根本不读该文件 → 照现状部署前端会指向 `http://api.mynet.local`」——**不成立**。`quasar.config.ts:10-31` 的 `loadEnvProduction()`（2026-06-09 `dee1fb3` 引入）早就手工 `readFileSync('.env.production')` 填 `process.env`，而 `build.env` 在 `getBuildSystemDefine`（`env.js:163-166`）里**后写、覆盖 fileEnv**，所以产物一直是对的。实测对照：`git stash` 回到改前状态跑 `quasar build`，产物 hash 与改后**完全相同**（同为 `index-DQx2KfW3.js`，`api.mynet.local` 同为 0 次）。**真正的缺陷只在 dev 侧**（`.env.development` 死 → dev 注入 `.env` 的 `api.mynet.local`，这才是当初不得不建 `.env.local` 的原因），以及 prod 侧「正确但靠一个手写 dotenv 解析器兜着」的脆弱性。改名后 `.env.prod` 被 Quasar 原生加载，两条路径一致。
+> 2. **`.env.local` 的优先级低于 `.env.dev`**（与 Vite 相反）。见下方「连带发现」。
+
+#### CPI-30a. Quasar 的 env 优先级与 Vite **相反** —— `.env.local` 覆盖不了 `.env.dev` ✅ 已修复（2026-09-24）
+
+| 项 | 内容 |
+|---|---|
+| **位置** | `@quasar/app-vite/lib/utils/env.js:59-94`（fileList 顺序）+ `:101-116`（`Object.fromEntries(fileList.flatMap(…))`，后出现的文件覆盖先出现的） |
+| **证据** | fileList 顺序是 `.env`(1) → `.env.local`(2) → `.env.[buildType]`(3) → `.env.local.[buildType]`(4) → …。**第 3 位覆盖第 2 位**，即 `.env.dev` > `.env.local`。实测：`.env.local`（`VITE_API_BASE_URL=http://127.0.0.1:8080`）在场时 dev 注入的是 `http://localhost:8000`；把 `.env.local` 移开后注入值**一模一样** → `.env.local` 对同名 key 已是 no-op |
+| **影响** | 本 workspace 原有的 `.env.local`（把 API base 指向本地 back 的 `127.0.0.1:8080`）**已失效**，dev 会去打 `localhost:8000`。任何按 Vite 惯例「用 `.env.local` 做个人覆盖」的做法在 Quasar 里都不成立 |
+| **处置** | ① `mv .env.local .env.local.dev`（fileList 第 4 位，真的能覆盖 `.env.dev`）；② `.gitignore` 补 `.env.local.*`（原 `:13` 的 `.env.*.local` 要求以 `.local` 结尾，匹配不到 `.env.local.dev`，会有误提交风险）；③ 文件头注释改写，讲清「命名法」与「优先级相反」两层原因；④ `AGENTS.md` §4 的坑表同步更正（原写「本地覆盖用 `.env.local`」是错的） |
+| **实测验证** | `git check-ignore -v .env.local.dev` → `.gitignore:44:.env.local.*`（确认仍不入库）；`.gitignore` env 段现为 `:12 .env.local` / `:13 .env.*.local` / `:44 .env.local.*` |
+| **优先级** | 🟠 P1 → ✅ 已修 |
+
+#### CPI-31. `/api/v1/users/onboarding` 500 —— 我方未完成实现（**不是**框架缺陷）
+
+| 项 | 内容 |
+|---|---|
+| **位置** | `mynet_back/app/Modules/VPN/Controllers/Api/V1/UserController.php:411`（及 `:441` 的 save） |
+| **现象** | 调 `App\Services\UserService::getOnboardingState()` / `saveOnboardingState()`，而该 service 只有 `listUsers`/`getUser`/`updateUser` 三个方法；且 `user_onboarding`/`onboarding`/`user_settings` 三张表都不存在 |
+| **易误判点** | 框架确有 onboarding，但那是 `TenantOnboardingService`（infrastructure 模块）——**租户开通引导**，Operator 驱动，步骤为 基础信息→域名→套餐→支付→创建 Tenant。与此处的**用户新手引导**（`completed`/`currentStage`/`selectedPath`/`stages`/`preferences`）是两个概念，**不可混用、不应上报框架** |
+| **影响** | 每页控制台一条 500。GUI 已优雅降级（`stores/onboarding.ts:301` 捕获后回落 localStorage，实测 `State loaded: {source: localStorage, progress: 0}`），不挡功能 |
+| **修复建议** | 待用户裁定：① 补齐（建表 + 两个 service 方法 + 测试）；② 删掉死 API 面（两条路由 + 两个控制器方法），GUI 改为不再调用 |
+| **优先级** | 🟡 P2 |
+
+#### CPI-32. 业务规则拒绝返回 HTTP 500（应为 409/422）
+
+| 项 | 内容 |
+|---|---|
+| **位置** | `mynet_back/app/Modules/VPN/Domain/Services/RouteRequestDomainService.php:103` 经 `BaseApiController::serverErrorResponse` |
+| **证据** | 实测重复提交连接申请：`POST /api/v1/route/send-request` → **HTTP 500**，body `errors.exception = "该连接已经建立，无需重复申请"` |
+| **影响** | 业务语义的正常拒绝被计入 5xx。上线后**监控与告警全是假阳性**，真实故障会被淹没；客户端也无法据状态码区分「重试无用」与「服务端坏了」 |
+| **修复建议** | 给 `DomainException` 分类（冲突/校验/不存在/无权），在 `mapDomainExceptionToHttpResponse` 里映射到 409/422/404/403；`serverErrorResponse` 只留给真正未预期的异常。需配套 Feature 测试锁状态码 |
+| **优先级** | 🟠 P1 —— 上线前必修（可观测性前提） |
+
+#### CPI-33. `mynet_back/storage/` 子目录既未跟踪也未忽略 → 新克隆即坏
+
+| 项 | 内容 |
+|---|---|
+| **位置** | `mynet_back/.gitignore:28,31` 只挡了 `storage/logs/` 与 `storage/framework/views/*.php` |
+| **现象** | `git status` 显示 `?? storage/`；`storage/app`、`storage/framework/{cache,sessions,testing,views}` 均无 Laravel 骨架标配的 `*` + `!.gitignore` 存根 |
+| **影响** | 新克隆缺 `storage/framework/sessions` 等目录。`SESSION_DRIVER=file` 时 `FileSessionHandler` **不会自动建目录** → 运行期报错。与 CPI-23 同属「新克隆即坏」一族 |
+| **修复建议** | 按 Laravel 骨架补 5 个 `.gitignore` 存根（内容 `*` + `!.gitignore`），使目录结构入库而内容不入库 |
+| **优先级** | 🟡 P2 |
+
+#### CPI-34 / CPI-35. 框架侧两个「未声明的跨模块硬依赖」
+
+已单独成文，详见 [`upstream-dsplat-issues.md`](upstream-dsplat-issues.md)（含 file:line 证据、复现命令、三种修法建议、可直接粘贴的提示词）。此处只登记对我方的影响：
+
+| ID | 框架缺陷 | 对我方的影响 | 我方处置 |
+|---|---|---|---|
+| **CPI-34** | 主包 `AiStreaming` 的 4 个控制器注入 `AgentServiceContract`，全框架**零绑定**；`ResolveController:33` 还注入了框架里不存在的 `ToolRegistry` | `php artisan route:list` / `route:cache` **直接崩**，CI 路由审计与部分 IDE 插件不可用 | 改用 `grep` 模块 `Routes/api.php` 查路由。**不在 vendor 打补丁**（§1.8） |
+| **CPI-35** | `module-auth/Models/User.php:20` 硬引用 `Notification\Models\DatabaseNotification`、`:18` 引用 `Billing\Models\CreditAccount`，但 `composer.json` 只声明依赖 `multi-tenant-saas` | `/api/v1/notifications/unread-count` 500；Laravel 数据库通知面整体不可用 | GUI 已降级。**不在 vendor 打补丁**，等上游修后 `composer update` |
+
+> ⚠️ 两条都**不得**用「改 vendor」的方式绕过。`Class not found` 抛的是 `\Error`，
+> 不被 `catch (\Exception)` 捕获——这也是为什么下游写了降级分支却仍然 500。
+
+---
+
 ## 📐 架构设计决策（非 bug，易被误判）
 
 #### mynet_gui 生产 VITE_API_BASE_URL=https://my.mynet.club（同源反代）
-- **现状**：`mynet_gui/.env.production` 中 `VITE_API_BASE_URL=https://my.mynet.club`（指向自身域名）
+- **现状**：`mynet_gui/.env.prod` 中 `VITE_API_BASE_URL=https://my.mynet.club`（指向自身域名）
 - **设计意图**：生产部署中 nginx 在 `my.mynet.club` 上对 `/api/*` 反向代理到 `api.mynet.club`，实现 same-origin 访问以规避浏览器 CORS preflight
 - **决策日期**：2026-05（用户确认）
+- ✅ **2026-09-24 复核：载体已修好（CPI-30）**。文件已从 `.env.production` 改名为 **`.env.prod`**
+  （Quasar 的 `buildType` 只有 `dev|prod`，见 `@quasar/app-vite/lib/utils/env.js:31`），
+  `quasar build` 现在**原生加载**它（启动日志 `Using .env files: .env, .env.local, .env.prod`），
+  `quasar.config.ts` 的手工加载器与 4 个部署脚本的引用也已同步改名。
+  实测产物：`dist/spa` 里 `api.mynet.local` **0 次**，`index-DQx2KfW3.js` 内含
+  `https://my.mynet.club/api/v1`、`websocket-DZ-9vTY9.js` 内含 `wss://my.mynet.club/wss`。
+- ⚠️ **一处需澄清的旧记录**：本条原先的复核备注断言「生产构建会退回 `http://api.mynet.local`」——
+  实测**不成立**。`quasar.config.ts:10-31` 的 `loadEnvProduction()`（2026-06-09 引入）一直在手工读
+  旧文件名填 `process.env`，而 `build.env` 在 `getBuildSystemDefine`（`env.js:163-166`）里覆盖 fileEnv，
+  所以**生产产物改名前后字节相同**（同为 `index-DQx2KfW3.js`）。真正坏掉的是 **dev 侧**
+  （`.env.development` 死文件 → dev 注入 `.env` 的 `api.mynet.local`）。决策本身（同源反代）始终成立。
+- ⚠️ **仍未解决**：`.env.local` **覆盖不了** `.env.dev`（Quasar 优先级与 Vite 相反），
+  本地个人覆盖须改用 `.env.local.dev` 并给 `.gitignore` 补 `.env.local.*`。详见 **CPI-30a**。
 - **关联**：CORS 配置 issue #3 仍存在，但因 SPA 走同源路径，实际风险被反代屏蔽；严格白名单仍建议补上
 - **TODO**：在 [architecture.md](architecture.md) 增加「反代部署模式」章节
 
@@ -234,6 +341,16 @@
 | 2026-09-22 | 本机能力面骨架落地（信封/token 鉴权/HTTP/传输无关 Service 层） | `ee5467e` |
 | 2026-09-22 | 本机能力面 service/config 两域 | `28afbb5` |
 | 2026-09-22 | 本机能力面 peers 域 | `790edbd` |
+| 2026-09-24 | **CPI-23** back 缺 `.env` → `APP_KEY` 空 → **全站每个请求 500**（测试全绿也发现不了） | 待提交 |
+| 2026-09-24 | **CPI-24** 未覆盖框架默认 `redirectGuestsTo` → 不带 `Accept` 头的未鉴权请求 500 而非 401 | 待提交 |
+| 2026-09-24 | **CPI-25** `Node` 只有 scope 无实例方法 → 两个好友节点端点 500 → **连接向导「可用设备」恒 0、下一步永远禁用** | 待提交 |
+| 2026-09-24 | **CPI-26** `SocialDomainService:397` 的 `nodes_count` 硬编码 0（原 `// TODO`） | 待提交 |
+| 2026-09-24 | **CPI-27** `config/cors.php` 默认值缺 scheme+port → 预检无 ACAO 头，浏览器全线拦（本地已配，生产白名单仍待办） | 待提交 |
+| 2026-09-24 | **CPI-28** Feature 套件（43 测试）长期游离在 `Default` 门禁外 → 已并入，`make check` 73/2253 → **126/2398** | 待提交 |
+| 2026-09-24 | **CPI-29** Testbench 不加载 `bootstrap/app.php` → 测试态/生产态分叉；已在 TestCase 镜像（走框架 `Middleware` 入口以对齐三个静态回调） | 待提交 |
+| 2026-09-24 | **CPI-30** `mynet_gui` 的 `.env.development`/`.env.production` 是死文件（Quasar 只认 `.env.dev`/`.env.prod`）→ `git mv` 改名（rename 56%/58%，历史保留）+ 同步 9 处引用点（`quasar.config.ts` 手工加载器、`deployment.sh`、`quick-deploy.sh`、`pre-deploy-check.sh`、`verify-debug-disabled.sh`、`.env.example`、`docs/UPGRADE-v2.md`、`docs/06-部署指南.md`、`.github/copilot-instructions-详细版.md`）。实测：dev 日志 `Using .env files: .env, .env.local, .env.dev`；build 日志 `… .env.prod`；`dist/spa` 里 `api.mynet.local` **0 次**、`https://my.mynet.club/api/v1` 已烘入 | 待提交 |
+| 2026-09-24 | **CPI-30 连带发现（未修，待裁定）** Quasar 的 env 优先级与 Vite **相反**：`.env.dev` 覆盖 `.env.local`（`env.js:101-116` 的 `Object.fromEntries(fileList.flatMap(…))`，fileList 里 `.env.local` 第 2 位、`.env.[buildType]` 第 3 位，后者胜出）。本地覆盖必须写 `.env.local.dev`，而它**不被 `.gitignore:13` 的 `.env.*.local` 匹配** → 有误提交风险 | 待提交 |
+| 2026-09-24 | **T2-6 达成**：mynet_gui 四页真打通新 back，连接向导四步走通并落库（`req=4456240307586718 status=pending`） | 待提交 |
 
 ---
 
@@ -279,12 +396,28 @@
 **反例（应当避免）**：先在代码里把主问题修掉，顺手发现的周边缺陷只在对话里说一句 ——
 下一轮换个上下文就找不回来了。本轮（2026-09-22）那些 CPI 条目就是在补这个课。
 
-**自动校验（已有）**：
-- `scripts/check-command-vocabulary.php` —— 比对 back 声明的远程命令与 agent
-  `conf/command.*.json` 的真值，back 单方面声明的命令以退出码 1 阻断
-- `scripts/check-command-invocations.php` —— 反方向：真跑 agent CLI 的 `--help`，
-  核对 `conf/command.*.json` 里**每条调用**（子命令是否存在、参数是否被接受）。
-  已知未决项逐条列在脚本里（带台账 ID）并每次运行都打印，新出现的不一致才 exit 1
-  —— 这样既不会漏，也不会因为"永远失败"而被忽略
-这是 CPI-2 / CPI-4 的防复发手段：命令名写错的后果是"节点侧静默失效、back 侧看不出来"，
-只靠人眼迟早再漂一次。改了任一侧命令词汇就顺手跑一遍。
+**自动校验（2026-09-24 换载体）**：
+
+命令词汇的守护**已从 PHP 脚本改为 agent 仓内的 Go 测试**。
+
+- ❌ 已退休并删除：`scripts/check-command-vocabulary.php`、`scripts/check-command-invocations.php`
+- ✅ 现载体：`mynet_agent/mynetd/commands/backmap_test.go`（随 `make check` 每次跑）
+
+**为什么换**（用户裁定，2026-09-24）：
+
+1. **节点/客户端没有 PHP 环境**。命令名的唯一真值来源在 agent（`commands.Plan` 的 switch），
+   守护必须长在真值旁边、能在 agent 仓里跑——PHP 脚本做不到。
+2. **两个脚本此前已永久失效**：默认路径是旧布局的 `mynet_{back,agent}-integration`
+   （新 workspace 里没有这个后缀），且它们依赖的 SSOT `conf/command.*.json`
+   在 D-6「内化 bin/mynet 命令链」后**已不存在**。实测两者恒 `exit 2`。
+3. **从未接进任何门禁**：全 workspace 只有本文档提到它们，无 CI / Makefile / hook 引用
+   ——这正是「永久 exit 2 却无人发现」的原因。
+
+新守护做三件事：① back 会下发的 13 条命令逐条断言能映射到 agent 认识的 Op 且能被
+`Plan()` 展开成 argv；② 用 `go/ast` 解析 `commands.go`，强制 `knownOps` 列表与
+`Plan()` 的 switch **双向同步**（改一边不改另一边即失败）；③ 断言不认识的命令
+（含历史上真实漂过的 `mynet.reboot`）**必须显式失败**而非静默忽略。
+已做变异测试验证守护真能拦住两个方向的漂移。
+
+> 仍是 CPI-2 / CPI-4 的防复发手段：命令名写错的后果是「节点侧静默失效、back 侧看不出来」，
+> 只靠人眼迟早再漂一次。区别是现在它**每次 `make check` 都会跑**，不再依赖有人记得手动执行。
