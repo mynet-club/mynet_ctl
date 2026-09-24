@@ -195,6 +195,52 @@
   建一个本机 MySQL 库，与生产同一份 DDL。
 - **优先级**：🟠 P1（它让「本机验证」这个最便宜的反馈回路整体失效）
 
+#### CPI-49. `deploy/nginx.conf` 缺 `listen [::]:443` → IPv6 请求被别的站点兜走
+- **位置**：`mynet_back/deploy/nginx.conf`（api 段与 gw 段）· 派生物 `deploy/nginx-staging.conf`
+- **实测**：把标记文件放进 `stage-api/public/`，`curl -4` 取回标记本身（HTTP 200），
+  `curl -6` 取回的却是**另一个站的 HTML 404 页**。线上生产的 `api.mynet.club.conf`
+  有 `listen [::]:443 ssl http2;`，仓里这份没有 —— 于是 IPv6 上没有匹配的 server block，
+  落到了默认站点。
+- **危害**：这个假象足以让人误判成「部署失败 / 路由没注册」。本轮就误判过一次：
+  实际路由一直是好的（CLI 下 500 条路由、含 44 条 nodes/monitor），
+  而 HTTP 探测全在打另一个应用。**排障时先用 `-4`/`-6` 分别验一遍**，
+  或用「放一个唯一标记文件再取」的办法确认请求真的落在目标 root 上。
+- **✅ 已修**（`mynet_back 8c3927f`）：补 3 处 `listen [::]:443 ssl http2;` 并重新派生 staging 配置。
+  ⚠️ `zero_to_one.sh` 里的 `curl -4` 是**绕过不是修复**，nginx 侧修好后应去掉再验一遍。
+- **优先级**：🟠 P1 → ✅ 已修（待去掉 -4 复验）
+
+#### CPI-50. 生产环境把**任何**异常压成 500，「未登录」也返 500 且不留日志
+- **位置**：`mynet_back/bootstrap/app.php` 的 `withExceptions` → `renderable(function (Throwable $e) …)`
+- **原文**：`if (app()->environment('production') && (request()->is('api/*') || request()->expectsJson())) return json('服务器内部错误', 500);`
+  —— **无条件**兜住任何 Throwable，包括 `AuthenticationException`。
+- **后果**：① 未登录访问返 500 而不是 401，监控全是假告警（与 CPI-32 同类，
+  且会把 CPI-32 修好的 409/422 再压平回 500）；② `AuthenticationException` 在框架的
+  `internalDontReport` 里、默认不记日志，于是呈现出「**全站 API 恒 500 且日志零行**」
+  这种最难查的状态。
+- **为什么长期没被发现**：本机 `APP_ENV=local` 时条件不成立、走正常渲染返 401 ——
+  **只在生产/staging 现形**，本地开发、154 个测试、pint 全绿都发现不了。
+- **✅ 已修**（`mynet_back 8c3927f`）：只对没有明确 HTTP 语义的异常兜底，
+  `HttpExceptionInterface` / `AuthenticationException` / `AuthorizationException` /
+  `ValidationException` 一律交回框架渲染。实测 staging：nodes / auth/me /
+  social/friends 从 500 → **401**，真不存在的路由仍 **404**，`/up` 仍 200。
+- **连带发现**：`app/Exceptions/Handler.php` 里那个空的 `reportable(function (Throwable $e) {})`
+  回调（注释写着「可以在这里添加日志记录逻辑」）—— 空回调会**截断默认报告链**。
+  但实测该 Handler 在 Laravel 11 下**并未被绑定**（改它不影响行为），
+  真正生效的是 `bootstrap/app.php` 的 `withExceptions`。已补实现并在注释里写明，
+  免得下一个人以为日志开关在这个文件里。
+- **优先级**：🟠 P1 → ✅ 已修
+
+#### CPI-51. `deploy/.rsyncignore` 用了 gitignore 的 `!` 取反语法，rsync 不认
+- **位置**：`mynet_back/deploy/.rsyncignore`（原第 15-17 行：`.env` / `.env.*` / `!.env.example`）
+- **后果**：rsync 的排除文件里 `!` **不是取反**（会被当成字面量的一部分），
+  所以 `.env.example` 一直被 `.env.*` 排掉，那条取反从未生效 ——
+  staging 部署时 `cp .env.example .env` 直接失败。
+- **✅ 已修**（`mynet_back 8c3927f`）：改用 rsync 自己的 `+ 包含 / - 排除` 语法
+  （**第一条匹配的规则生效**，所以包含必须写在排除前面）。
+- **教训**：`.gitignore` / `.rsyncignore` / `.dockerignore` 三者语法**互不通用**，
+  抄写法之前先确认是哪个工具的。
+- **优先级**：🟡 P2 → ✅ 已修
+
 ---
 
 ### 📝 控制面落地发现的缺陷（2026-09-22 记录，发现即记）
