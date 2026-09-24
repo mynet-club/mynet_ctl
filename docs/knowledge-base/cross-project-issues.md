@@ -80,6 +80,16 @@
 - **修复建议**：区分「没报接口信息」与「报了且 `status=down`」。前者应只记 warning 并**照常处理 node_monitor**；后者才判离线。
 - **优先级**：🟠 P1（静默丢数据 + 误报离线，且 HTTP 层返回 200 看不出异常）
 
+#### CPI-39. 框架的模块依赖检查**每次请求刷 8 条 WARNING**，一天 2224 条
+- **位置**：`vendor/dsplat/multi-tenant-saas-module-infrastructure/Services/ModuleRegistry.php:317`（框架侧，按 §1.8 **只读**）
+- **现状**：按需 module（§1.6：31 个只留 3~4 个）砍掉 27 个模块后，框架仍按**完整模块表**做依赖检查，于是每次请求都记 8 条形如
+  `[ModuleManager] 模块 [activity_plan] 依赖 [ai], 但该模块未安装` 的 WARNING。
+  实测 2026-09-24 一天的日志里这类行 **2224 条**（8 个模块 × 278 次请求）。
+- **影响**：① 真错误被淹 —— V4-4 做结构化日志的意义之一是能过滤，但噪音本身仍占空间与 IO；② **WARNING 级别失去信号价值**（一天两千多条 WARNING 等于没有 WARNING）；③ 日志文件膨胀
+- **修复建议**：① 首选**回上游**（§1.8）：`ModuleRegistry` 应只对**已启用**的模块做依赖检查，或把「模块本身未启用」这种情况降到 debug；② 本地临时降噪：把该 channel 的 level 提到 error，或在 `config/logging.php` 里加过滤
+- **已记入** `upstream-dsplat-issues.md`（框架缺陷走上游）
+- **优先级**：🟡 P2（不影响功能，但持续污染日志、削弱告警信号）
+
 ---
 
 ### 📝 控制面落地发现的缺陷（2026-09-22 记录，发现即记）

@@ -176,6 +176,64 @@ route:cache 与 CI 路由审计同样不可用。
 | 1 notification | `/api/v1/notifications/unread-count` 500 | GUI 已优雅降级（控制台报错但页面正常）。**不在 vendor 打补丁** |
 | 2 AiStreaming | `php artisan route:list` / `route:cache` 不可用 | 改用 `grep` 模块 `Routes/api.php` 查路由；**不在 vendor 打补丁** |
 
+---
+
+## 缺陷 3 —— `ModuleRegistry` 对**未启用**的模块也做依赖检查，每次请求刷一批 WARNING
+
+### 现象
+
+按需启用模块（本项目 31 个只留 3~4 个，见 `AGENTS.md` §1.6）之后，**每次请求**都会记
+一批形如下面的 WARNING：
+
+```
+[ModuleManager] 模块 [activity_plan] 依赖 [ai], 但该模块未安装
+[ModuleManager] 模块 [ai-streaming] 依赖 [ai], 但该模块未安装
+[ModuleManager] 模块 [commerce] 依赖 [billing], 但该模块未安装
+…（共 8 条）
+```
+
+实测一天 **2224 条**（8 个模块 × 278 次请求）。
+
+### 根因
+
+`multi-tenant-saas-module-infrastructure/Services/ModuleRegistry.php:317`：
+
+```php
+$errors[] = "模块 [{$name}] 依赖 [{$dep}], 但该模块未安装";
+```
+
+依赖检查遍历的是**完整模块表**，而不是「已启用的模块」。于是被裁掉的模块
+（`activity_plan` / `ai-streaming` / `commerce` / `ibot` / `order` / `pay` /
+`service-desk` / `user-ai`）**自身的**依赖缺失也被当成错误报出来 ——
+而这些模块本来就没打算启用，它们依赖谁与运行时无关。
+
+### 影响面
+
+- 真错误被噪音淹掉
+- **WARNING 级别失去信号价值**：一天两千多条 WARNING，等于没有 WARNING
+- 日志膨胀：本项目一天的日志里绝大部分是这 8 条的重复
+
+### 建议修法（按侵入性从小到大）
+
+1. 依赖检查只对**已启用**的模块做 —— 未启用的模块不加载，依赖缺失就不影响运行
+2. 或把「模块自身未启用」这种情况降到 `debug` 级
+3. 或提供开关（如 `modules.skip_dependency_check_for_disabled: true`）
+
+### 复现
+
+```bash
+# 只装 multi-tenant-saas + module-infrastructure + module-auth（不装 ai / billing）
+LOG_CHANNEL=json php artisan tinker --execute="Log::info('probe');"
+# → stderr 里先出现 8 条 ModuleManager WARNING，然后才是 probe 那条
+```
+
+### 下游的临时处置
+
+不改 vendor（§1.8）。本项目侧记为 `cross-project-issues.md` **CPI-39**；
+临时降噪手段是把日志 channel 的 level 提到 error，或加过滤。
+
+---
+
 ### 非上游、纯我方的已知缺口（2026-09-24 实测记录，用户裁定「只记录不改」）
 
 | 端点 | 表现 | 根因 | 处置 |
