@@ -89,6 +89,16 @@ newrepo wt_a1_narrow
 printf '<?php\n$DirToken = $request->header(%s);\n' "'X-Dir-Token'" > "$WORK/wt_a1_narrow/conf.php"
 expect "驼峰标识符不误报 A1（收窄仍有效）" 0 wt_a1_narrow "A1 无硬编码凭据"
 
+# 裸 PASS= 也要抓得到：db-setup.sh 曾这样明文存口令，而 password|passwd|pwd 都匹配不到
+newrepo wt_a1_pass
+printf 'LOCAL_DB_PASS = "%s"\n' 'Mynet@Dev2026' > "$WORK/wt_a1_pass/deploy.sh"
+expect "裸 PASS= 的明文口令 → A1 拦下" 1 wt_a1_pass "A1 硬编码凭据"
+
+# 反向：良性写法不得误报（误报多了守护会被 --no-verify 绕过，反而失效）
+newrepo wt_a1_benign
+printf 'pass=0\nPASS_COUNT=3\nBYPASS="%s"\npass=$((pass+1))\nCOMPASS="%s"\n' enabled north > "$WORK/wt_a1_benign/x.sh"
+expect "良性 pass 写法不误报" 0 wt_a1_benign "A1 无硬编码凭据"
+
 newrepo wt_a2
 printf -- '-----BEGIN %s PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAE\n-----END %s PRIVATE KEY-----\n' OPENSSH OPENSSH > "$WORK/wt_a2/k.txt"
 expect "未跟踪文件里私钥 → A2 拦下" 1 wt_a2 "A2 私钥泄露"

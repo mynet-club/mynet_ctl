@@ -27,7 +27,25 @@ LOCAL_DB_HOST="127.0.0.1"
 LOCAL_DB_PORT="3306"
 LOCAL_DB_NAME="mynet_ctl"
 LOCAL_DB_USER="mynet"
-LOCAL_DB_PASS="Mynet@Dev2026"
+# ⚠️ 口令**不写在这个文件里**。此前这里硬编码了本地库口令（形如
+# `LOCAL_DB_PASS="<明文>"`，值已脱敏 —— 写进注释也会被 guard A1 正确拦下），
+# 触犯 AGENTS.md §3「不硬编码凭据」；而 guard 的 A1 当时还**漏报**它 ——
+# 关键字表只有 password|passwd|pwd，匹配不到裸 `PASS=`（模板已补 `pass`，
+# 并加了正反两条用例：明文口令要拦、pass=0 / BYPASS="enabled" 不得误报）。
+# 🔴 那个值已进 git 历史，**需要轮换**，不是从文件里删掉就算完。
+# 取法与 mynet_back/deploy/backup.sh 一致（V3-5）：FILE 优先，其次 env，都没有就报错退出。
+if [ -n "${LOCAL_DB_PASSWORD_FILE:-}" ]; then
+    [ -f "$LOCAL_DB_PASSWORD_FILE" ] || { echo "✗ LOCAL_DB_PASSWORD_FILE 不存在：${LOCAL_DB_PASSWORD_FILE}" >&2; exit 1; }
+    LOCAL_DB_PASS="$(cat "$LOCAL_DB_PASSWORD_FILE")"
+elif [ -n "${LOCAL_DB_PASSWORD+x}" ]; then
+    # 用 +x 而不是 -n：本机开发库无口令时，显式给空串也算「已提供」
+    LOCAL_DB_PASS="$LOCAL_DB_PASSWORD"
+else
+    echo "✗ 需要 LOCAL_DB_PASSWORD_FILE 或 LOCAL_DB_PASSWORD" >&2
+    echo "  推荐：crt use <条目> -- ./scripts/deploy/db-setup.sh dump-local   # 口令只进子进程 env，不入上下文" >&2
+    echo "  或：  LOCAL_DB_PASSWORD_FILE=~/.mynet/ctl-local-db.pass ./scripts/deploy/db-setup.sh …" >&2
+    exit 1
+fi
 
 # 远程数据库（将在远程创建）
 REMOTE_DB_NAME="mynet_ctl"
@@ -128,11 +146,31 @@ dump_local_data() {
 
     # 先导出结构（CREATE TABLE），再导出数据（INSERT）
     # 使用 --no-create-info 只导出数据，因为结构由 migration 管理
-    mysqldump \
-        -h "$LOCAL_DB_HOST" \
-        -P "$LOCAL_DB_PORT" \
-        -u "$LOCAL_DB_USER" \
-        -p"$LOCAL_DB_PASS" \
+    #
+    # ⚠️ 口令走 --defaults-extra-file，**不上命令行**：原来的 `-p"$LOCAL_DB_PASS"`
+    # 会让口令出现在 `ps` 里，同机任何用户都看得到（与 mynet_back/deploy/backup.sh
+    # 修掉的是同一个问题，见 V3-5）。
+    local CNF DUMP_ERR
+    CNF="$(mktemp)"
+    DUMP_ERR="$(mktemp)"
+    # shellcheck disable=SC2064  # 这里要的是**当前**路径，不是返回时才展开
+    trap "rm -f '$CNF' '$DUMP_ERR'" RETURN
+    chmod 600 "$CNF"
+    # option file 里含引号/反斜杠的口令要转义，否则 mysql 解析出错
+    local esc_pass
+    esc_pass="$(printf '%s' "$LOCAL_DB_PASS" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')"
+    cat > "$CNF" <<EOF
+[client]
+host="$LOCAL_DB_HOST"
+port=$LOCAL_DB_PORT
+user="$LOCAL_DB_USER"
+password="$esc_pass"
+EOF
+
+    # ⚠️ 不再 2>/dev/null：那会把 mysqldump 的失败原因整个吞掉，
+    # 只剩一个空 dump 文件，看起来像「本地没数据」。
+    if ! mysqldump \
+        --defaults-extra-file="$CNF" \
         --no-create-info \
         --complete-insert \
         --skip-lock-tables \
@@ -141,7 +179,16 @@ dump_local_data() {
         --quick \
         "$LOCAL_DB_NAME" \
         "${TABLES[@]}" \
-        > "$DUMP_FILE" 2>/dev/null
+        > "$DUMP_FILE" 2>"$DUMP_ERR"; then
+        log_error "mysqldump 失败："
+        cat "$DUMP_ERR" >&2
+        return 1
+    fi
+    if ! grep -q 'Dump completed' "$DUMP_FILE"; then
+        log_error "mysqldump 输出里没有结束标记「Dump completed」，dump 可能被截断"
+        tail -3 "$DUMP_ERR" >&2
+        return 1
+    fi
 
     # 统计行数
     local rows
