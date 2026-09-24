@@ -12,6 +12,7 @@ class TokenAdminController extends Controller
     public function index()
     {
         $tokens = ApiToken::orderByDesc('created_at')->paginate(30);
+
         return view('admin.tokens.index', compact('tokens'));
     }
 
@@ -23,22 +24,22 @@ class TokenAdminController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'name'       => 'required|string|max:128',
-            'abilities'  => 'required|array|min:1',
-            'abilities.*'=> 'string',
+            'name' => 'required|string|max:128',
+            'abilities' => 'required|array|min:1',
+            'abilities.*' => 'string',
             'expires_at' => 'nullable|date|after:now',
         ]);
 
         $plainToken = Str::random(48);
-        $tokenId    = (int)(microtime(true) * 10000) + random_int(0, 9999);
+        $tokenId = (int) (microtime(true) * 10000) + random_int(0, 9999);
 
         ApiToken::create([
-            'token_id'   => $tokenId,
-            'name'       => $data['name'],
+            'token_id' => $tokenId,
+            'name' => $data['name'],
             'token_hash' => hash('sha256', $plainToken),
-            'abilities'  => $data['abilities'],
+            'abilities' => $data['abilities'],
             'expires_at' => $data['expires_at'] ?? null,
-            'status'     => 1,
+            'status' => 1,
         ]);
 
         return redirect('/admin/tokens')
@@ -60,6 +61,7 @@ class TokenAdminController extends Controller
         $token->save();
 
         $action = $token->status ? '启用' : '禁用';
+
         return back()->with('success', "已{$action}令牌「{$token->name}」");
     }
 

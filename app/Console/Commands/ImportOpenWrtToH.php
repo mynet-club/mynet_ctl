@@ -88,19 +88,19 @@ class ImportOpenWrtToH extends Command
     public function handle(): int
     {
         $version = $this->argument('version');
-        $dryRun  = $this->option('dry-run');
-        $target  = $this->option('target');
-        $file    = $this->option('file');
-        $all     = $this->option('all');
-        $fresh   = $this->option('fresh');
+        $dryRun = $this->option('dry-run');
+        $target = $this->option('target');
+        $file = $this->option('file');
+        $all = $this->option('all');
+        $fresh = $this->option('fresh');
 
         $this->info("OpenWrt 设备数据导入 — 版本 <comment>{$version}</comment>");
-        $this->info("数据源: downloads.openwrt.org");
+        $this->info('数据源: downloads.openwrt.org');
         if ($dryRun) {
             $this->warn('预览模式（dry-run）：不会写入数据库');
         }
 
-        if ($fresh && !$dryRun) {
+        if ($fresh && ! $dryRun) {
             $this->warn('--fresh 已指定，清空现有数据...');
             \Schema::disableForeignKeyConstraints();
             OpenwrtDeviceFirmware::truncate();
@@ -121,16 +121,16 @@ class ImportOpenWrtToH extends Command
 
         $this->info(sprintf('共 <comment>%d</comment> 个 target 待导入', count($targets)));
 
-        $totalDevices   = 0;
-        $totalFirmware  = 0;
-        $failedTargets  = [];
+        $totalDevices = 0;
+        $totalFirmware = 0;
+        $failedTargets = [];
 
         foreach ($targets as $t) {
             [$imported, $firmware] = $this->importTarget($version, $t, $file, $dryRun);
             if ($imported === -1) {
                 $failedTargets[] = $t;
             } else {
-                $totalDevices  += $imported;
+                $totalDevices += $imported;
                 $totalFirmware += $firmware;
             }
         }
@@ -161,17 +161,19 @@ class ImportOpenWrtToH extends Command
         bool $dryRun
     ): array {
         $data = $this->fetchProfilesJson($version, $target, $localFile);
-        if (!$data) {
+        if (! $data) {
             $this->line("  <fg=red>✗</> {$target} — 获取失败");
+
             return [-1, 0];
         }
 
-        $archPackages  = $data['arch_packages'] ?? '';
-        $targetFull    = $data['target'] ?? $target;
-        $profiles      = $data['profiles'] ?? [];
+        $archPackages = $data['arch_packages'] ?? '';
+        $targetFull = $data['target'] ?? $target;
+        $profiles = $data['profiles'] ?? [];
 
         if (empty($archPackages) || empty($profiles)) {
             $this->line("  <fg=yellow>⚠</> {$target} — profiles 为空，跳过");
+
             return [0, 0];
         }
 
@@ -180,15 +182,15 @@ class ImportOpenWrtToH extends Command
 
         // 通过 OpenWrtDetectService 计算 ctl_arch
         $detected = $this->detector->detect($archPackages, $targetFull);
-        $ctlArch  = $detected['arch'];
-        $libc     = $detected['libc'] ?? 'musl';
+        $ctlArch = $detected['arch'];
+        $libc = $detected['libc'] ?? 'musl';
         $floatAbi = $this->inferFloatAbi($ctlArch);
 
         $imported = 0;
         $firmware = 0;
 
         foreach ($profiles as $profileId => $profile) {
-            $titles           = $profile['titles'] ?? [];
+            $titles = $profile['titles'] ?? [];
             $supportedDevices = $profile['supported_devices'] ?? [];
 
             if (empty($titles) || empty($profileId)) {
@@ -201,6 +203,7 @@ class ImportOpenWrtToH extends Command
                 $this->line("  [dry] {$profileId} — {$brand} {$modelName} {$variant}  [{$ctlArch}]");
                 $imported++;
                 $firmware++;
+
                 continue;
             }
 
@@ -211,27 +214,27 @@ class ImportOpenWrtToH extends Command
             );
 
             // 主 board_name（第一个 supported_device）
-            if ($device->wasRecentlyCreated && !empty($supportedDevices)) {
+            if ($device->wasRecentlyCreated && ! empty($supportedDevices)) {
                 $this->trySetBoardName($device, $supportedDevices[0]);
             }
 
             // 创建/更新固件条目（以 device_id + distrib_target + distrib_arch 为唯一键）
             OpenwrtDeviceFirmware::updateOrCreate(
                 [
-                    'device_id'     => $device->id,
+                    'device_id' => $device->id,
                     'distrib_target' => $targetFull,
-                    'distrib_arch'   => $archPackages,
+                    'distrib_arch' => $archPackages,
                 ],
                 [
-                    'openwrt_target'   => $openwrtTarget,
+                    'openwrt_target' => $openwrtTarget,
                     'openwrt_subtarget' => $openwrtSub,
                     'supported_devices' => $supportedDevices,
-                    'ctl_arch'         => $ctlArch,
-                    'libc'             => $libc,
-                    'float_abi'        => $floatAbi,
-                    'support_status'   => 'supported',
-                    'is_primary'       => true,
-                    'status'           => 1,
+                    'ctl_arch' => $ctlArch,
+                    'libc' => $libc,
+                    'float_abi' => $floatAbi,
+                    'support_status' => 'supported',
+                    'is_primary' => true,
+                    'status' => 1,
                 ]
             );
 
@@ -256,6 +259,7 @@ class ImportOpenWrtToH extends Command
     {
         if ($localFile) {
             $content = @file_get_contents($localFile);
+
             return $content ? json_decode($content, true) : null;
         }
 
@@ -264,7 +268,7 @@ class ImportOpenWrtToH extends Command
         // CDN（Varnish）偶尔会对短时间多次请求限流，最多重试 3 次，间隔 3s
         $ctx = stream_context_create([
             'http' => ['timeout' => 60, 'user_agent' => self::UA],
-            'ssl'  => ['verify_peer' => true, 'verify_peer_name' => true],
+            'ssl' => ['verify_peer' => true, 'verify_peer_name' => true],
         ]);
 
         for ($attempt = 1; $attempt <= 3; $attempt++) {
@@ -279,6 +283,7 @@ class ImportOpenWrtToH extends Command
                 sleep(3);
             }
         }
+
         return null;
     }
 
@@ -291,10 +296,11 @@ class ImportOpenWrtToH extends Command
         if (empty($titles)) {
             return ['', '', ''];
         }
-        $t       = $titles[0];
-        $brand   = $t['vendor'] ?? '';
-        $model   = $t['model'] ?? '';
+        $t = $titles[0];
+        $brand = $t['vendor'] ?? '';
+        $model = $t['model'] ?? '';
         $variant = $t['variant'] ?? '';
+
         return [trim($brand), trim($model), trim($variant)];
     }
 
@@ -306,15 +312,15 @@ class ImportOpenWrtToH extends Command
         string $model,
         string $variant,
         string $profileId,
-        array  $supportedDevices
+        array $supportedDevices
     ): array {
         $slug = Str::slug(str_replace(['_', '/'], '-', $profileId));
 
         return [
-            'brand'        => $brand,
-            'model'        => $model,
-            'version'      => $variant,
-            'device_slug'  => $slug,
+            'brand' => $brand,
+            'model' => $model,
+            'version' => $variant,
+            'device_slug' => $slug,
             // board_name 单独处理（避免唯一键冲突）
         ];
     }
@@ -324,7 +330,7 @@ class ImportOpenWrtToH extends Command
      */
     private function trySetBoardName(OpenwrtDevice $device, string $boardName): void
     {
-        if (!$boardName) {
+        if (! $boardName) {
             return;
         }
         try {
@@ -341,6 +347,7 @@ class ImportOpenWrtToH extends Command
     private function splitTarget(string $target): array
     {
         $parts = explode('/', $target, 2);
+
         return [$parts[0] ?? '', $parts[1] ?? ''];
     }
 
@@ -354,9 +361,10 @@ class ImportOpenWrtToH extends Command
         if (str_ends_with($ctlArch, '-softfp')) {
             return 'soft';
         }
+
         return match ($ctlArch) {
             'armv7', 'arm64' => 'hard',
-            default          => 'soft',
+            default => 'soft',
         };
     }
 
@@ -367,6 +375,7 @@ class ImportOpenWrtToH extends Command
     {
         // 额外追加 OpenWrtDetectService::TARGET_MAP 中的 target
         $fromService = array_keys($this->detector->getTargetMap());
+
         return array_unique(array_merge(self::BUILTIN_TARGETS, $fromService));
     }
 
@@ -381,7 +390,8 @@ class ImportOpenWrtToH extends Command
 
         $topTargets = $this->listDirectoryEntries($baseUrl);
         if (empty($topTargets)) {
-            $this->warn("无法枚举 targets（网络问题），退回到内置列表");
+            $this->warn('无法枚举 targets（网络问题），退回到内置列表');
+
             return $this->getBuiltinTargets();
         }
 
@@ -394,6 +404,7 @@ class ImportOpenWrtToH extends Command
         }
 
         $this->info(sprintf('发现 <comment>%d</comment> 个 target/subtarget 组合', count($allTargets)));
+
         return $allTargets;
     }
 
@@ -404,14 +415,15 @@ class ImportOpenWrtToH extends Command
     {
         $ctx = stream_context_create([
             'http' => ['timeout' => 30, 'user_agent' => self::UA],
-            'ssl'  => ['verify_peer' => true, 'verify_peer_name' => true],
+            'ssl' => ['verify_peer' => true, 'verify_peer_name' => true],
         ]);
         try {
             $html = @file_get_contents($url, false, $ctx);
-            if (!$html) {
+            if (! $html) {
                 return [];
             }
             preg_match_all('|href="([a-z0-9_\-]+)/"|', $html, $matches);
+
             return $matches[1] ?? [];
         } catch (\Throwable) {
             return [];

@@ -2,12 +2,14 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Models\DownloadLog;
 use App\Models\Plugin;
 use App\Services\Plugin\PluginService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class PluginController extends Controller
 {
@@ -19,6 +21,7 @@ class PluginController extends Controller
     public function index(Request $request): JsonResponse
     {
         $platform = $request->query('platform', 'linux');
+
         return response()->json(['data' => $this->service->listByPlatform($platform)]);
     }
 
@@ -28,16 +31,16 @@ class PluginController extends Controller
     public function store(Request $request): JsonResponse
     {
         $request->validate([
-            'name'         => 'required|string|max:64',
+            'name' => 'required|string|max:64',
             'display_name' => 'nullable|string|max:128',
-            'category'     => 'nullable|string',
-            'version'      => 'required|string|max:32',
-            'platform'     => 'required|string',
-            'arch'         => 'nullable|string',
-            'description'  => 'nullable|string',
+            'category' => 'nullable|string',
+            'version' => 'required|string|max:32',
+            'platform' => 'required|string',
+            'arch' => 'nullable|string',
+            'description' => 'nullable|string',
             'dependencies' => 'nullable|array',
-            'metadata'     => 'nullable|array',
-            'file'         => 'required|file|max:51200', // 50MB
+            'metadata' => 'nullable|array',
+            'file' => 'required|file|max:51200', // 50MB
         ]);
 
         $plugin = $this->service->upload(
@@ -53,7 +56,7 @@ class PluginController extends Controller
     /**
      * GET /api/v2/plugins/{pluginId}/download/{filename}
      */
-    public function download(Request $request, int $pluginId, string $filename): \Symfony\Component\HttpFoundation\BinaryFileResponse
+    public function download(Request $request, int $pluginId, string $filename): BinaryFileResponse
     {
         $absolutePath = $this->service->download(
             $pluginId,
@@ -70,6 +73,7 @@ class PluginController extends Controller
     public function disable(int $pluginId): JsonResponse
     {
         $this->service->disable($pluginId);
+
         return response()->json(['message' => 'ok']);
     }
 
@@ -77,18 +81,18 @@ class PluginController extends Controller
      * GET /d/plugins/{filename}
      * 按文件名查找插件并下载
      */
-    public function downloadByFilename(Request $request, string $filename): \Symfony\Component\HttpFoundation\BinaryFileResponse
+    public function downloadByFilename(Request $request, string $filename): BinaryFileResponse
     {
         $plugin = Plugin::active()->where('filename', $filename)->firstOrFail();
 
         Plugin::where('id', $plugin->id)->increment('download_cnt');
-        \App\Models\DownloadLog::create([
+        DownloadLog::create([
             'resource_type' => 'plugin',
-            'resource_id'   => $plugin->plugin_id,
-            'ip'            => $request->ip(),
-            'user_agent'    => $request->userAgent() ?? '',
-            'referer'       => $request->header('Referer', ''),
-            'created_at'    => now(),
+            'resource_id' => $plugin->plugin_id,
+            'ip' => $request->ip(),
+            'user_agent' => $request->userAgent() ?? '',
+            'referer' => $request->header('Referer', ''),
+            'created_at' => now(),
         ]);
 
         return response()->download(Storage::disk('local')->path($plugin->file_path), $filename);

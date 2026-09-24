@@ -9,8 +9,8 @@ use Tests\TestCase;
 
 class ManifestServiceTest extends TestCase
 {
-    use RefreshDatabase;
     use CreatesCtlTables;
+    use RefreshDatabase;
 
     private ManifestService $service;
 

@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class Release extends Model
 {
     protected $table = 'releases';
+
     protected $primaryKey = 'id';
 
     protected $fillable = [
@@ -17,12 +18,12 @@ class Release extends Model
     ];
 
     protected $casts = [
-        'release_id'   => 'integer',
-        'file_size'    => 'integer',
+        'release_id' => 'integer',
+        'file_size' => 'integer',
         'download_cnt' => 'integer',
-        'is_stable'    => 'boolean',
-        'is_latest'    => 'boolean',
-        'status'       => 'boolean',
+        'is_stable' => 'boolean',
+        'is_latest' => 'boolean',
+        'status' => 'boolean',
     ];
 
     public function scopeActive($query)

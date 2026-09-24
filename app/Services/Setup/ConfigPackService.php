@@ -48,10 +48,10 @@ class ConfigPackService
     /**
      * 生成节点配置包 ZIP 并返回临时文件路径
      *
-     * @param string      $token    用户 Sanctum Token
-     * @param int         $nodeId   节点 ID
-     * @param string|null $platform 目标平台（null = 仅配置）
-     * @param string|null $arch     目标架构（null = 仅配置）
+     * @param  string  $token  用户 Sanctum Token
+     * @param  int  $nodeId  节点 ID
+     * @param  string|null  $platform  目标平台（null = 仅配置）
+     * @param  string|null  $arch  目标架构（null = 仅配置）
      * @return array{path: string, filename: string, node_name: string}
      */
     public function generatePack(string $token, int $nodeId, ?string $platform = null, ?string $arch = null, ?int $zoneId = null): array
@@ -83,8 +83,8 @@ class ConfigPackService
         $filename = "mynet_node_{$nodeId}_{$safeName}.zip";
 
         return [
-            'path'      => $zipPath,
-            'filename'  => $filename,
+            'path' => $zipPath,
+            'filename' => $filename,
             'node_name' => $nodeName,
         ];
     }
@@ -92,7 +92,7 @@ class ConfigPackService
     /**
      * 优先使用 config-bundle API 获取配置 + 密钥，失败则降级为分散请求
      *
-     * @return array{0: array<string, string>, 1: array<string, string>}  [configs, keys]
+     * @return array{0: array<string, string>, 1: array<string, string>} [configs, keys]
      */
     private function fetchViaBundle(string $token, int $zoneId, int $nodeId): array
     {
@@ -109,10 +109,10 @@ class ConfigPackService
 
             // Security keys
             $sec = $bundle['keys']['security'] ?? [];
-            if (!empty($sec['private'])) {
+            if (! empty($sec['private'])) {
                 $keys["{$nodeId}.private"] = $sec['private'];
             }
-            if (!empty($sec['public'])) {
+            if (! empty($sec['public'])) {
                 $keys["{$nodeId}.public"] = $sec['public'];
             }
 
@@ -121,6 +121,7 @@ class ConfigPackService
             // Fallback to legacy multi-request
             $configs = $this->fetchAllConfigs($token, $zoneId, $nodeId);
             $keys = $this->fetchKeys($token, $zoneId, $nodeId, $configs['route.conf'] ?? '');
+
             return [$configs, $keys];
         }
     }
@@ -156,7 +157,7 @@ class ConfigPackService
     /**
      * 获取密钥文件（自身 + 对等节点公钥）
      *
-     * @param string $routeConf route.conf 纯文本（用于提取对等节点 ID）
+     * @param  string  $routeConf  route.conf 纯文本（用于提取对等节点 ID）
      */
     private function fetchKeys(string $token, int $zoneId, int $nodeId, string $routeConf = ''): array
     {
@@ -167,10 +168,10 @@ class ConfigPackService
             $keysData = $this->backClient->getNodeKeys($token, $zoneId, $nodeId);
             $data = $keysData['data'] ?? $keysData;
 
-            if (!empty($data['public_key'])) {
+            if (! empty($data['public_key'])) {
                 $keys["{$nodeId}.public"] = $data['public_key'];
             }
-            if (!empty($data['private_key'])) {
+            if (! empty($data['private_key'])) {
                 $keys["{$nodeId}.private"] = $data['private_key'];
             }
         } catch (RuntimeException) {
@@ -179,7 +180,7 @@ class ConfigPackService
 
         // 从 route.conf 提取对等节点 ID，批量获取公钥
         $peerNodeIds = $this->extractPeerNodeIds($routeConf, $nodeId);
-        if (!empty($peerNodeIds)) {
+        if (! empty($peerNodeIds)) {
             try {
                 $routerKeysData = $this->backClient->getRouterKeys($token, $zoneId, $nodeId, $peerNodeIds);
                 $routerKeys = $routerKeysData['data']['keys'] ?? $routerKeysData['keys'] ?? [];
@@ -215,11 +216,12 @@ class ConfigPackService
             $parts = explode('|', $line);
             if (count($parts) >= 2) {
                 $id = (int) $parts[0];
-                if ($id > 0 && $id !== $selfNodeId && !in_array($id, $peerIds, true)) {
+                if ($id > 0 && $id !== $selfNodeId && ! in_array($id, $peerIds, true)) {
                     $peerIds[] = $id;
                 }
             }
         }
+
         return $peerIds;
     }
 
@@ -238,7 +240,7 @@ class ConfigPackService
     ): string {
         $tempPath = tempnam(sys_get_temp_dir(), 'mynet_pack_');
 
-        $zip = new ZipArchive();
+        $zip = new ZipArchive;
         if ($zip->open($tempPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
             throw new RuntimeException('无法创建 ZIP 文件');
         }
@@ -374,7 +376,7 @@ PS1;
 
         $targetLine = ($platform && $arch)
             ? "目标平台:  {$platform} / {$arch}"
-            : "目标平台:  通用（仅配置文件）";
+            : '目标平台:  通用（仅配置文件）';
 
         $setupSection = ($platform && $arch)
             ? $this->readmeSetupSection($platform)
@@ -436,6 +438,7 @@ SECTION;
         }
 
         $dir = $platform === 'openwrt' ? '/etc/mynet' : '/opt/mynet';
+
         return <<<SECTION
 
 ## 快速部署

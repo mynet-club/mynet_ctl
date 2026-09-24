@@ -2,9 +2,9 @@
 
 namespace App\Services\Manifest;
 
-use App\Models\Release;
-use App\Models\Plugin;
 use App\Domain\Release\Services\ReleaseDomainService;
+use App\Models\Plugin;
+use App\Models\Release;
 use App\Services\Script\ScriptService;
 
 /**
@@ -26,6 +26,7 @@ class ManifestService
     public function __construct(
         private readonly ScriptService $scriptService
     ) {}
+
     /**
      * 外部名称 → CTL 内部 product 名称
      * tui 二进制在旧体系中称为 "mynet"
@@ -39,22 +40,22 @@ class ManifestService
      */
     private const CLIENT_PLUGINS = [
         'heartbeat' => [
-            'name'        => '@mynet/heartbeat',
+            'name' => '@mynet/heartbeat',
             'description' => '心跳守护插件',
-            'required'    => false,
-            'type'        => 'nodejs',
+            'required' => false,
+            'type' => 'nodejs',
         ],
         'updater' => [
-            'name'        => '@mynet/updater',
+            'name' => '@mynet/updater',
             'description' => '自动更新插件',
-            'required'    => false,
-            'type'        => 'nodejs',
+            'required' => false,
+            'type' => 'nodejs',
         ],
         'proxy' => [
-            'name'        => '@mynet/proxy',
+            'name' => '@mynet/proxy',
             'description' => '代理路由插件',
-            'required'    => false,
-            'type'        => 'nodejs',
+            'required' => false,
+            'type' => 'nodejs',
         ],
     ];
 
@@ -95,9 +96,9 @@ class ManifestService
             $def = $productDefs[$product] ?? [];
 
             $entry = [
-                'name'         => $def['name'] ?? $externalKey,
-                'description'  => $def['desc'] ?? '',
-                'latest'       => $latestVersion,
+                'name' => $def['name'] ?? $externalKey,
+                'description' => $def['desc'] ?? '',
+                'latest' => $latestVersion,
                 'manifest_url' => "/d/{$externalKey}/manifest.json",
             ];
 
@@ -118,11 +119,11 @@ class ManifestService
         // 补充尚未有 release 的已定义产品（如 client 可能还没有 release）
         foreach ($productDefs as $product => $def) {
             $externalKey = $def['alias'] ?? $product;
-            if (!isset($products[$externalKey]) && !isset($products[$product])) {
+            if (! isset($products[$externalKey]) && ! isset($products[$product])) {
                 $entry = [
-                    'name'         => $def['name'],
-                    'description'  => $def['desc'],
-                    'latest'       => null,
+                    'name' => $def['name'],
+                    'description' => $def['desc'],
+                    'latest' => null,
                     'manifest_url' => "/d/{$product}/manifest.json",
                 ];
                 if ($product === 'client') {
@@ -134,10 +135,10 @@ class ManifestService
 
         return [
             'schema_version' => '2.1',
-            'generated_at'   => now()->toIso8601String(),
-            'products'       => $products,
-            'apps'           => $apps,        // 旧客户端兼容
-            'aliases'        => ['tui' => 'mynet'],
+            'generated_at' => now()->toIso8601String(),
+            'products' => $products,
+            'apps' => $apps,        // 旧客户端兼容
+            'aliases' => ['tui' => 'mynet'],
         ];
     }
 
@@ -158,14 +159,15 @@ class ManifestService
                 'latest' => $latestPlugin->version ?? null,
             ]);
         }
+
         return $plugins;
     }
 
     /**
      * 生成 {product}/plugins.json — 某产品可用的插件清单
      *
-     * @param string $product  产品名（如 client）
-     * @return array|null  null 表示该产品无插件
+     * @param  string  $product  产品名（如 client）
+     * @return array|null null 表示该产品无插件
      */
     public function getPlugins(string $product): ?array
     {
@@ -187,12 +189,12 @@ class ManifestService
                 ->first();
 
             $entry = [
-                'name'        => $slug,
-                'full_name'   => $def['name'],
+                'name' => $slug,
+                'full_name' => $def['name'],
                 'description' => $def['description'],
-                'version'     => $latestPlugin->version ?? null,
-                'type'        => $def['type'],
-                'required'    => $def['required'],
+                'version' => $latestPlugin->version ?? null,
+                'type' => $def['type'],
+                'required' => $def['required'],
             ];
 
             if ($latestPlugin) {
@@ -206,17 +208,17 @@ class ManifestService
 
         return [
             'schema_version' => '1.0',
-            'product'        => $product,
-            'generated_at'   => now()->toIso8601String(),
-            'plugins'        => $plugins,
+            'product' => $product,
+            'generated_at' => now()->toIso8601String(),
+            'plugins' => $plugins,
         ];
     }
 
     /**
      * 生成某个产品的 manifest.json（兼容 tui updater 的 schema v1.1 格式）
      *
-     * @param string $product  外部名称（如 mynet/tui/gnb/utc）
-     * @return array|null  null 表示没有该产品的 release
+     * @param  string  $product  外部名称（如 mynet/tui/gnb/utc）
+     * @return array|null null 表示没有该产品的 release
      */
     public function getManifest(string $product): ?array
     {
@@ -240,7 +242,7 @@ class ManifestService
             ->value('version');
 
         // 仍兼容：如无 is_latest 标记，退回按创建时间取最新稳定版的 version
-        if (!$latestStableVersion) {
+        if (! $latestStableVersion) {
             $latestStableVersion = Release::where('product', $internalProduct)
                 ->where('status', 1)
                 ->where('is_stable', 1)
@@ -262,20 +264,20 @@ class ManifestService
                     ? "{$release->arch}-{$release->variant}"
                     : $release->arch;
 
-                $ext  = pathinfo($release->filename, PATHINFO_EXTENSION) ?: 'tgz';
+                $ext = pathinfo($release->filename, PATHINFO_EXTENSION) ?: 'tgz';
 
                 // 统一使用 /d/ 分发路径
-                $displayName = (new ReleaseDomainService())->getProductFilenamePrefix($internalProduct);
-                $dlFilename = (new ReleaseDomainService())->generateFilename($internalProduct, $release->platform, $release->arch, $release->version);
-                $url = rtrim(config('app.url'), '/') . "/d/{$displayName}/{$dlFilename}";
+                $displayName = (new ReleaseDomainService)->getProductFilenamePrefix($internalProduct);
+                $dlFilename = (new ReleaseDomainService)->generateFilename($internalProduct, $release->platform, $release->arch, $release->version);
+                $url = rtrim(config('app.url'), '/')."/d/{$displayName}/{$dlFilename}";
 
                 $artifacts[] = [
-                    'os'     => $release->platform,
-                    'arch'   => $archFull,
-                    'file'   => $release->filename,
-                    'url'    => $url,
-                    'ext'    => $ext,
-                    'size'   => (int) $release->file_size,
+                    'os' => $release->platform,
+                    'arch' => $archFull,
+                    'file' => $release->filename,
+                    'url' => $url,
+                    'ext' => $ext,
+                    'size' => (int) $release->file_size,
                     'sha256' => $release->sha256,
                 ];
 
@@ -283,10 +285,10 @@ class ManifestService
 
                 // 构建 matrix（按 os 聚合 arch 列表）
                 $os = $release->platform;
-                if (!isset($matrixMap[$os])) {
+                if (! isset($matrixMap[$os])) {
                     $matrixMap[$os] = ['os' => $os, 'arch' => [], 'ext' => $ext];
                 }
-                if (!in_array($archFull, $matrixMap[$os]['arch'], true)) {
+                if (! in_array($archFull, $matrixMap[$os]['arch'], true)) {
                     $matrixMap[$os]['arch'][] = $archFull;
                 }
             }
@@ -296,28 +298,28 @@ class ManifestService
 
             $versions[$version] = [
                 'released_at' => $firstRelease->created_at->toIso8601String(),
-                'channel'     => $channel,
-                'checksums'   => $checksums,
-                'matrix'      => array_values($matrixMap),
-                'artifacts'   => $artifacts,
-                'scripts'     => $this->scriptService->getScriptsForVersion($version),
+                'channel' => $channel,
+                'checksums' => $checksums,
+                'matrix' => array_values($matrixMap),
+                'artifacts' => $artifacts,
+                'scripts' => $this->scriptService->getScriptsForVersion($version),
             ];
         }
 
         // 版本排序：依赖语义化版本（gnb 的 v1.6.0.a 也能 fallback 到字符串排序）
-        uksort($versions, fn($a, $b) => $this->compareVersionDesc($a, $b));
+        uksort($versions, fn ($a, $b) => $this->compareVersionDesc($a, $b));
 
         return [
             'schema_version' => '1.1',
-            'project'        => $product,             // 对客户端暴露外部名称
-            'generated_at'   => now()->toIso8601String(),
-            'latest'         => [
-                'stable'  => $latestStableVersion,
-                'beta'    => null,
+            'project' => $product,             // 对客户端暴露外部名称
+            'generated_at' => now()->toIso8601String(),
+            'latest' => [
+                'stable' => $latestStableVersion,
+                'beta' => null,
                 'nightly' => null,
             ],
-            'latest_stable'  => $latestStableVersion,
-            'versions'       => $versions,
+            'latest_stable' => $latestStableVersion,
+            'versions' => $versions,
         ];
     }
 
@@ -333,6 +335,7 @@ class ManifestService
     private function toExternalName(string $internal): string
     {
         $flip = array_flip(self::ALIASES);
+
         return $flip[$internal] ?? $internal;
     }
 
@@ -342,11 +345,12 @@ class ManifestService
      */
     private function compareVersionDesc(string $a, string $b): int
     {
-        $clean = fn(string $v) => ltrim($v, 'v');
+        $clean = fn (string $v) => ltrim($v, 'v');
         $cmp = version_compare($clean($b), $clean($a));
         if ($cmp !== 0) {
             return $cmp;
         }
+
         // version_compare 认为相等时，按字符串倒序
         return strcmp($b, $a);
     }

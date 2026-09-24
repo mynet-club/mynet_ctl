@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class Plugin extends Model
 {
     protected $table = 'plugins';
+
     protected $primaryKey = 'id';
 
     protected $fillable = [
@@ -17,12 +18,12 @@ class Plugin extends Model
     ];
 
     protected $casts = [
-        'plugin_id'    => 'integer',
-        'file_size'    => 'integer',
+        'plugin_id' => 'integer',
+        'file_size' => 'integer',
         'download_cnt' => 'integer',
         'dependencies' => 'array',
-        'metadata'     => 'array',
-        'status'       => 'boolean',
+        'metadata' => 'array',
+        'status' => 'boolean',
     ];
 
     public function scopeActive($query)

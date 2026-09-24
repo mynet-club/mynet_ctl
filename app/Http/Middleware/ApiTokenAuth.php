@@ -18,19 +18,19 @@ class ApiTokenAuth
     public function handle(Request $request, Closure $next, string ...$abilities): Response
     {
         $bearer = $request->bearerToken();
-        if (!$bearer) {
+        if (! $bearer) {
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
-        $hash  = hash('sha256', $bearer);
+        $hash = hash('sha256', $bearer);
         $token = ApiToken::active()->where('token_hash', $hash)->first();
 
-        if (!$token) {
+        if (! $token) {
             return response()->json(['message' => 'Invalid token'], 401);
         }
 
         foreach ($abilities as $ability) {
-            if (!$token->hasAbility($ability)) {
+            if (! $token->hasAbility($ability)) {
                 return response()->json(['message' => "Missing ability: {$ability}"], 403);
             }
         }

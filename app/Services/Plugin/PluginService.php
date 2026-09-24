@@ -18,22 +18,22 @@ class PluginService
 
     public function upload(array $data, UploadedFile $file): Plugin
     {
-        if (!$this->domain->validateCategory($data['category'] ?? 'general')) {
+        if (! $this->domain->validateCategory($data['category'] ?? 'general')) {
             throw new RuntimeException('无效的插件分类');
         }
-        if (!$this->domain->validatePlatform($data['platform'] ?? '')) {
+        if (! $this->domain->validatePlatform($data['platform'] ?? '')) {
             throw new RuntimeException('无效的平台');
         }
 
-        $name     = $data['name'];
-        $version  = $data['version'];
+        $name = $data['name'];
+        $version = $data['version'];
         $platform = $data['platform'];
-        $arch     = $data['arch'] ?? 'all';
+        $arch = $data['arch'] ?? 'all';
 
         $filename = $this->domain->generateFilename($name, $platform, $arch, $version);
-        $path     = "plugins/{$name}/{$version}/{$filename}";
-        $sha256   = hash_file('sha256', $file->getRealPath());
-        $size     = $file->getSize();
+        $path = "plugins/{$name}/{$version}/{$filename}";
+        $sha256 = hash_file('sha256', $file->getRealPath());
+        $size = $file->getSize();
 
         DB::transaction(function () use ($data, $file, $filename, $path, $sha256, $size, $name, $version, $platform, $arch, &$plugin) {
             Storage::disk('local')->putFileAs(
@@ -45,23 +45,23 @@ class PluginService
             $pluginId = $this->generateId();
 
             $plugin = Plugin::create([
-                'plugin_id'    => $pluginId,
-                'name'         => $name,
+                'plugin_id' => $pluginId,
+                'name' => $name,
                 'display_name' => $data['display_name'] ?? $name,
-                'category'     => $data['category'] ?? 'general',
-                'version'      => $version,
-                'platform'     => $platform,
-                'arch'         => $arch,
-                'description'  => $data['description'] ?? null,
-                'filename'     => $filename,
-                'file_path'    => $path,
-                'file_size'    => $size,
-                'sha256'       => $sha256,
+                'category' => $data['category'] ?? 'general',
+                'version' => $version,
+                'platform' => $platform,
+                'arch' => $arch,
+                'description' => $data['description'] ?? null,
+                'filename' => $filename,
+                'file_path' => $path,
+                'file_size' => $size,
+                'sha256' => $sha256,
                 'download_url' => $this->buildDownloadUrl($pluginId, $filename),
                 'dependencies' => $data['dependencies'] ?? null,
-                'metadata'     => $data['metadata'] ?? null,
-                'uploaded_by'  => $data['uploaded_by'] ?? null,
-                'status'       => 1,
+                'metadata' => $data['metadata'] ?? null,
+                'uploaded_by' => $data['uploaded_by'] ?? null,
+                'status' => 1,
             ]);
         });
 
@@ -83,12 +83,13 @@ class PluginService
         Plugin::where('id', $plugin->id)->increment('download_cnt');
         DownloadLog::create([
             'resource_type' => 'plugin',
-            'resource_id'   => $pluginId,
-            'ip'            => $ip,
-            'user_agent'    => $userAgent,
-            'referer'       => request()->header('Referer', ''),
-            'created_at'    => now(),
+            'resource_id' => $pluginId,
+            'ip' => $ip,
+            'user_agent' => $userAgent,
+            'referer' => request()->header('Referer', ''),
+            'created_at' => now(),
         ]);
+
         return Storage::disk('local')->path($plugin->file_path);
     }
 
@@ -99,11 +100,11 @@ class PluginService
 
     private function generateId(): int
     {
-        return (int) (substr(microtime(true) * 1000, 0, 10) . str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT));
+        return (int) (substr(microtime(true) * 1000, 0, 10).str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT));
     }
 
     private function buildDownloadUrl(int $id, string $filename): string
     {
-        return rtrim(config('app.url'), '/') . "/d/plugins/{$filename}";
+        return rtrim(config('app.url'), '/')."/d/plugins/{$filename}";
     }
 }

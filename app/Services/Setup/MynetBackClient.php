@@ -14,6 +14,7 @@ use RuntimeException;
 class MynetBackClient
 {
     private string $baseUrl;
+
     private int $timeout;
 
     public function __construct()
@@ -32,8 +33,8 @@ class MynetBackClient
     public function login(string $email, string $password, string $deviceName = 'ctl-setup'): array
     {
         return $this->post('/api/v2/auth/login', [
-            'email'       => $email,
-            'password'    => $password,
+            'email' => $email,
+            'password' => $password,
             'device_name' => $deviceName,
         ]);
     }
@@ -70,12 +71,12 @@ class MynetBackClient
      * v2 端点为 /configuration，支持 section=vpn|network|all
      * render_conf=1 仅在 section=vpn 时生效
      *
-     * @param bool $renderConf true 返回 conf 纯文本，false 返回 JSON
+     * @param  bool  $renderConf  true 返回 conf 纯文本，false 返回 JSON
      */
     public function getNodeConfig(string $token, int $zoneId, int $nodeId, bool $renderConf = true): string|array
     {
         $query = [
-            'section'     => 'vpn',
+            'section' => 'vpn',
             'render_conf' => $renderConf ? '1' : '0',
         ];
 
@@ -162,11 +163,12 @@ class MynetBackClient
         if ($zoneId) {
             $request = $request->withHeaders(['X-Zone-ID' => $zoneId]);
         }
-        $response = $request->get($this->baseUrl . "/api/v1/nodes/{$nodeId}/bundle");
+        $response = $request->get($this->baseUrl."/api/v1/nodes/{$nodeId}/bundle");
         if ($response->failed()) {
             $this->throwFromResponse($response, "/api/v1/nodes/{$nodeId}/bundle");
         }
         $json = $response->json();
+
         return is_array($json) ? $json : [];
     }
 
@@ -182,7 +184,7 @@ class MynetBackClient
             $request = $request->withHeaders(['X-Zone-ID' => $zoneId]);
         }
 
-        $response = $request->get($this->baseUrl . $path, $query);
+        $response = $request->get($this->baseUrl.$path, $query);
 
         if ($response->failed()) {
             $this->throwFromResponse($response, $path);
@@ -201,7 +203,7 @@ class MynetBackClient
             $request = $request->withHeaders(['X-Zone-ID' => $zoneId]);
         }
 
-        $response = $request->get($this->baseUrl . $path, $query);
+        $response = $request->get($this->baseUrl.$path, $query);
 
         if ($response->failed()) {
             $this->throwFromResponse($response, $path);
@@ -214,7 +216,7 @@ class MynetBackClient
     {
         $response = Http::timeout($this->timeout)
             ->acceptJson()
-            ->post($this->baseUrl . $path, $data);
+            ->post($this->baseUrl.$path, $data);
 
         if ($response->failed()) {
             $this->throwFromResponse($response, $path);
@@ -233,7 +235,7 @@ class MynetBackClient
             $request = $request->withHeaders(['X-Zone-ID' => $zoneId]);
         }
 
-        $response = $request->post($this->baseUrl . $path, $data);
+        $response = $request->post($this->baseUrl.$path, $data);
 
         if ($response->failed()) {
             $this->throwFromResponse($response, $path);
@@ -245,8 +247,8 @@ class MynetBackClient
     private function throwFromResponse($response, string $path): never
     {
         $status = $response->status();
-        $body   = $response->json();
-        $msg    = $body['message'] ?? $body['error'] ?? "请求失败: {$path}";
+        $body = $response->json();
+        $msg = $body['message'] ?? $body['error'] ?? "请求失败: {$path}";
 
         throw new RuntimeException("[mynet_back {$status}] {$msg}", $status);
     }

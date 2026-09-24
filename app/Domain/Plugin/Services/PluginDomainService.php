@@ -38,6 +38,7 @@ class PluginDomainService
     public function generateFilename(string $name, string $platform, string $arch, string $version): string
     {
         $archPart = ($arch === 'all') ? 'universal' : $arch;
+
         return "plugin_{$name}_{$platform}_{$archPart}_{$version}.tgz";
     }
 }

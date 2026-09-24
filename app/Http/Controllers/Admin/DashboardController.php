@@ -18,6 +18,7 @@ class DashboardController extends Controller
         if (session('admin_token_id')) {
             return redirect('/admin');
         }
+
         return view('admin.login');
     }
 
@@ -25,10 +26,10 @@ class DashboardController extends Controller
     {
         $request->validate(['token' => 'required|string']);
 
-        $hash  = hash('sha256', $request->input('token'));
+        $hash = hash('sha256', $request->input('token'));
         $token = ApiToken::active()->where('token_hash', $hash)->first();
 
-        if (!$token || !$token->hasAbility('*')) {
+        if (! $token || ! $token->hasAbility('*')) {
             return back()->withErrors(['token' => '无效的管理令牌'])->withInput();
         }
 
@@ -41,16 +42,17 @@ class DashboardController extends Controller
     public function logout(Request $request)
     {
         $request->session()->forget('admin_token_id');
+
         return redirect('/admin/login');
     }
 
     public function index()
     {
         $stats = [
-            'releases'    => Release::where('status', 1)->count(),
-            'scripts'     => Script::where('status', 1)->count(),
-            'plugins'     => Plugin::where('status', 1)->count(),
-            'tokens'      => ApiToken::where('status', 1)->count(),
+            'releases' => Release::where('status', 1)->count(),
+            'scripts' => Script::where('status', 1)->count(),
+            'plugins' => Plugin::where('status', 1)->count(),
+            'tokens' => ApiToken::where('status', 1)->count(),
             'downloads_7d' => DownloadLog::where('created_at', '>=', now()->subDays(7))->count(),
             'downloads_30d' => DownloadLog::where('created_at', '>=', now()->subDays(30))->count(),
         ];
@@ -91,9 +93,9 @@ class DashboardController extends Controller
 
         // Daily downloads (last 14 days)
         $dailyDownloads = DownloadLog::select(
-                DB::raw('DATE(created_at) as date'),
-                DB::raw('COUNT(*) as cnt')
-            )
+            DB::raw('DATE(created_at) as date'),
+            DB::raw('COUNT(*) as cnt')
+        )
             ->where('created_at', '>=', now()->subDays(14))
             ->groupBy(DB::raw('DATE(created_at)'))
             ->orderBy('date')

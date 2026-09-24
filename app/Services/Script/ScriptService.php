@@ -20,39 +20,39 @@ class ScriptService
     public function publish(array $data): Script
     {
         $category = $data['category'] ?? 'install';
-        $lang     = $data['lang'] ?? $this->domain->detectLang($data['content'] ?? '');
+        $lang = $data['lang'] ?? $this->domain->detectLang($data['content'] ?? '');
 
-        if (!$this->domain->validateCategory($category)) {
+        if (! $this->domain->validateCategory($category)) {
             throw new RuntimeException('无效的脚本分类');
         }
-        if (!$this->domain->validateLang($lang)) {
+        if (! $this->domain->validateLang($lang)) {
             throw new RuntimeException('无效的脚本语言');
         }
 
-        $content  = $data['content'];
+        $content = $data['content'];
         $checksum = $this->domain->computeChecksum($content);
         $targetVersion = $data['target_version'] ?? null;
 
         $script = DB::transaction(function () use ($data, $category, $lang, $content, $checksum, $targetVersion) {
             $scriptId = $this->generateId();
-            $filename = $data['name'] . '.' . $lang;
+            $filename = $data['name'].'.'.$lang;
 
             return Script::create([
-                'script_id'     => $scriptId,
-                'name'          => $data['name'],
-                'display_name'  => $data['display_name'] ?? $data['name'],
-                'category'      => $category,
-                'platform'      => $data['platform'] ?? 'linux',
-                'version'       => $data['version'] ?? 'latest',
-                'target_version'=> $targetVersion,
-                'description'   => $data['description'] ?? null,
-                'content'       => $content,
-                'lang'          => $lang,
-                'checksum'      => $checksum,
+                'script_id' => $scriptId,
+                'name' => $data['name'],
+                'display_name' => $data['display_name'] ?? $data['name'],
+                'category' => $category,
+                'platform' => $data['platform'] ?? 'linux',
+                'version' => $data['version'] ?? 'latest',
+                'target_version' => $targetVersion,
+                'description' => $data['description'] ?? null,
+                'content' => $content,
+                'lang' => $lang,
+                'checksum' => $checksum,
                 'is_standalone' => $data['is_standalone'] ?? true,
-                'download_url'  => $this->buildDownloadUrl($filename, $targetVersion),
-                'uploaded_by'   => $data['uploaded_by'] ?? null,
-                'status'        => 1,
+                'download_url' => $this->buildDownloadUrl($filename, $targetVersion),
+                'uploaded_by' => $data['uploaded_by'] ?? null,
+                'status' => 1,
             ]);
         });
 
@@ -66,10 +66,11 @@ class ScriptService
     {
         $script = Script::where('script_id', $scriptId)->firstOrFail();
         $script->update([
-            'content'  => $newContent,
+            'content' => $newContent,
             'checksum' => $this->domain->computeChecksum($newContent),
-            'version'  => $newVersion ?? $script->version,
+            'version' => $newVersion ?? $script->version,
         ]);
+
         return $script->fresh();
     }
 
@@ -92,15 +93,16 @@ class ScriptService
         Script::where('id', $script->id)->increment('download_cnt');
         DownloadLog::create([
             'resource_type' => 'script',
-            'resource_id'   => $scriptId,
-            'ip'            => $ip,
-            'user_agent'    => $userAgent,
-            'referer'       => request()->header('Referer', ''),
-            'created_at'    => now(),
+            'resource_id' => $scriptId,
+            'ip' => $ip,
+            'user_agent' => $userAgent,
+            'referer' => request()->header('Referer', ''),
+            'created_at' => now(),
         ]);
+
         return [
-            'content'  => $script->content,
-            'lang'     => $script->lang,
+            'content' => $script->content,
+            'lang' => $script->lang,
             'checksum' => $script->checksum,
         ];
     }
@@ -130,16 +132,16 @@ class ScriptService
         Script::where('id', $script->id)->increment('download_cnt');
         DownloadLog::create([
             'resource_type' => 'script',
-            'resource_id'   => $script->script_id,
-            'ip'            => $ip,
-            'user_agent'    => $userAgent,
-            'referer'       => request()->header('Referer', ''),
-            'created_at'    => now(),
+            'resource_id' => $script->script_id,
+            'ip' => $ip,
+            'user_agent' => $userAgent,
+            'referer' => request()->header('Referer', ''),
+            'created_at' => now(),
         ]);
 
         return [
-            'content'  => $script->content,
-            'lang'     => $script->lang,
+            'content' => $script->content,
+            'lang' => $script->lang,
             'checksum' => $script->checksum,
             'target_version' => $script->target_version,
         ];
@@ -152,7 +154,7 @@ class ScriptService
 
     private function generateId(): int
     {
-        return (int) (substr(microtime(true) * 1000, 0, 10) . str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT));
+        return (int) (substr(microtime(true) * 1000, 0, 10).str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT));
     }
 
     private function buildDownloadUrl(string $filename, ?string $targetVersion = null): string
@@ -161,6 +163,7 @@ class ScriptService
         if ($targetVersion) {
             return "{$base}/d/scripts/{$targetVersion}/{$filename}";
         }
+
         return "{$base}/d/scripts/{$filename}";
     }
 
@@ -171,6 +174,7 @@ class ScriptService
     {
         $ext = $script->lang ?: 'sh';
         $filename = "{$script->name}.{$ext}";
+
         return $this->buildDownloadUrl($filename, $script->target_version);
     }
 

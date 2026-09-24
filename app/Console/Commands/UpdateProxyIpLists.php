@@ -32,17 +32,19 @@ class UpdateProxyIpLists extends Command
         $scriptPath = base_path('scripts/proxy-lists/update_proxy_lists.sh');
         $outputDir = storage_path('app/public/proxy-lists');
 
-        if (!file_exists($scriptPath)) {
+        if (! file_exists($scriptPath)) {
             $this->error("脚本不存在: {$scriptPath}");
+
             return self::FAILURE;
         }
 
         $cmd = "bash {$scriptPath} --output-dir {$outputDir}";
 
         if ($this->option('dry-run')) {
-            $this->info("[DRY-RUN] 将要执行:");
+            $this->info('[DRY-RUN] 将要执行:');
             $this->line("  {$cmd}");
             $this->line("  输出目录: {$outputDir}");
+
             return self::SUCCESS;
         }
 
@@ -66,36 +68,38 @@ class UpdateProxyIpLists extends Command
             $this->info('✅ 代理 IP 列表更新完成');
 
             // 显示结果摘要
-            $metaFile = $outputDir . '/meta.json';
+            $metaFile = $outputDir.'/meta.json';
             if (file_exists($metaFile)) {
                 $meta = json_decode(file_get_contents($metaFile), true);
                 if ($meta) {
                     $this->table(
                         ['文件', '行数', '大小', 'SHA256'],
                         [
-                            ['chinaip.txt', $meta['chinaip']['count'] ?? '-', $this->formatSize($meta['chinaip']['size'] ?? 0), substr($meta['chinaip']['sha256'] ?? '', 0, 16) . '...'],
-                            ['interip.txt', $meta['interip']['count'] ?? '-', $this->formatSize($meta['interip']['size'] ?? 0), substr($meta['interip']['sha256'] ?? '', 0, 16) . '...'],
+                            ['chinaip.txt', $meta['chinaip']['count'] ?? '-', $this->formatSize($meta['chinaip']['size'] ?? 0), substr($meta['chinaip']['sha256'] ?? '', 0, 16).'...'],
+                            ['interip.txt', $meta['interip']['count'] ?? '-', $this->formatSize($meta['interip']['size'] ?? 0), substr($meta['interip']['sha256'] ?? '', 0, 16).'...'],
                         ]
                     );
-                    $this->line("更新时间: " . ($meta['updated_at'] ?? '-'));
+                    $this->line('更新时间: '.($meta['updated_at'] ?? '-'));
                 }
             }
 
             return self::SUCCESS;
         }
 
-        $this->error('❌ 更新失败 (exit code: ' . $result->exitCode() . ')');
+        $this->error('❌ 更新失败 (exit code: '.$result->exitCode().')');
+
         return self::FAILURE;
     }
 
     private function formatSize(int $bytes): string
     {
         if ($bytes >= 1048576) {
-            return round($bytes / 1048576, 1) . ' MB';
+            return round($bytes / 1048576, 1).' MB';
         }
         if ($bytes >= 1024) {
-            return round($bytes / 1024, 1) . ' KB';
+            return round($bytes / 1024, 1).' KB';
         }
-        return $bytes . ' B';
+
+        return $bytes.' B';
     }
 }

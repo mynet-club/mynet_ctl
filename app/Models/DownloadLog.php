@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class DownloadLog extends Model
 {
     protected $table = 'download_logs';
+
     public $timestamps = false;
 
     protected $fillable = [
@@ -15,6 +16,6 @@ class DownloadLog extends Model
 
     protected $casts = [
         'resource_id' => 'integer',
-        'created_at'  => 'datetime',
+        'created_at' => 'datetime',
     ];
 }

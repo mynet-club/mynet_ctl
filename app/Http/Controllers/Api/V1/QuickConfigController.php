@@ -7,6 +7,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use RuntimeException;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 /**
  * QuickConfigController
@@ -50,24 +51,24 @@ class QuickConfigController extends Controller
      *     "external_index": "5.6.7.8:9001"   // 可选
      *   }
      */
-    public function generate(Request $request): \Symfony\Component\HttpFoundation\BinaryFileResponse|JsonResponse
+    public function generate(Request $request): BinaryFileResponse|JsonResponse
     {
         $validated = $request->validate([
-            'nodes'                => 'required|array|min:1|max:50',
-            'nodes.*.node_id'     => 'required|integer|min:1000000000000000',
-            'nodes.*.name'        => 'required|string|max:64|regex:/^[a-zA-Z0-9_\-]+$/',
-            'nodes.*.ip'          => 'required|ip',
-            'nodes.*.port'        => 'required|integer|min:1024|max:65535',
-            'nodes.*.is_index'    => 'sometimes|boolean',
-            'nodes.*.public_ip'   => 'nullable|ip',
-            'nodes.*.ifname'      => 'nullable|string|max:15|regex:/^[a-zA-Z0-9_]+$/',
-            'subnet_mask'         => 'sometimes|string|in:255.255.255.0,255.255.0.0,255.0.0.0',
-            'external_index'      => ['nullable', 'string', 'regex:/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d{1,5})?$/'],
+            'nodes' => 'required|array|min:1|max:50',
+            'nodes.*.node_id' => 'required|integer|min:1000000000000000',
+            'nodes.*.name' => 'required|string|max:64|regex:/^[a-zA-Z0-9_\-]+$/',
+            'nodes.*.ip' => 'required|ip',
+            'nodes.*.port' => 'required|integer|min:1024|max:65535',
+            'nodes.*.is_index' => 'sometimes|boolean',
+            'nodes.*.public_ip' => 'nullable|ip',
+            'nodes.*.ifname' => 'nullable|string|max:15|regex:/^[a-zA-Z0-9_]+$/',
+            'subnet_mask' => 'sometimes|string|in:255.255.255.0,255.255.0.0,255.0.0.0',
+            'external_index' => ['nullable', 'string', 'regex:/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d{1,5})?$/'],
         ]);
 
         // 校验：必须存在至少一个索引节点或提供外部索引
-        $hasIndex = collect($validated['nodes'])->contains(fn ($n) => !empty($n['is_index']) && !empty($n['public_ip']));
-        if (!$hasIndex && empty($validated['external_index'])) {
+        $hasIndex = collect($validated['nodes'])->contains(fn ($n) => ! empty($n['is_index']) && ! empty($n['public_ip']));
+        if (! $hasIndex && empty($validated['external_index'])) {
             return response()->json([
                 'message' => '至少需要一个节点设为索引（并填写公网 IP），或者提供外部索引地址',
             ], 422);
@@ -94,7 +95,7 @@ class QuickConfigController extends Controller
                 ['Content-Type' => 'application/zip']
             )->deleteFileAfterSend(true);
         } catch (RuntimeException $e) {
-            return response()->json(['message' => '生成失败: ' . $e->getMessage()], 500);
+            return response()->json(['message' => '生成失败: '.$e->getMessage()], 500);
         }
     }
 }

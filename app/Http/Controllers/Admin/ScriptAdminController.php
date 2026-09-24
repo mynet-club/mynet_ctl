@@ -29,27 +29,28 @@ class ScriptAdminController extends Controller
     public function edit(int $id)
     {
         $script = Script::where('script_id', $id)->firstOrFail();
+
         return view('admin.scripts.editor', compact('script'));
     }
 
     public function store(Request $request)
     {
         $data = $request->validate([
-            'name'          => 'required|string|max:64',
-            'display_name'  => 'nullable|string|max:128',
-            'category'      => 'required|string|in:install,service,setup,upgrade,tool',
-            'platform'      => 'required|string|in:linux,openwrt,darwin,windows,all',
-            'version'       => 'nullable|string|max:32',
-            'description'   => 'nullable|string',
-            'content'       => 'required|string',
-            'lang'          => 'nullable|string|in:bash,sh,python',
+            'name' => 'required|string|max:64',
+            'display_name' => 'nullable|string|max:128',
+            'category' => 'required|string|in:install,service,setup,upgrade,tool',
+            'platform' => 'required|string|in:linux,openwrt,darwin,windows,all',
+            'version' => 'nullable|string|max:32',
+            'description' => 'nullable|string',
+            'content' => 'required|string',
+            'lang' => 'nullable|string|in:bash,sh,python',
             'is_standalone' => 'nullable|boolean',
         ]);
 
-        $data['checksum']  = hash('sha256', $data['content']);
+        $data['checksum'] = hash('sha256', $data['content']);
         $data['script_id'] = $this->generateId();
-        $data['version']   = $data['version'] ?? 'latest';
-        $data['lang']      = $data['lang'] ?? 'bash';
+        $data['version'] = $data['version'] ?? 'latest';
+        $data['lang'] = $data['lang'] ?? 'bash';
 
         Script::create($data);
 
@@ -62,14 +63,14 @@ class ScriptAdminController extends Controller
         $script = Script::where('script_id', $id)->firstOrFail();
 
         $data = $request->validate([
-            'name'          => 'required|string|max:64',
-            'display_name'  => 'nullable|string|max:128',
-            'category'      => 'required|string|in:install,service,setup,upgrade,tool',
-            'platform'      => 'required|string|in:linux,openwrt,darwin,windows,all',
-            'version'       => 'nullable|string|max:32',
-            'description'   => 'nullable|string',
-            'content'       => 'required|string',
-            'lang'          => 'nullable|string|in:bash,sh,python',
+            'name' => 'required|string|max:64',
+            'display_name' => 'nullable|string|max:128',
+            'category' => 'required|string|in:install,service,setup,upgrade,tool',
+            'platform' => 'required|string|in:linux,openwrt,darwin,windows,all',
+            'version' => 'nullable|string|max:32',
+            'description' => 'nullable|string',
+            'content' => 'required|string',
+            'lang' => 'nullable|string|in:bash,sh,python',
             'is_standalone' => 'nullable|boolean',
         ]);
 
@@ -88,11 +89,12 @@ class ScriptAdminController extends Controller
         $script->save();
 
         $action = $script->status ? '启用' : '禁用';
+
         return back()->with('success', "已{$action} {$script->name}");
     }
 
     private function generateId(): int
     {
-        return (int)(microtime(true) * 10000) + random_int(0, 9999);
+        return (int) (microtime(true) * 10000) + random_int(0, 9999);
     }
 }

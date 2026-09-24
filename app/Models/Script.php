@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class Script extends Model
 {
     protected $table = 'scripts';
+
     protected $primaryKey = 'id';
 
     protected $fillable = [
@@ -16,10 +17,10 @@ class Script extends Model
     ];
 
     protected $casts = [
-        'script_id'    => 'integer',
+        'script_id' => 'integer',
         'download_cnt' => 'integer',
-        'is_standalone'=> 'boolean',
-        'status'       => 'boolean',
+        'is_standalone' => 'boolean',
+        'status' => 'boolean',
     ];
 
     public function scopeActive($query)

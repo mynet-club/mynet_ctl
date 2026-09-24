@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Domain\Release\Services\ReleaseDomainService;
 use App\Services\Manifest\ManifestService;
 use App\Services\Release\ReleaseService;
-use App\Domain\Release\Services\ReleaseDomainService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
@@ -99,7 +99,7 @@ class ManifestController extends Controller
     {
         $parsed = $this->domainService->parseFilename($filename);
 
-        if (!$parsed) {
+        if (! $parsed) {
             abort(404, 'Invalid filename format');
         }
 

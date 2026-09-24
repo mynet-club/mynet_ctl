@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Api\V1;
 use App\Domain\Platform\Services\OpenWrtDetectService;
 use App\Domain\Release\Services\ReleaseDomainService;
 use App\Models\OpenwrtDevice;
-use App\Models\OpenwrtDeviceFirmware;
 use App\Services\Release\ReleaseService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -41,32 +40,32 @@ class DetectController extends Controller
 
         // ── 模式二: distrib_arch + distrib_target 直接检测 ─────────────────
         $request->validate([
-            'distrib_arch'   => ['required', 'string', 'max:64'],
+            'distrib_arch' => ['required', 'string', 'max:64'],
             'distrib_target' => ['nullable', 'string', 'max:64', 'regex:/^[a-z0-9_\-\/\.]+$/i'],
-            'model'          => ['nullable', 'string', 'max:128'],
+            'model' => ['nullable', 'string', 'max:128'],
         ]);
 
-        $distribArch   = $request->input('distrib_arch', '');
+        $distribArch = $request->input('distrib_arch', '');
         $distribTarget = $request->input('distrib_target', '');
-        $model         = $request->input('model', '');
+        $model = $request->input('model', '');
 
         $detected = $this->detector->detect($distribArch, $distribTarget);
-        $arch     = $detected['ctl_arch'] ?? $detected['arch'] ?? 'amd64';
+        $arch = $detected['ctl_arch'] ?? $detected['arch'] ?? 'amd64';
 
-        $ctlBase = rtrim(config('app.url'), '/') . '/api/v2';
+        $ctlBase = rtrim(config('app.url'), '/').'/api/v2';
         $downloads = $this->buildDownloads($arch, $ctlBase);
 
         return response()->json([
-            'ctl_arch'       => $arch,
-            'soc'            => $detected['soc'] ?? null,
-            'cpu'            => $detected['cpu'] ?? null,
-            'libc'           => $detected['libc'] ?? null,
-            'note'           => $detected['note'] ?? null,
-            'confidence'     => $detected['confidence'] ?? 'unknown',
-            'model'          => $model ?: null,
-            'distrib_arch'   => $distribArch,
+            'ctl_arch' => $arch,
+            'soc' => $detected['soc'] ?? null,
+            'cpu' => $detected['cpu'] ?? null,
+            'libc' => $detected['libc'] ?? null,
+            'note' => $detected['note'] ?? null,
+            'confidence' => $detected['confidence'] ?? 'unknown',
+            'model' => $model ?: null,
+            'distrib_arch' => $distribArch,
             'distrib_target' => $distribTarget ?: null,
-            'downloads'      => $downloads,
+            'downloads' => $downloads,
         ]);
     }
 
@@ -78,13 +77,13 @@ class DetectController extends Controller
         // 搜索设备表的 brand/model 字段
         $devices = OpenwrtDevice::where(function ($q) use ($name) {
             $q->where('model', 'like', "%{$name}%")
-              ->orWhere('brand', 'like', "%{$name}%");
+                ->orWhere('brand', 'like', "%{$name}%");
         })
-        ->with(['firmware' => function ($q) {
-            $q->select('device_id', 'distrib_target', 'distrib_arch', 'ctl_arch', 'libc');
-        }])
-        ->limit(20)
-        ->get();
+            ->with(['firmware' => function ($q) {
+                $q->select('device_id', 'distrib_target', 'distrib_arch', 'ctl_arch', 'libc');
+            }])
+            ->limit(20)
+            ->get();
 
         if ($devices->isEmpty()) {
             return response()->json(['error' => "未找到匹配 '{$name}' 的设备，请尝试更简短的关键词"], 404);
@@ -92,19 +91,20 @@ class DetectController extends Controller
 
         // 只有一个结果且有固件信息 → 直接返回检测结果
         if ($devices->count() === 1 && $devices->first()->firmware->isNotEmpty()) {
-            $device   = $devices->first();
+            $device = $devices->first();
             $firmware = $device->firmware->first();
-            $arch     = $firmware->ctl_arch;
-            $ctlBase  = rtrim(config('app.url'), '/') . '/api/v2';
+            $arch = $firmware->ctl_arch;
+            $ctlBase = rtrim(config('app.url'), '/').'/api/v2';
+
             return response()->json([
-                'ctl_arch'       => $arch,
-                'device_model'   => trim("{$device->brand} {$device->model} {$device->version}"),
-                'soc'            => $device->soc_name ?: null,
-                'cpu'            => null,
-                'confidence'     => 'exact',
-                'distrib_arch'   => $firmware->distrib_arch,
+                'ctl_arch' => $arch,
+                'device_model' => trim("{$device->brand} {$device->model} {$device->version}"),
+                'soc' => $device->soc_name ?: null,
+                'cpu' => null,
+                'confidence' => 'exact',
+                'distrib_arch' => $firmware->distrib_arch,
                 'distrib_target' => $firmware->distrib_target,
-                'downloads'      => $this->buildDownloads($arch, $ctlBase),
+                'downloads' => $this->buildDownloads($arch, $ctlBase),
             ]);
         }
 
@@ -112,17 +112,18 @@ class DetectController extends Controller
         $candidates = $devices->flatMap(function ($device) {
             if ($device->firmware->isEmpty()) {
                 return [[
-                    'model'          => trim("{$device->brand} {$device->model} {$device->version}"),
-                    'distrib_arch'   => null,
+                    'model' => trim("{$device->brand} {$device->model} {$device->version}"),
+                    'distrib_arch' => null,
                     'distrib_target' => null,
-                    'ctl_arch'       => null,
+                    'ctl_arch' => null,
                 ]];
             }
-            return $device->firmware->map(fn($fw) => [
-                'model'          => trim("{$device->brand} {$device->model} {$device->version}"),
-                'distrib_arch'   => $fw->distrib_arch,
+
+            return $device->firmware->map(fn ($fw) => [
+                'model' => trim("{$device->brand} {$device->model} {$device->version}"),
+                'distrib_arch' => $fw->distrib_arch,
                 'distrib_target' => $fw->distrib_target,
-                'ctl_arch'       => $fw->ctl_arch,
+                'ctl_arch' => $fw->ctl_arch,
             ]);
         })->unique('distrib_target')->values();
 
@@ -139,13 +140,13 @@ class DetectController extends Controller
      */
     public function openwrtScript(): Response
     {
-$ctlBase = rtrim(config('app.url'), '/') . '/api/v2';
-        $script  = $this->generateDetectScript($ctlBase);
+        $ctlBase = rtrim(config('app.url'), '/').'/api/v2';
+        $script = $this->generateDetectScript($ctlBase);
 
         return response($script, 200, [
-            'Content-Type'        => 'text/plain; charset=utf-8',
+            'Content-Type' => 'text/plain; charset=utf-8',
             'Content-Disposition' => 'inline; filename="detect-openwrt.sh"',
-            'Cache-Control'       => 'no-cache',
+            'Cache-Control' => 'no-cache',
         ]);
     }
 
@@ -156,11 +157,11 @@ $ctlBase = rtrim(config('app.url'), '/') . '/api/v2';
      */
     public function archMap(): JsonResponse
     {
-        $archMap   = $this->detector->getArchMap();   // {distrib => ['arch' => ..., 'note' => ...]}
+        $archMap = $this->detector->getArchMap();   // {distrib => ['arch' => ..., 'note' => ...]}
         $targetMap = $this->detector->getTargetMap();   // {target => ['soc' => ..., 'arch_hint' => ...]}
 
         // Flatten arch_map to simple string map for frontend: {distrib_arch => ctl_arch}
-        $flatArchMap = array_map(fn($v) => $v['arch'], $archMap);
+        $flatArchMap = array_map(fn ($v) => $v['arch'], $archMap);
 
         // Build soc_examples: {distrib_arch => soc_string} using target_map hints
         $socExamples = [];
@@ -174,8 +175,8 @@ $ctlBase = rtrim(config('app.url'), '/') . '/api/v2';
         }
 
         return response()->json([
-            'arch_map'    => $flatArchMap,
-            'target_map'  => $targetMap,
+            'arch_map' => $flatArchMap,
+            'target_map' => $targetMap,
             'soc_examples' => $socExamples,
         ]);
     }
@@ -189,12 +190,12 @@ $ctlBase = rtrim(config('app.url'), '/') . '/api/v2';
     private function buildDownloads(string $arch, string $ctlBase): array
     {
         $productLabels = ['tui' => 'MyNet Client', 'gnb' => 'GNB', 'utc' => 'UTC'];
-        $platform      = 'openwrt';
-        $downloads     = [];
+        $platform = 'openwrt';
+        $downloads = [];
 
         foreach ($productLabels as $product => $label) {
             $release = $this->releaseService->getLatest($product, $platform, $arch);
-            if (!$release) {
+            if (! $release) {
                 // soft-float 变体回退
                 $fallbackArch = $this->softfpFallback($arch);
                 if ($fallbackArch) {
@@ -206,13 +207,13 @@ $ctlBase = rtrim(config('app.url'), '/') . '/api/v2';
                 $displayName = $this->releaseDomain->getProductFilenamePrefix($product);
                 $ext = $this->releaseDomain->getDefaultExtension($platform);
                 $dlFilename = "{$displayName}_{$platform}_{$release->arch}_{$release->version}.{$ext}";
-                $url = rtrim(config('app.url'), '/') . "/d/{$displayName}/{$dlFilename}";
+                $url = rtrim(config('app.url'), '/')."/d/{$displayName}/{$dlFilename}";
 
                 $downloads[] = [
-                    'product'       => $displayName,
+                    'product' => $displayName,
                     'product_label' => $label,
-                    'version'       => $release->version,
-                    'url'           => $url,
+                    'version' => $release->version,
+                    'url' => $url,
                 ];
             }
         }
@@ -227,15 +228,15 @@ $ctlBase = rtrim(config('app.url'), '/') . '/api/v2';
     private function softfpFallback(string $arch): string
     {
         return match ($arch) {
-            'armv7'          => 'armv7-softfp',
-            'armv7-softfp'   => 'armv7',
-            'arm64'          => 'arm64-softfp',
-            'arm64-softfp'   => 'arm64',
-            'mips'           => 'mips-softfp',
-            'mips-softfp'    => 'mips',
-            'mipsel'         => 'mipsel-softfp',
-            'mipsel-softfp'  => 'mipsel',
-            default          => '',
+            'armv7' => 'armv7-softfp',
+            'armv7-softfp' => 'armv7',
+            'arm64' => 'arm64-softfp',
+            'arm64-softfp' => 'arm64',
+            'mips' => 'mips-softfp',
+            'mips-softfp' => 'mips',
+            'mipsel' => 'mipsel-softfp',
+            'mipsel-softfp' => 'mipsel',
+            default => '',
         };
     }
 
@@ -245,6 +246,7 @@ $ctlBase = rtrim(config('app.url'), '/') . '/api/v2';
     private function generateDetectScript(string $ctlBase): string
     {
         $siteBase = rtrim(config('app.url'), '/');
+
         return <<<SH
 #!/bin/sh
 # detect-openwrt.sh — MyNet OpenWrt 硬件检测工具

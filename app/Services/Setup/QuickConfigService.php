@@ -17,47 +17,47 @@ class QuickConfigService
      * GNB node.conf 默认配置
      */
     private const NODE_DEFAULTS = [
-        'ifname'               => 'gnb_tun',
-        'mtu'                  => 1450,
-        'multi_socket'         => 'on',
-        'direct_forwarding'    => 'on',
-        'unified_forwarding'   => 'auto',
-        'standard_forwarding'  => 'on',
-        'address_secure'       => 'on',
-        'forward'              => 'on',
-        'daemon'               => 'on',
-        'es_argv'              => '--upnp',
-        'passcode'             => '12345678',
-        'crypto'               => 'xor',
+        'ifname' => 'gnb_tun',
+        'mtu' => 1450,
+        'multi_socket' => 'on',
+        'direct_forwarding' => 'on',
+        'unified_forwarding' => 'auto',
+        'standard_forwarding' => 'on',
+        'address_secure' => 'on',
+        'forward' => 'on',
+        'daemon' => 'on',
+        'es_argv' => '--upnp',
+        'passcode' => '12345678',
+        'crypto' => 'xor',
     ];
 
     /**
      * snake_case → kebab-case 字段名映射（与 GNB 一致）
      */
     private const FIELD_MAP = [
-        'nodeid'              => 'nodeid',
-        'ifname'              => 'ifname',
-        'listen'              => 'listen',
-        'mtu'                 => 'mtu',
-        'multi_socket'        => 'multi-socket',
-        'direct_forwarding'   => 'direct-forwarding',
-        'unified_forwarding'  => 'unified-forwarding',
+        'nodeid' => 'nodeid',
+        'ifname' => 'ifname',
+        'listen' => 'listen',
+        'mtu' => 'mtu',
+        'multi_socket' => 'multi-socket',
+        'direct_forwarding' => 'direct-forwarding',
+        'unified_forwarding' => 'unified-forwarding',
         'standard_forwarding' => 'standard-forwarding',
-        'address_secure'      => 'address-secure',
-        'forward'             => 'forward',
-        'daemon'              => 'daemon',
-        'es_argv'             => 'es-argv',
-        'passcode'            => 'passcode',
-        'crypto'              => 'crypto',
+        'address_secure' => 'address-secure',
+        'forward' => 'forward',
+        'daemon' => 'daemon',
+        'es_argv' => 'es-argv',
+        'passcode' => 'passcode',
+        'crypto' => 'crypto',
     ];
 
     /**
      * 批量生成节点配置包（合并为单个 ZIP）
      *
-     * @param array $params 用户输入参数
-     *   - nodes: array [{ name, ip, port, is_index, public_ip? }]
-     *   - subnet_mask: string (默认 255.255.255.0)
-     *   - external_index?: string (外部索引地址 ip:port，当无节点做 index 时)
+     * @param  array  $params  用户输入参数
+     *                         - nodes: array [{ name, ip, port, is_index, public_ip? }]
+     *                         - subnet_mask: string (默认 255.255.255.0)
+     *                         - external_index?: string (外部索引地址 ip:port，当无节点做 index 时)
      * @return array{path: string, filename: string}
      */
     public function generateBatch(array $params): array
@@ -77,7 +77,7 @@ class QuickConfigService
             $publicKey = bin2hex(sodium_crypto_sign_publickey($keyPair));
             $privateKey = bin2hex(sodium_crypto_sign_secretkey($keyPair));
             $nodeKeys[$node['node_id']] = [
-                'public'  => $publicKey,
+                'public' => $publicKey,
                 'private' => $privateKey,
             ];
         }
@@ -88,7 +88,7 @@ class QuickConfigService
 
         // 打包
         $tempPath = tempnam(sys_get_temp_dir(), 'mynet_quick_');
-        $zip = new ZipArchive();
+        $zip = new ZipArchive;
         if ($zip->open($tempPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
             throw new RuntimeException('无法创建 ZIP 文件');
         }
@@ -142,7 +142,7 @@ class QuickConfigService
         $filename = "mynet_quickconfig_{$count}nodes.zip";
 
         return [
-            'path'     => $tempPath,
+            'path' => $tempPath,
             'filename' => $filename,
         ];
     }
@@ -157,18 +157,18 @@ class QuickConfigService
             'listen' => $node['port'] ?? 9001,
         ]);
 
-        if (!empty($node['ifname'])) {
+        if (! empty($node['ifname'])) {
             $config['ifname'] = $node['ifname'];
         }
 
-        $lines = ["# GNB Node Configuration", "# Node: {$node['name']} (ID: {$node['node_id']})", ""];
+        $lines = ['# GNB Node Configuration', "# Node: {$node['name']} (ID: {$node['node_id']})", ''];
 
         foreach ($config as $key => $value) {
             $confKey = self::FIELD_MAP[$key] ?? str_replace('_', '-', $key);
             $lines[] = "{$confKey} {$value}";
         }
 
-        return implode("\n", $lines) . "\n";
+        return implode("\n", $lines)."\n";
     }
 
     /**
@@ -178,19 +178,19 @@ class QuickConfigService
      */
     private function generateAddressConf(array $nodes, ?string $externalIndex): string
     {
-        $lines = ["# GNB Index Services Configuration", "# Format: i|0|ip|port", ""];
+        $lines = ['# GNB Index Services Configuration', '# Format: i|0|ip|port', ''];
 
         $hasIndex = false;
 
         foreach ($nodes as $node) {
-            if (!empty($node['is_index']) && !empty($node['public_ip'])) {
+            if (! empty($node['is_index']) && ! empty($node['public_ip'])) {
                 $port = $node['port'] ?? 9001;
                 $lines[] = "i|0|{$node['public_ip']}|{$port}";
                 $hasIndex = true;
             }
         }
 
-        if (!$hasIndex && $externalIndex) {
+        if (! $hasIndex && $externalIndex) {
             // 外部索引格式: ip:port
             $parts = explode(':', $externalIndex);
             $ip = $parts[0];
@@ -198,7 +198,7 @@ class QuickConfigService
             $lines[] = "i|0|{$ip}|{$port}";
         }
 
-        return implode("\n", $lines) . "\n";
+        return implode("\n", $lines)."\n";
     }
 
     /**
@@ -208,13 +208,13 @@ class QuickConfigService
      */
     private function generateRouteConf(array $nodes, string $subnetMask): string
     {
-        $lines = ["# GNB Node Route Configuration", "# Format: {nodeId}|{ipAddress}|{subnetMask}", ""];
+        $lines = ['# GNB Node Route Configuration', '# Format: {nodeId}|{ipAddress}|{subnetMask}', ''];
 
         foreach ($nodes as $node) {
             $lines[] = "{$node['node_id']}|{$node['ip']}|{$subnetMask}";
         }
 
-        return implode("\n", $lines) . "\n";
+        return implode("\n", $lines)."\n";
     }
 
     /**
@@ -271,9 +271,9 @@ BASH;
         $nodeId = $node['node_id'];
         $nodeName = $node['name'];
 
-        $nodeList = "";
+        $nodeList = '';
         foreach ($allNodes as $n) {
-            $role = (!empty($n['is_index']) && !empty($n['public_ip'])) ? ' [INDEX]' : '';
+            $role = (! empty($n['is_index']) && ! empty($n['public_ip'])) ? ' [INDEX]' : '';
             $nodeList .= "    {$n['node_id']}  {$n['name']}  {$n['ip']}  :{$n['port']}{$role}\n";
         }
         if ($externalIndex) {

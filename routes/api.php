@@ -1,7 +1,6 @@
 <?php
 
 use App\Http\Controllers\Api\V1\DetectController;
-use App\Http\Controllers\Api\V1\ManifestController;
 use App\Http\Controllers\Api\V1\PluginController;
 use App\Http\Controllers\Api\V1\ProxyController;
 use App\Http\Controllers\Api\V1\QuickConfigController;

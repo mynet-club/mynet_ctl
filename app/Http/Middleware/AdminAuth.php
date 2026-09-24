@@ -19,7 +19,7 @@ class AdminAuth
     {
         $tokenId = $request->session()->get('admin_token_id');
 
-        if (!$tokenId) {
+        if (! $tokenId) {
             return redirect('/admin/login');
         }
 
@@ -27,8 +27,9 @@ class AdminAuth
             ->where('token_id', $tokenId)
             ->first();
 
-        if (!$token || !$token->hasAbility('*')) {
+        if (! $token || ! $token->hasAbility('*')) {
             $request->session()->forget('admin_token_id');
+
             return redirect('/admin/login');
         }
 

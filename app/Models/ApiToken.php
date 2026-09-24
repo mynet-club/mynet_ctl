@@ -14,20 +14,20 @@ class ApiToken extends Model
     ];
 
     protected $casts = [
-        'token_id'    => 'integer',
-        'abilities'   => 'array',
-        'last_used_at'=> 'datetime',
-        'expires_at'  => 'datetime',
-        'status'      => 'boolean',
+        'token_id' => 'integer',
+        'abilities' => 'array',
+        'last_used_at' => 'datetime',
+        'expires_at' => 'datetime',
+        'status' => 'boolean',
     ];
 
     public function scopeActive($query)
     {
         return $query->where('status', 1)
-                     ->where(function ($q) {
-                         $q->whereNull('expires_at')
-                           ->orWhere('expires_at', '>', now());
-                     });
+            ->where(function ($q) {
+                $q->whereNull('expires_at')
+                    ->orWhere('expires_at', '>', now());
+            });
     }
 
     public function hasAbility(string $ability): bool

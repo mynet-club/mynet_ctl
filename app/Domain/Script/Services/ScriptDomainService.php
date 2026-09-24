@@ -45,6 +45,7 @@ class ScriptDomainService
         if (str_contains($firstLine, 'bash')) {
             return 'bash';
         }
+
         return 'sh';
     }
 }

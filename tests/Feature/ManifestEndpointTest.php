@@ -8,8 +8,8 @@ use Tests\TestCase;
 
 class ManifestEndpointTest extends TestCase
 {
-    use RefreshDatabase;
     use CreatesCtlTables;
+    use RefreshDatabase;
 
     protected function setUp(): void
     {

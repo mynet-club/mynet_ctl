@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Domain\Release\Services\ReleaseDomainService;
 use App\Models\Release;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Routing\Controller;
@@ -22,7 +24,7 @@ class ProxyController extends Controller
      * GET /api/v2/proxy/latest
      * 返回 proxy 插件的最新版本信息
      */
-    public function latest(Request $request): \Illuminate\Http\JsonResponse
+    public function latest(Request $request): JsonResponse
     {
         $platform = $request->query('platform');
         $arch = $request->query('arch');
@@ -40,24 +42,24 @@ class ProxyController extends Controller
 
         $release = $query->orderBy('created_at', 'desc')->first();
 
-        if (!$release) {
+        if (! $release) {
             return response()->json(['message' => 'No proxy release found'], 404);
         }
 
-        $displayName = (new \App\Domain\Release\Services\ReleaseDomainService())->getProductFilenamePrefix($release->product);
-        $dlFilename = (new \App\Domain\Release\Services\ReleaseDomainService())->generateFilename($release->product, $release->platform, $release->arch, $release->version);
-        $downloadUrl = rtrim(config('app.url'), '/') . "/d/{$displayName}/{$dlFilename}";
+        $displayName = (new ReleaseDomainService)->getProductFilenamePrefix($release->product);
+        $dlFilename = (new ReleaseDomainService)->generateFilename($release->product, $release->platform, $release->arch, $release->version);
+        $downloadUrl = rtrim(config('app.url'), '/')."/d/{$displayName}/{$dlFilename}";
 
         return response()->json([
             'data' => [
-                'version'      => $release->version,
-                'platform'     => $release->platform,
-                'arch'         => $release->arch,
-                'filename'     => $release->filename,
-                'file_size'    => $release->file_size,
-                'sha256'       => $release->sha256,
+                'version' => $release->version,
+                'platform' => $release->platform,
+                'arch' => $release->arch,
+                'filename' => $release->filename,
+                'file_size' => $release->file_size,
+                'sha256' => $release->sha256,
                 'download_url' => $downloadUrl,
-                'released_at'  => $release->created_at->toIso8601String(),
+                'released_at' => $release->created_at->toIso8601String(),
             ],
         ]);
     }
@@ -66,24 +68,24 @@ class ProxyController extends Controller
      * GET /api/v2/proxy/iplists
      * 返回 chinaip.txt + interip.txt 内容（供 client 一次性下载）
      */
-    public function iplists(): \Illuminate\Http\JsonResponse
+    public function iplists(): JsonResponse
     {
         $dir = storage_path('app/public/proxy-lists');
 
-        $chinaipFile = $dir . '/chinaip.txt';
-        $interipFile = $dir . '/interip.txt';
+        $chinaipFile = $dir.'/chinaip.txt';
+        $interipFile = $dir.'/interip.txt';
 
-        if (!file_exists($chinaipFile) || !file_exists($interipFile)) {
+        if (! file_exists($chinaipFile) || ! file_exists($interipFile)) {
             return response()->json(['message' => 'IP lists not generated yet. Run: php artisan proxy:update-iplists'], 404);
         }
 
-        $metaFile = $dir . '/meta.json';
+        $metaFile = $dir.'/meta.json';
         $meta = file_exists($metaFile) ? json_decode(file_get_contents($metaFile), true) : null;
 
         return response()->json([
             'chinaip' => file_get_contents($chinaipFile),
             'interip' => file_get_contents($interipFile),
-            'meta'    => $meta,
+            'meta' => $meta,
         ]);
     }
 
@@ -93,20 +95,20 @@ class ProxyController extends Controller
      * 以纯文本格式直接返回单个 IP 列表文件（供 proxy.sh refresh 的 curl -o 直接保存）
      * 文件由 scripts/proxy-lists/update_proxy_lists.sh 每日生成
      */
-    public function iplistFile(string $name): \Illuminate\Http\Response
+    public function iplistFile(string $name): Response
     {
-        if (!in_array($name, ['interip.txt', 'chinaip.txt'], true)) {
+        if (! in_array($name, ['interip.txt', 'chinaip.txt'], true)) {
             abort(404);
         }
 
-        $file = storage_path('app/public/proxy-lists/' . $name);
+        $file = storage_path('app/public/proxy-lists/'.$name);
 
-        if (!file_exists($file)) {
+        if (! file_exists($file)) {
             abort(404, 'IP list not generated yet. Run: php artisan proxy:update-iplists');
         }
 
         return response(file_get_contents($file), 200, [
-            'Content-Type'  => 'text/plain; charset=utf-8',
+            'Content-Type' => 'text/plain; charset=utf-8',
             'Cache-Control' => 'public, max-age=3600',
         ]);
     }
@@ -115,11 +117,11 @@ class ProxyController extends Controller
      * GET /api/v2/proxy/iplists/meta
      * 仅返回 IP 列表的元信息（行数、大小、SHA256、更新时间）
      */
-    public function iplistsMeta(): \Illuminate\Http\JsonResponse
+    public function iplistsMeta(): JsonResponse
     {
         $metaFile = storage_path('app/public/proxy-lists/meta.json');
 
-        if (!file_exists($metaFile)) {
+        if (! file_exists($metaFile)) {
             return response()->json(['message' => 'IP lists not generated yet'], 404);
         }
 
@@ -144,9 +146,9 @@ class ProxyController extends Controller
         $script = $this->generateInstallScript($baseUrl, $latestVersion);
 
         return response($script, 200, [
-            'Content-Type'  => 'text/plain; charset=utf-8',
+            'Content-Type' => 'text/plain; charset=utf-8',
             'Cache-Control' => 'no-cache',
-            'X-Version'     => $latestVersion,
+            'X-Version' => $latestVersion,
         ]);
     }
 

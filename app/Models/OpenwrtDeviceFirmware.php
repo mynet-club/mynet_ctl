@@ -12,13 +12,13 @@ class OpenwrtDeviceFirmware extends Model
     protected $guarded = [];
 
     protected $casts = [
-        'supported_devices'  => 'array',
-        'has_tftp_recovery'  => 'boolean',
-        'has_web_recovery'   => 'boolean',
-        'has_hw_crypto'      => 'boolean',
-        'has_hw_nat'         => 'boolean',
-        'has_hw_accel'       => 'boolean',
-        'is_primary'         => 'boolean',
+        'supported_devices' => 'array',
+        'has_tftp_recovery' => 'boolean',
+        'has_web_recovery' => 'boolean',
+        'has_hw_crypto' => 'boolean',
+        'has_hw_nat' => 'boolean',
+        'has_hw_accel' => 'boolean',
+        'is_primary' => 'boolean',
     ];
 
     public function device(): BelongsTo

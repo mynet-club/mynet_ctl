@@ -22,7 +22,7 @@ class ReleaseAdminController extends Controller
             $query->where('platform', $platform);
         }
         if ($request->query('status') !== null && $request->query('status') !== '') {
-            $query->where('status', (int)$request->query('status'));
+            $query->where('status', (int) $request->query('status'));
         }
 
         $releases = $query->orderByDesc('created_at')->paginate(30);
@@ -38,12 +38,12 @@ class ReleaseAdminController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'product'   => 'required|string|in:tui,gnb,utc,client',
-            'version'   => 'required|string|max:32',
-            'platform'  => 'required|string|in:linux,openwrt,darwin,windows',
-            'arch'      => 'required|string|max:32',
-            'variant'   => 'nullable|string|max:32',
-            'file'      => 'required|file|max:204800',
+            'product' => 'required|string|in:tui,gnb,utc,client',
+            'version' => 'required|string|max:32',
+            'platform' => 'required|string|in:linux,openwrt,darwin,windows',
+            'arch' => 'required|string|max:32',
+            'variant' => 'nullable|string|max:32',
+            'file' => 'required|file|max:204800',
             'changelog' => 'nullable|string',
             'is_stable' => 'nullable|boolean',
         ]);
@@ -61,6 +61,7 @@ class ReleaseAdminController extends Controller
         $release->save();
 
         $action = $release->status ? '启用' : '禁用';
+
         return back()->with('success', "已{$action} {$release->product} {$release->version}");
     }
 

@@ -34,7 +34,7 @@ class PageController extends Controller
     {
         $product = $request->query('product', 'tui');
         $allowedProducts = ['tui', 'gnb', 'utc'];
-        if (!in_array($product, $allowedProducts)) {
+        if (! in_array($product, $allowedProducts)) {
             $product = 'tui';
         }
 
@@ -45,17 +45,17 @@ class PageController extends Controller
             $grouped = [];
             foreach ($flat as $r) {
                 $ver = $r['version'];
-                if (!isset($grouped[$ver])) {
+                if (! isset($grouped[$ver])) {
                     $grouped[$ver] = [
-                        'version'   => $ver,
+                        'version' => $ver,
                         'is_latest' => false,
-                        'is_stable' => (bool)($r['is_stable'] ?? false),
+                        'is_stable' => (bool) ($r['is_stable'] ?? false),
                         'changelog' => $r['changelog'] ?? '',
-                        'date'      => $r['created_at'] ?? null,
-                        'files'     => [],
+                        'date' => $r['created_at'] ?? null,
+                        'files' => [],
                     ];
                 }
-                if (!empty($r['is_latest'])) {
+                if (! empty($r['is_latest'])) {
                     $grouped[$ver]['is_latest'] = true;
                 }
                 $grouped[$ver]['files'][] = array_merge($r, [

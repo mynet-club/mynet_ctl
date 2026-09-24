@@ -19,6 +19,7 @@ class ScriptController extends Controller
     {
         $category = $request->query('category', 'install');
         $platform = $request->query('platform', 'linux');
+
         return response()->json(['data' => $this->service->listByCategory($category, $platform)]);
     }
 
@@ -29,16 +30,16 @@ class ScriptController extends Controller
     public function store(Request $request): JsonResponse
     {
         $request->validate([
-            'name'           => 'required|string|max:64',
-            'display_name'   => 'nullable|string|max:128',
-            'category'       => 'nullable|string',
-            'platform'       => 'nullable|string',
-            'version'        => 'nullable|string|max:32',
+            'name' => 'required|string|max:64',
+            'display_name' => 'nullable|string|max:128',
+            'category' => 'nullable|string',
+            'platform' => 'nullable|string',
+            'version' => 'nullable|string|max:32',
             'target_version' => 'nullable|string|max:32',
-            'description'    => 'nullable|string',
-            'content'        => 'required|string',
-            'lang'           => 'nullable|string|in:bash,sh,python',
-            'is_standalone'  => 'nullable|boolean',
+            'description' => 'nullable|string',
+            'content' => 'required|string',
+            'lang' => 'nullable|string|in:bash,sh,python',
+            'is_standalone' => 'nullable|boolean',
         ]);
 
         $script = $this->service->publish(
@@ -61,6 +62,7 @@ class ScriptController extends Controller
         ]);
 
         $script = $this->service->updateContent($scriptId, $request->input('content'), $request->input('version'));
+
         return response()->json(['data' => $script]);
     }
 
@@ -79,9 +81,9 @@ class ScriptController extends Controller
         );
 
         return response($data['content'], 200, [
-            'Content-Type'        => 'text/plain; charset=utf-8',
-            'X-Script-Checksum'   => $data['checksum'],
-            'X-Script-Lang'       => $data['lang'],
+            'Content-Type' => 'text/plain; charset=utf-8',
+            'X-Script-Checksum' => $data['checksum'],
+            'X-Script-Lang' => $data['lang'],
             'Content-Disposition' => "inline; filename=\"{$name}.sh\"",
         ]);
     }
@@ -92,6 +94,7 @@ class ScriptController extends Controller
     public function disable(int $scriptId): JsonResponse
     {
         $this->service->disable($scriptId);
+
         return response()->json(['message' => 'ok']);
     }
 
@@ -126,9 +129,9 @@ class ScriptController extends Controller
         );
 
         return response($data['content'], 200, [
-            'Content-Type'        => 'text/plain; charset=utf-8',
-            'X-Script-Checksum'   => $data['checksum'],
-            'X-Script-Lang'       => $data['lang'],
+            'Content-Type' => 'text/plain; charset=utf-8',
+            'X-Script-Checksum' => $data['checksum'],
+            'X-Script-Lang' => $data['lang'],
             'Content-Disposition' => "inline; filename=\"{$name}\"",
         ]);
     }

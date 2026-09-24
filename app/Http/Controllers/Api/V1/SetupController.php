@@ -9,6 +9,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use RuntimeException;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 /**
  * SetupController
@@ -39,7 +40,7 @@ class SetupController extends Controller
     public function platforms(): JsonResponse
     {
         return response()->json([
-            'platforms'    => array_keys(ReleaseDomainService::PLATFORMS),
+            'platforms' => array_keys(ReleaseDomainService::PLATFORMS),
             'combinations' => ReleaseDomainService::VALID_COMBINATIONS,
         ]);
     }
@@ -89,6 +90,7 @@ class SetupController extends Controller
 
         try {
             $query = array_filter($request->only(['status', 'search', 'page', 'per_page']));
+
             return response()->json($this->backClient->listNodes($token, $zoneId, $query));
         } catch (RuntimeException $e) {
             return $this->handleBackendError($e);
@@ -122,7 +124,7 @@ class SetupController extends Controller
      *
      * Query: ?platform=linux&arch=amd64  （可选）
      */
-    public function configPack(Request $request, int $nodeId): \Symfony\Component\HttpFoundation\BinaryFileResponse|JsonResponse
+    public function configPack(Request $request, int $nodeId): BinaryFileResponse|JsonResponse
     {
         $token = $this->extractToken($request);
         $zoneId = (int) $request->query('zone_id', 0);
@@ -135,12 +137,12 @@ class SetupController extends Controller
 
         // 如果提供了 platform，必须合法且配合 arch
         if ($platform) {
-            $domainService = new ReleaseDomainService();
-            if (!$domainService->validatePlatform($platform)) {
-                return response()->json(['message' => '不支持的平台: ' . $platform], 422);
+            $domainService = new ReleaseDomainService;
+            if (! $domainService->validatePlatform($platform)) {
+                return response()->json(['message' => '不支持的平台: '.$platform], 422);
             }
-            if (!$arch || !$domainService->validateCombination($platform, $arch)) {
-                return response()->json(['message' => '不支持的平台/架构组合: ' . $platform . '/' . ($arch ?? 'null')], 422);
+            if (! $arch || ! $domainService->validateCombination($platform, $arch)) {
+                return response()->json(['message' => '不支持的平台/架构组合: '.$platform.'/'.($arch ?? 'null')], 422);
             }
         }
 
@@ -162,9 +164,10 @@ class SetupController extends Controller
     private function extractToken(Request $request): string
     {
         $token = $request->bearerToken();
-        if (!$token) {
+        if (! $token) {
             abort(401, '请提供 Authorization: Bearer {token} 头');
         }
+
         return $token;
     }
 
@@ -185,9 +188,10 @@ class SetupController extends Controller
         }
 
         $errorType = $code >= 500 ? 'backend_error' : 'unknown_error';
+
         return response()->json([
             'error_type' => $errorType,
-            'message'    => '后端服务暂时不可用: ' . $e->getMessage(),
+            'message' => '后端服务暂时不可用: '.$e->getMessage(),
         ], $code >= 500 ? 502 : $code);
     }
 }

@@ -6,6 +6,7 @@ use App\Services\Release\ReleaseService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class ReleaseController extends Controller
 {
@@ -31,10 +32,10 @@ class ReleaseController extends Controller
     public function latest(Request $request): JsonResponse
     {
         $request->validate([
-            'product'  => 'required|string',
+            'product' => 'required|string',
             'platform' => 'required|string',
-            'arch'     => 'required|string',
-            'variant'  => 'nullable|string',
+            'arch' => 'required|string',
+            'variant' => 'nullable|string',
         ]);
 
         $release = $this->service->getLatest(
@@ -44,7 +45,7 @@ class ReleaseController extends Controller
             $request->query('variant', '')
         );
 
-        if (!$release) {
+        if (! $release) {
             return response()->json(['message' => 'Not found'], 404);
         }
 
@@ -57,14 +58,14 @@ class ReleaseController extends Controller
     public function store(Request $request): JsonResponse
     {
         $request->validate([
-            'product'    => 'required|string',
-            'version'    => 'required|string',
-            'platform'   => 'required|string',
-            'arch'       => 'required|string',
-            'variant'    => 'nullable|string',
-            'changelog'  => 'nullable|string',
-            'is_stable'  => 'nullable|boolean',
-            'file'       => 'required|file|max:102400', // 100MB
+            'product' => 'required|string',
+            'version' => 'required|string',
+            'platform' => 'required|string',
+            'arch' => 'required|string',
+            'variant' => 'nullable|string',
+            'changelog' => 'nullable|string',
+            'is_stable' => 'nullable|boolean',
+            'file' => 'required|file|max:102400', // 100MB
         ]);
 
         $release = $this->service->upload(
@@ -80,7 +81,7 @@ class ReleaseController extends Controller
     /**
      * GET /api/v2/releases/{releaseId}/download/{filename}
      */
-    public function download(Request $request, int $releaseId, string $filename): \Symfony\Component\HttpFoundation\BinaryFileResponse
+    public function download(Request $request, int $releaseId, string $filename): BinaryFileResponse
     {
         $absolutePath = $this->service->download(
             $releaseId,
@@ -97,6 +98,7 @@ class ReleaseController extends Controller
     public function disable(int $releaseId): JsonResponse
     {
         $this->service->disable($releaseId);
+
         return response()->json(['message' => 'ok']);
     }
 }

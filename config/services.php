@@ -59,8 +59,8 @@ return [
     |
     */
     'mynet_urls' => [
-        'www'  => env('MYNET_WWW_URL', 'https://www.mynet.club'),
-        'gui'  => env('MYNET_GUI_URL', 'https://my.mynet.club'),
+        'www' => env('MYNET_WWW_URL', 'https://www.mynet.club'),
+        'gui' => env('MYNET_GUI_URL', 'https://my.mynet.club'),
         'docs' => env('MYNET_DOCS_URL', 'https://www.mynet.club/docs'),
     ],
 

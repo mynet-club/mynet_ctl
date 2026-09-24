@@ -68,35 +68,36 @@ class ImportGnbFromDownload extends Command
 
     public function handle(): int
     {
-        $version  = $this->argument('version');
-        $dryRun   = $this->option('dry-run');
-        $fresh    = $this->option('fresh');
-        $skipDl   = $this->option('skip-download');
-        $source   = $this->option('source');
-        $baseUrl  = rtrim($this->option('base-url') ?: 'https://download.mynet.club/gnb', '/');
+        $version = $this->argument('version');
+        $dryRun = $this->option('dry-run');
+        $fresh = $this->option('fresh');
+        $skipDl = $this->option('skip-download');
+        $source = $this->option('source');
+        $baseUrl = rtrim($this->option('base-url') ?: 'https://download.mynet.club/gnb', '/');
 
-        if (!$this->domain->validateVersion($version)) {
+        if (! $this->domain->validateVersion($version)) {
             $this->error("无效的版本号: {$version}");
+
             return self::FAILURE;
         }
 
         // 判断模式
         $mode = $source ? 'source' : ($skipDl ? 'scan' : 'download');
 
-        $this->info("=== GNB Release Import ===");
+        $this->info('=== GNB Release Import ===');
         $this->info("版本: {$version}");
-        $this->info("模式: " . match ($mode) {
-            'source'   => "本地目录扫描 → {$source}",
-            'scan'     => "已有文件扫描 → storage/app/private/releases/gnb/{$version}/",
+        $this->info('模式: '.match ($mode) {
+            'source' => "本地目录扫描 → {$source}",
+            'scan' => "已有文件扫描 → storage/app/private/releases/gnb/{$version}/",
             'download' => "HTTP 下载 → {$baseUrl}",
         });
         $this->info("目标: storage/app/private/releases/gnb/{$version}/");
         if ($dryRun) {
-            $this->warn("*** DRY RUN 模式 — 不复制不入库 ***");
+            $this->warn('*** DRY RUN 模式 — 不复制不入库 ***');
         }
 
         // Fresh 模式：清空该版本记录
-        if ($fresh && !$dryRun) {
+        if ($fresh && ! $dryRun) {
             $count = Release::where('product', 'gnb')->where('version', $version)->count();
             if ($count > 0) {
                 if ($this->confirm("即将删除 GNB {$version} 的 {$count} 条记录，确认？")) {
@@ -121,7 +122,7 @@ class ImportGnbFromDownload extends Command
      */
     private function importFromDirectory(string $version, string $mode, ?string $source, bool $dryRun, bool $fresh): int
     {
-        $localDisk   = Storage::disk('local');
+        $localDisk = Storage::disk('local');
         $storagePath = "releases/gnb/{$version}";
 
         // 确定扫描目录
@@ -129,15 +130,17 @@ class ImportGnbFromDownload extends Command
             ? rtrim($source, '/')
             : $localDisk->path($storagePath);
 
-        if (!is_dir($scanDir)) {
+        if (! is_dir($scanDir)) {
             $this->error("目录不存在: {$scanDir}");
+
             return self::FAILURE;
         }
 
         // 扫描所有 gnb_*.tgz 和 gnb_*.zip
-        $files = glob($scanDir . '/gnb_*.{tgz,zip}', GLOB_BRACE);
+        $files = glob($scanDir.'/gnb_*.{tgz,zip}', GLOB_BRACE);
         if (empty($files)) {
-            $this->error("目录中未找到 gnb_*.tgz / gnb_*.zip 文件");
+            $this->error('目录中未找到 gnb_*.tgz / gnb_*.zip 文件');
+
             return self::FAILURE;
         }
 
@@ -145,7 +148,7 @@ class ImportGnbFromDownload extends Command
         sort($files);
 
         $this->newLine();
-        $this->info(sprintf("扫描到 %d 个文件", count($files)));
+        $this->info(sprintf('扫描到 %d 个文件', count($files)));
         $this->newLine();
 
         $stats = ['success' => 0, 'skipped' => 0, 'failed' => 0];
@@ -155,9 +158,10 @@ class ImportGnbFromDownload extends Command
 
             // 解析文件名
             $parsed = $this->domain->parseFilename($originalFilename);
-            if (!$parsed) {
+            if (! $parsed) {
                 $this->line("  <comment>SKIP</comment> {$originalFilename} (无法解析文件名)");
                 $stats['skipped']++;
+
                 continue;
             }
 
@@ -165,6 +169,7 @@ class ImportGnbFromDownload extends Command
             if ($parsed['product'] !== 'gnb') {
                 $this->line("  <comment>SKIP</comment> {$originalFilename} (非 gnb 产品: {$parsed['product']})");
                 $stats['skipped']++;
+
                 continue;
             }
 
@@ -172,12 +177,13 @@ class ImportGnbFromDownload extends Command
             if ($parsed['version'] !== $version) {
                 $this->line("  <comment>SKIP</comment> {$originalFilename} (版本不匹配: {$parsed['version']})");
                 $stats['skipped']++;
+
                 continue;
             }
 
             $platform = $parsed['platform'];
-            $arch     = $parsed['arch'];
-            $ext      = $parsed['ext'];
+            $arch = $parsed['arch'];
+            $ext = $parsed['ext'];
 
             // CTL 标准文件名（确保一致性）
             $filename = $this->domain->generateFilename('gnb', $platform, $arch, $version, $ext);
@@ -190,16 +196,18 @@ class ImportGnbFromDownload extends Command
                 ->where('arch', $arch)
                 ->exists();
 
-            if ($exists && !$fresh) {
+            if ($exists && ! $fresh) {
                 $this->line("  <comment>SKIP</comment> {$filename} (已存在)");
                 $stats['skipped']++;
+
                 continue;
             }
 
             if ($dryRun) {
                 $fileSize = filesize($srcAbsPath);
-                $this->line(sprintf("  <info>DRY</info>  %s (%s)", $filename, $this->humanSize($fileSize)));
+                $this->line(sprintf('  <info>DRY</info>  %s (%s)', $filename, $this->humanSize($fileSize)));
                 $stats['success']++;
+
                 continue;
             }
 
@@ -208,16 +216,18 @@ class ImportGnbFromDownload extends Command
 
             if ($mode === 'source') {
                 $localDisk->makeDirectory($storagePath);
-                if (!copy($srcAbsPath, $destAbsPath)) {
+                if (! copy($srcAbsPath, $destAbsPath)) {
                     $this->line("  <error>FAIL</error> {$filename} (复制失败)");
                     $stats['failed']++;
+
                     continue;
                 }
             } else {
                 // scan 模式：文件应该已在目标路径
-                if (!file_exists($destAbsPath)) {
+                if (! file_exists($destAbsPath)) {
                     $this->line("  <error>MISS</error> {$filename} (文件不存在)");
                     $stats['failed']++;
+
                     continue;
                 }
             }
@@ -226,8 +236,8 @@ class ImportGnbFromDownload extends Command
             $this->createRelease($version, $platform, $arch, $filename, $filePath, $destAbsPath);
 
             $fileSize = filesize($destAbsPath);
-            $sha256   = hash_file('sha256', $destAbsPath);
-            $this->line(sprintf("  <info>OK</info>   %s (%s, sha256:%s)", $filename, $this->humanSize($fileSize), $sha256));
+            $sha256 = hash_file('sha256', $destAbsPath);
+            $this->line(sprintf('  <info>OK</info>   %s (%s, sha256:%s)', $filename, $this->humanSize($fileSize), $sha256));
             $stats['success']++;
 
             usleep(1000);
@@ -241,12 +251,12 @@ class ImportGnbFromDownload extends Command
      */
     private function importFromHttp(string $version, string $baseUrl, bool $dryRun, bool $fresh): int
     {
-        $localDisk   = Storage::disk('local');
+        $localDisk = Storage::disk('local');
         $storagePath = "releases/gnb/{$version}";
-        $stats       = ['success' => 0, 'skipped' => 0, 'failed' => 0];
+        $stats = ['success' => 0, 'skipped' => 0, 'failed' => 0];
 
         $this->newLine();
-        $this->info(sprintf("共 %d 个目标文件", count(self::DOWNLOAD_MATRIX)));
+        $this->info(sprintf('共 %d 个目标文件', count(self::DOWNLOAD_MATRIX)));
         $this->newLine();
 
         foreach (self::DOWNLOAD_MATRIX as [$platform, $arch, $ext]) {
@@ -259,9 +269,10 @@ class ImportGnbFromDownload extends Command
                 ->where('arch', $arch)
                 ->exists();
 
-            if ($exists && !$fresh) {
+            if ($exists && ! $fresh) {
                 $this->line("  <comment>SKIP</comment> {$filename} (已存在)");
                 $stats['skipped']++;
+
                 continue;
             }
 
@@ -271,21 +282,23 @@ class ImportGnbFromDownload extends Command
                 $this->line("  <info>DRY</info>  {$filename}");
                 $this->line("         URL: {$url}");
                 $stats['success']++;
+
                 continue;
             }
 
             $destAbsPath = $localDisk->path($filePath);
-            if (!$this->downloadFile($url, $destAbsPath, $storagePath, $localDisk)) {
+            if (! $this->downloadFile($url, $destAbsPath, $storagePath, $localDisk)) {
                 $this->line("  <error>FAIL</error> {$filename} (下载失败)");
                 $stats['failed']++;
+
                 continue;
             }
 
             $this->createRelease($version, $platform, $arch, $filename, $filePath, $destAbsPath);
 
             $fileSize = filesize($destAbsPath);
-            $sha256   = hash_file('sha256', $destAbsPath);
-            $this->line(sprintf("  <info>OK</info>   %s (%s, sha256:%s)", $filename, $this->humanSize($fileSize), $sha256));
+            $sha256 = hash_file('sha256', $destAbsPath);
+            $this->line(sprintf('  <info>OK</info>   %s (%s, sha256:%s)', $filename, $this->humanSize($fileSize), $sha256));
             $stats['success']++;
 
             usleep(1000);
@@ -299,31 +312,31 @@ class ImportGnbFromDownload extends Command
      */
     private function createRelease(string $version, string $platform, string $arch, string $filename, string $filePath, string $absPath): void
     {
-        $sha256   = hash_file('sha256', $absPath);
+        $sha256 = hash_file('sha256', $absPath);
         $fileSize = filesize($absPath);
-        $downloadUrl = rtrim(config('app.url'), '/') . "/d/gnb/{$filename}";
+        $downloadUrl = rtrim(config('app.url'), '/')."/d/gnb/{$filename}";
 
         DB::transaction(function () use ($version, $platform, $arch, $filename, $filePath, $sha256, $fileSize, $downloadUrl) {
-            $releaseId = (int) (substr((string)(microtime(true) * 1000), 0, 10)
-                . str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT));
+            $releaseId = (int) (substr((string) (microtime(true) * 1000), 0, 10)
+                .str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT));
 
             Release::create([
-                'release_id'   => $releaseId,
-                'product'      => 'gnb',
-                'version'      => $version,
-                'platform'     => $platform,
-                'arch'         => $arch,
-                'variant'      => '',
-                'filename'     => $filename,
-                'file_path'    => $filePath,
-                'file_size'    => $fileSize,
-                'sha256'       => $sha256,
+                'release_id' => $releaseId,
+                'product' => 'gnb',
+                'version' => $version,
+                'platform' => $platform,
+                'arch' => $arch,
+                'variant' => '',
+                'filename' => $filename,
+                'file_path' => $filePath,
+                'file_size' => $fileSize,
+                'sha256' => $sha256,
                 'download_url' => $downloadUrl,
-                'changelog'    => null,
-                'is_stable'    => true,
-                'is_latest'    => false,
-                'uploaded_by'  => null,
-                'status'       => 1,
+                'changelog' => null,
+                'is_stable' => true,
+                'is_latest' => false,
+                'uploaded_by' => null,
+                'status' => 1,
             ]);
         });
 
@@ -353,24 +366,26 @@ class ImportGnbFromDownload extends Command
         $content = @file_get_contents($url, false, $context);
         if ($content === false) {
             $this->output->writeln('<error>FAILED</error>');
+
             return false;
         }
 
         $dir = dirname($destPath);
-        if (!is_dir($dir)) {
+        if (! is_dir($dir)) {
             mkdir($dir, 0755, true);
         }
 
         file_put_contents($destPath, $content);
         $size = strlen($content);
         $this->output->writeln(sprintf('<info>OK</info> (%s)', $this->humanSize($size)));
+
         return true;
     }
 
     private function printSummary(array $stats): int
     {
         $this->newLine();
-        $this->info("=== 导入完成 ===");
+        $this->info('=== 导入完成 ===');
         $this->table(
             ['状态', '数量'],
             [
@@ -401,7 +416,7 @@ class ImportGnbFromDownload extends Command
             ->orderByDesc('created_at')
             ->first();
 
-        if (!$latest) {
+        if (! $latest) {
             return;
         }
 
@@ -423,6 +438,7 @@ class ImportGnbFromDownload extends Command
             $size /= 1024;
             $i++;
         }
-        return round($size, 2) . ' ' . $units[$i];
+
+        return round($size, 2).' '.$units[$i];
     }
 }
