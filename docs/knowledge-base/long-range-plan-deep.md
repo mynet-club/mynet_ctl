@@ -416,7 +416,7 @@ $ MYNET_APPS_INDEX=http://127.0.0.1:18090 mynet update
 | V3-0 | ~~Docker 路线~~ **已撤**：`deploy/{docker-compose.yml,caddy-compose.yml,Caddyfile}` 删除；路线改为**主机 + nginx + rsync** | — | — | ✅ 2026-09-24（用户裁定；见下「为什么撤 Docker」） |
 | V3-1 | ~~`deploy/Dockerfile`~~ → **改为补主机部署入口 `manage-prod.sh`**（registry 称其为推荐路径但**文件不存在**） | — | `./manage-prod.sh deploy/sync/status/rollback` 可用；远端前置守卫生效 | ✅ 2026-09-24（守卫矩阵实测：合规→0；priv 0644/0640、APP_KEY 空、无 .env→各 1） |
 | V3-2 | **按 H1 裁定改走 nginx**：`deploy/Caddyfile` 已删，其意图（TLS + api/gw 反代 + 安全头）转为 `deploy/nginx.conf` | H1 ✅, H2, H3 | `nginx -t` 通过 | ✅ 2026-09-24（语法实测通过，仅缺生产机的证书文件）；四个子域 curl 实测待 H2/H3 |
-| V3-3 | ~~compose 收敛~~ **随 V3-0 一并作废**（不再有 compose）。gateway 在主机上以 systemd 运行，redis 由主机提供 | V1-5 | gateway 主机可跑 + redis 可达 | ☐（改为主机侧待办） |
+| V3-3 | ~~compose 收敛~~ **随 V3-0 一并作废**。gateway 在主机上以 systemd 运行 | V1-5 | gateway 主机可跑 | ✅ **V3-3a**：`mynet_agent/deploy/{systemd/mynet_gateway.service, gateway.env.example, README.md}` 备好，并按**与 unit 完全相同的参数**本地实测（构建→起→`/healthz` 返回 `{"data":{"conns":0}}`→`SIGTERM` exit 0；`MYNET_GATEWAY_UPSTREAM` 经环境变量生效，证明 unit 的 `EnvironmentFile` 那条路可用）。**生产安装待 H8**。⚠️ 原判据里的「redis 可达」**已作废** —— 见下方更正 |
 | V3-4 | ~~compose healthcheck~~ **随 V3-0 作废**；健康检查改由 nginx 的 `/up` 与脚本 verify 承担 | V3-0 | `curl https://api.mynet.club/up` → 200 | ✅ 已并入 V3-1 的 verify_deployment |
 | V3-5 | **重做 T3-3**：备份加密 + 恢复脚本 + **恢复演练** + 密码不走命令行 + cron 真装（原先是明文 tar.gz、无 restore、`-p"$DB_PASSWORD"` 进 `ps`、cron 只在 README 注释里） | — | 从备份**真恢复出一个可用库**；`ps` 里看不到密码 | ✅ 2026-09-24。新增 `deploy/{restore.sh,backup-drill.sh,install-cron.sh}` 并重写 `backup.sh`。演练在**隔离临时 MySQL 实例**里跑：造库→加密备份→恢复→**逐表 7/5/2 行数一致 + 内容一致**；另两条断言（备份确实加密、DB 口令不在 `mysqldump` argv）各做了一次**变异测试**，注入「不加密」与「口令进 argv」后都被抓住（见 §V3-5 实测证据） |
 | V3-6a | **按 H7 裁定把 `back_priv` 改为 0600 文件**：文件优先，**权限过宽即拒绝且不回退 env** | H7 ✅ | 代码只从文件读；权限实测；缺/空文件明确报错 | ✅ 2026-09-24（10 测试；「不回退」那条是被测试抓出来的） |
@@ -425,6 +425,14 @@ $ MYNET_APPS_INDEX=http://127.0.0.1:18090 mynet update
 | V3-7 | 补 `deployment-registry.md` 的 stale 项 + 按 H4 把 back 管理面从 `admin` 改称 `console`（原估要同步 3 处） | V3-1..6 | 文档每条都能在盘上找到对应物；子域命名全库一致 | ✅ 2026-09-24。registry **重写**：逐条 `ls` 核对，**5 条路径根本不存在**（含两个退役仓的）→ 删除；矩阵补上 agent / openwrt / desktop / gnb / utc 与「分发到节点」这一类；退役仓单列并写明承接者；**7 处 `<待补>`** 改为如实描述（监控面整体**未建立**，不是「已有什么只是没填」）。命名同步 **5 处**（比预估多 2 处：`ecosystem.md:65` 与 `projects/mynet_back.md:6`）；两个历史文档只加说明、不改原文 |
 | V3-8 | **T3-4 真机注册**：非 VM 真机走完「注册→密钥→连接→互通」 | H2, H5, H6, H8, V1, V3-6 | 真机 `node_id` 落库、心跳在线、与另一节点互通 | 真机实测 + back 数据 | ☐（需人工闸门） |
 | V3-9 | **G4**：外网可注册、可互通、`mynet update` 升级不断线 | V2-8, V3-8 | `long-range-plan-t.md:121-123` 三条判据全过 | 外网实测 | ☐（需人工闸门） |
+
+> **V3-3 的一处判据更正（2026-09-24，做 V3-3a 时核出来的）**：
+> 原判据是「gateway 主机可跑 + **redis 可达**」，等于把 **V4 的前置写进了 V3**。
+> 核查 `NewRedisPresence` 的调用点：**没有任何非测试调用** ——
+> `cmd/mynet_gateway/main.go` 根本不接 redis（`grep -c -i redis cmd/mynet_gateway/main.go` → 0），
+> 进程跑的是内存 presence。这与 V4-5 记的是同一件事。
+> 所以「redis 由主机提供」在**当前实现下不成立**：给 systemd unit 配了也不会被使用。
+> 只有多实例才需要它，那是 V4-5 / V4-6 —— V3 阶段不必背这个前置。
 
 #### 为什么撤 Docker（V3-0，2026-09-24）
 
@@ -463,7 +471,7 @@ $ MYNET_APPS_INDEX=http://127.0.0.1:18090 mynet update
 | V4-3 | metrics 端点：localapi 现在只绑 `127.0.0.1:8096`（`server.go:18`）→ 远端不可抓取。需决定暴露方式（gateway 代理 / 独立端口 / push） | V4-1 | 远端可抓到指标 | 跨机 `curl` 实测 |
 | V4-4 | 结构化日志：`shared/logger` 现在**零消费者**，实际全是 `fmt.Fprintf(os.Stderr,…)`；back `config/logging.php` 无 json 通道 | — | 关键路径日志可被机器解析 | 日志样本 |
 | V4-5 | **presence 真接线**（重做 C-6）：`Registry.SetPresence` 无调用方、`Notify` 从不调 `presence.Publish`、`NewRedisPresence` 仅被测试调用 → 实际恒内存 presence | V1, Redis 部署 | 节点连 A、back 通知 B → **B 能推达**（现在必 404，`server.go:229-235`） | 双实例 e2e |
-| V4-6 | 双 gateway 其余三处：`Verified` 不共享（`MarkVerified` 只写本地）、`Register` 踢旧连接只本地生效（同节点双注册不去重）、compose 里**无 redis 服务** | V4-5 | 两实例下：鉴权状态一致、同节点重复连接被去重 | 双实例 e2e |
+| V4-6 | 双 gateway 其余三处：`Verified` 不共享（`MarkVerified` 只写本地）、`Register` 踢旧连接只本地生效（同节点双注册不去重）；原写的第三处「compose 里**无 redis 服务**」**随 V3-0 撤 compose 已不适用**（主机部署下 redis 由主机提供） | V4-5 | 两实例下：鉴权状态一致、同节点重复连接被去重 | 双实例 e2e |
 | V4-7 | 真 Redis 的 HSet/Publish/Subscribe **零测试**（现在只覆盖降级路径）→ 补集成测试 | V4-5 | 真 Redis 下测试通过（非 mock） | 测试实测输出 |
 | V4-8 | 告警：全仓 **0 处**。至少覆盖节点离线、心跳超时、命令失败率 | V4-2 | 触发条件下真发出告警 | 演练记录 |
 | V4-9 | **T4-6 真 50+ 节点**：见 §5，本地不可验证 | H10, V4-2 | — | — |
