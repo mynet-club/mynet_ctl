@@ -343,7 +343,7 @@ gateway: 已关闭（退出时连接数 0）                          ← 优雅
 | V2-6 | 真 `upgrade.Install`（校验+备份+原子替换+自检+回滚） | V2-5 | 正常升级成功；错 checksum 必须拒绝且不回滚 | e2e 两条 | ✅ 2026-09-24 |
 | V2-7 | 版本比较改语义 | — | `0.9.0 < 0.10.0` | 单测表驱动 + 变异 | ✅ 2026-09-24 |
 | V2-8 | 真升级一轮（重做 R4-3） | V2-5..7 | 旧版 → 新版，版本号确实改变 | e2e | ✅ **V2-8a**：agent 侧真二进制跑通（见下）。**ctl 侧**（上传两版 + 真 ctl 拉取）待 V2-8b |
-| V2-9 | OpenWrt `mynet-agent` ipk：`Package/mynet-agent/install`（`Makefile:190-196`）现在是 `[ -f ./files/mynetd ] && … \|\| true` → **缺文件时静默产出空 ipk**；`PKGARCH:=all`（`:182`）无法区分 mips/mipsle | V2-4 | 缺 `files/mynetd` 时**构建失败而非产出空包**；按 arch 分包 | 构建日志 + `tar tf` | ☐ |
+| V2-9 | OpenWrt `mynet-agent` ipk：原先 `[ -f ./files/mynetd ] && … \|\| true` → **缺文件时静默产空包**；`PKGARCH:=all` 与编译产物不符 | V2-4 | 缺 `files/mynetd` 时**构建失败**；按 arch 分包 | 构建日志 + `tar tf` | ✅ 2026-09-24（静态+行为校验；真出 ipk 仍需 SDK） |
 | V2-10 | CI：`mynet_agent` 新建 `.github/workflows/`（该 repo 目前**一个都没有**） | V2-4, H11 | tag 触发后 ctl 能拉到该版本 | Actions 记录 + ctl manifest | ☐（需 H11） |
 
 #### V2 实测证据（2026-09-24）
