@@ -9,9 +9,13 @@
 |------|----------|------------------|
 | mynet_ctl | [mynet_ctl/.env.example](../../../.env.example) | `ctl.env` |
 | mynet_back | [mynet_back/.env.example](../../../../mynet_back/.env.example) | `back.env` |
-| mynet_gui | （Quasar 不强制 .env，通过 quasar.config.ts 注入） | `gui.env` |
-| mynet_client | [mynet_client/conf/config.json](../../../../mynet_client/conf/config.json) | `client.config.json` |
-| mynet_lua | OpenWrt 设备上的 `/etc/mynet/conf/config.json` | `lua.config.json` |
+| mynet_gui | （Quasar 不强制 `.env`，通过 `quasar.config.ts` 注入） | `gui.env` |
+| mynet_agent | `$MYNET_CONFIG_HOME`（默认 `~/.mynet`，见 `shared/utils/paths.go:126`） | `agent.conf` |
+| mynet_openwrt | 设备上 `/etc/mynet/conf/{config.json,credential.json,mynet.conf}` | `openwrt.config.json` |
+
+> **`mynet_client` / `mynet_lua` 已不在本 workspace**（`repo-migration.md:81-82`）：
+> 前者是 Node.js 客户端，职责已拆到 agent / gui / desktop 三条线；后者是 OpenWrt
+> LuCI 旧线，已被 `mynet_openwrt` 取代。本表按**当前仓名**列，不要照着旧名去找。
 
 ## 凭证轮换记录
 
