@@ -323,8 +323,9 @@ env 会出现在 `docker inspect`、编排文件、`/proc/<pid>/environ` 里，
 
 生成 `back_priv` / `back_pub` 并入凭证库（`crt`）是 **H6**（人工闸门，红线「不碰生产
 密钥」）。生产注入后节点面 DH+HMAC 才可能验通 —— 当前 `.env` 里**没有任何**
-`MYNET_BACK_FACE_*` 键，所以是直接失败（`NodeHeartbeatAuthMiddleware.php:189-192`
-只 `Log::error`，不阻断）。
+`MYNET_BACK_FACE_*` 键，所以节点面请求会被**一律拒绝**（fail-closed，不是「静默放过」）：
+`BackFaceKeys::resolve()` 返回 null → `NodeHeartbeatAuthMiddleware.php:192-196`
+记 `Log::error` 并 `return null` → 调用方 `:73-75` 直接 `reject()`。
 
 ---
 

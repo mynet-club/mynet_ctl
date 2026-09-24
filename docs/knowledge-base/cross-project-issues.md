@@ -45,7 +45,7 @@
 - **修复建议**：生产轮换 Reverb 三件套（app_id / key / secret）；并将 `.env` 移到 `.env.local` 不入仓
 - **位置**：[mynet_back/.env](../../../mynet_back/.env)、[mynet_gui/.env](../../../mynet_gui/.env)
 
-#### CPI-36. `guard.sh` 的 A1 规则把「路径」和「变量引用」误判成硬编码凭据
+#### CPI-36. `guard.sh` 的 A1 规则把「路径」和「变量引用」误判成硬编码凭据 ✅ 已修复（2026-09-24）
 - **位置**：[templates/.githooks/guard.sh](templates/.githooks/guard.sh)（即与 `mynet_agent`/`mynet_utc` 字节一致的那份）
 - **现状**：A1 的判据是「口令类关键字 → 24 字符内出现 `=` → 引号包裹的内容 ≥8 字符」，只看**引号里有多长**，不看里面装的是什么。于是这两类**根本不含凭据**的写法会被拦下：
   - 指向口令文件的环境变量，值是**路径**（形如 `DB_PASSWORD_FILE=$ROOT/db.pass`）
@@ -53,9 +53,15 @@
 - **实撞**：写 V3-5 备份链（`mynet_back/deploy/backup-drill.sh`）时连撞两次，最后逐个加 `GUARD-OK` 才提交（豁免记入 `.git/guard-exempt.log`）
 - **连描述它的文档也会被拦**：本条目初稿把上面两个例子照原样（**带双引号**）写出来，`mynet_ctl` 的 pre-commit 立刻又被 A1 拦了一次 —— 也就是说这条规则**同时**没能区分「代码 vs 文档」，而 guard 自己的注释写着「只抓确凿模式，**避免撞注释/文档**」。为过闸，本节两个例子刻意省了引号（shell 里无空格时本来就可不加）
 - **风险**：§2.6 明写「误报过多的守护会被 `--no-verify` 绕过，反而失效」—— A1 是最该常驻的一条，它的误报代价比其他规则都高
-- **修复建议**：收窄为 ① 引号内**不得以 `$` 开头**（变量引用不是字面量）；② 关键字后不得紧跟 `_FILE` / `_PATH` / `_DIR` / `_NAME` 这类「装别的东西」的后缀；③ 或干脆跳过 `.md` —— 文档里引用凭据格式是常态，不是凭据
-- **注意**：三份 `guard.sh` 必须**字节一致**（SHA256 `86897f6379f5`），改要同步；且按「守护必须能失败」的规矩，改完得重做变异测试
-- **优先级**：🟡 P2（不阻塞，但此后每次写涉及口令路径/变量的代码都会再撞）
+- **处置**：采纳建议 ①，收窄 A1D 为「**双引号内以 `$` 开头的一律不算**」（那是变量引用或命令替换，不是字面量）。建议 ②（排除 `_FILE`/`_PATH` 后缀）与 ③（跳过 `.md`）**未采纳** —— ① 已覆盖本轮全部四个误报；② 会漏掉「关键字带 `_file` 后缀、但等号右边确实是字面量口令」的写法；③ 会让**文档里的真凭据**漏网。
+  **A1S（单引号版）故意不动**：单引号里 `$` 不展开，`'$DB_PASS'` 是字面字符串，可能真就是个叫这名字的密码，保守抓它才对。
+- **实测验证**：13 例变异测试（用 guard 的真实输入形态，即带 `+` 前缀的行）——
+  6 类真凭据**全部仍被抓**（双引号字面量、单引号字面量、`secret=` / `api_key=` / `token=` 三种关键字、缩进带空格版；值均为 ≥8 字符字面量，并含恰好 8 字符的边界例）；
+  4 类误报**全部放过**（双引号变量、命令替换、指向口令文件的路径、`MYSQL_PWD` 转交）；短值仍放过。
+  改完把 `backup-drill.sh` 里那 3 处 `GUARD-OK` 豁免**删掉**，A1 仍放行 —— 这本身就是对新规则的验证，也少了 3 条审计噪音。
+- **不采纳 ③ 的代价，本轮亲身付了一次**：结案时我把变异测试用的假凭据（形如 `password=` 后接一个 13 字符字面量）**原样写进了本条目**，于是 pre-commit 又被 A1 拦下。guard 抓得对 —— 它无法区分「文档里举例」和「代码里真写了」，而这正是 ③ 想解决、我却否掉的那件事。结论不是改规则，而是**写文档时别贴完整的凭据赋值形式**（本条已改为描述式）。
+- **⚠️ 一处需要更正的旧说法**：本条目初稿（以及更早的记录）写「**三份** `guard.sh` 字节一致（`templates/` · `mynet_agent` · `mynet_utc`）」—— 实际是 **9 份**：`templates/` + 8 个仓的 `.githooks/guard.sh`。其中 8 份 SHA256 完全相同（`86897f6379f5…`），`mynet_gnb` 那份因 B1 规则不同而 SHA 不同、但 **A1 段落一致**。所以改 A1 要同步 9 份，本次已用脚本同步并逐份核对。
+- **优先级**：🟡 P2 → ✅ 已修（`mynet_back 52374e6`，9 份 guard.sh 随各仓同批提交）
 
 ---
 
@@ -363,6 +369,7 @@
 | 2026-09-24 | **CPI-30** `mynet_gui` 的 `.env.development`/`.env.production` 是死文件（Quasar 只认 `.env.dev`/`.env.prod`）→ `git mv` 改名（rename 56%/58%，历史保留）+ 同步 9 处引用点（`quasar.config.ts` 手工加载器、`deployment.sh`、`quick-deploy.sh`、`pre-deploy-check.sh`、`verify-debug-disabled.sh`、`.env.example`、`docs/UPGRADE-v2.md`、`docs/06-部署指南.md`、`.github/copilot-instructions-详细版.md`）。实测：dev 日志 `Using .env files: .env, .env.local, .env.dev`；build 日志 `… .env.prod`；`dist/spa` 里 `api.mynet.local` **0 次**、`https://my.mynet.club/api/v1` 已烘入 | `mynet_gui d0961bf` |
 | 2026-09-24 | **CPI-30a** Quasar 的 env 优先级与 Vite **相反**：`.env.dev` 覆盖 `.env.local`（`env.js:101-116` 的 `Object.fromEntries(fileList.flatMap(…))`，fileList 里 `.env.local` 第 2 位、`.env.[buildType]` 第 3 位，后者胜出）。本地覆盖必须写 `.env.local.dev`，而它**不被 `.gitignore:13` 的 `.env.*.local` 匹配** → 有误提交风险 | `mynet_gui d0961bf` |
 | 2026-09-24 | **T2-6 达成**：mynet_gui 四页真打通新 back，连接向导四步走通并落库（`req=4456240307586718 status=pending`） | 任务达成（载体 `mynet_gui`；产物散在 CPI-23~30 各行） |
+| 2026-09-24 | **CPI-36** `guard.sh` 的 A1 把「路径」「变量引用」误判成硬编码凭据 → 收窄 A1D（双引号内以 `$` 开头的不算），A1S 故意保持严格；9 份 guard.sh 同步；13 例变异测试 | back `52374e6`（9 份 guard.sh 随各仓同批提交） |
 
 ---
 

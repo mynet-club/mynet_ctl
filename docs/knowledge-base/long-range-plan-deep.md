@@ -132,7 +132,7 @@ T3-5（G4 外网可用）、T4-4（双 gateway）、T4-6（真节点压测）、
 | **H4** | ~~裁定子域命名冲突~~ ✅ **已裁定（2026-09-24）：`console` = 租户管理（back 管理面）、`admin` = 平台管理（框架 platform/operator SPA）、`adm` 弃用**。用户原话：「back管理是租户管理，租户管理是console，admin 是平台管理」 | — | — | 已决 → 待同步 `deployment-registry.md:13` / `ecosystem.md:125` / `brand-guide.md:152` |
 | **H4b** | **`gw` vs `gw1`/`gw2` 未裁定**（H4 只答了 admin/adm）。建议：现阶段单入口 `gw`，等 V4-5/V4-6（presence 真接线）做完再开 `gw1`/`gw2`——现在开两个入口是空的 | 命名与多实例时机是产品决策 | T4-4 | V4 前 |
 | **H5** | **DBA 建库建表**：生产是 MySQL 8，而 `deployment-registry.md:63` 明写「**mynet_back 禁止 migration，需 DBA 走 database/sql/**」 | 生产库变更权限 | T3-4 | H1 之后 |
-| **H6** | **生成 `back_priv` / `back_pub` 并入凭证库**：当前 `.env` 无 `MYNET_BACK_FACE_*` 任何键 → 节点面 DH+HMAC **直接失败**（`NodeHeartbeatAuthMiddleware.php:189-192` 仅 Log::error）。⚠️ 保护等级 **高于**节点私钥（泄露可冒充**所有**节点） | 红线「不碰生产密钥/crt」；且必须走 `crt` 凭证库 | T3-4 · T3-5 | H5 同时 |
+| **H6** | **生成 `back_priv` / `back_pub` 并入凭证库**：当前 `.env` 无 `MYNET_BACK_FACE_*` 任何键 → 节点面 DH+HMAC **一律拒绝**（fail-closed：`BackFaceKeys::resolve()` 返 null → `NodeHeartbeatAuthMiddleware.php:192-196` 记 `Log::error` 并 return null → 调用方 `:73-75` `reject()`）。⚠️ 保护等级 **高于**节点私钥（泄露可冒充**所有**节点） | 红线「不碰生产密钥/crt」；且必须走 `crt` 凭证库 | T3-4 · T3-5 | H5 同时 |
 | **H7** | ~~裁定 `back_priv` 形态~~ ✅ **已裁定（2026-09-24）：0600 文件，按原规范**。原实现是 env 注入（`config/mynet.php`）**已改**（V3-6a：`BackFaceKeys`，文件优先且权限过宽即拒绝）；`spec/node-keying.md` 现无 back_priv 条目，**已补**（V3-6b：§4.6） | — | — | 已决 → V3-6a / V3-6b 均已完成 |
 | **H8** | **一台非 VM 真机** + 外网可达的 api 域名 | 硬件 | T3-4 | G4 前 |
 | **H9** | **一台 Windows 主机**（且需先确认 gnb/wireguard 在 Windows 的驱动可用性） | 硬件。无它则 Windows 只能交叉编译出包、**运行不可测** | T5-1 | T5 开工前 |
