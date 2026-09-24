@@ -407,17 +407,46 @@ $ MYNET_APPS_INDEX=http://127.0.0.1:18090 mynet update
 
 | ID | 内容 | 前置 | 验收判据 | 证据形式 |
 |---|---|---|---|---|
-| V3-1 | `deploy/Dockerfile`（**现在没有**，`build: .` 上下文即 deploy/ → build 必失败） | — | `docker compose build` 成功 | 构建日志 |
-| V3-2 | **按 H1 裁定改走 nginx**：归档/删除 `deploy/{Caddyfile,caddy-compose.yml}`（后者本身是坏的：跨文件 `depends_on: app` 报 `invalid compose project`），改为在现有 nginx 上加 `api` / `gw` / `console` / `admin` 四个 server block，沿用 `/etc/letsencrypt/live/mynet.club/` 证书 | H1 ✅, H2, H3 | `nginx -t` 通过；四个子域各自 `curl -vI https://` 命中正确上游 | 实测 curl 输出 |
-| V3-3 | compose 收敛：去掉 gateway 的 `alpine sleep infinity` 占位（`docker-compose.yml:23-27`），接 V1-5 产出的真二进制；补 **redis 服务**（现在任何 compose 都没有，而 V4-5 presence 需要它） | V1-5 | `docker compose config` 通过且服务齐全 | 实测输出 |
-| V3-4 | 补 healthcheck（现在 grep 0 命中） | V3-1 | app/db/gateway/redis 均有 healthcheck 且 healthy | `docker compose ps` |
-| V3-5 | **重做 T3-3**：备份加密（现在明文 tar.gz）+ 恢复脚本 + **恢复演练** + 密码不走命令行（现在 `-p"$DB_PASSWORD"` 进 `ps`）+ cron 真装（现在只是 README 注释） | — | 从备份**真恢复出一个可用库**；`ps` 里看不到密码 | 恢复演练实测输出 |
-| V3-6a | **按 H7 裁定把 `back_priv` 改为 0600 文件**：改 `config/mynet.php:25-26` 与 `docker-compose.yml:16-17` 从读文件而非 env；文件权限 0600、目录 0700；不进代码库、不进 BundleEnvelope | H7 ✅ | 代码只从文件读；`git status` 干净；权限实测 0600 | `ls -l` + 单测（缺文件时明确报错而非静默降级） |
-| V3-6b | **补 `spec/node-keying.md` 的 back_priv 条目**（现在该文件 grep 0 命中 → 规范缺位）：形态、权限、轮换、泄露处置、为什么保护等级高于节点私钥 | V3-6a | 规范与实现一致 | 文档评审 |
-| V3-6 | `back_priv`/`back_pub` 生成并入 `crt` 凭证库、注入生产 | H6, V3-6a | 节点面 DH+HMAC 在生产真验通过 | 真机心跳 200 |
-| V3-7 | 补 `deployment-registry.md` 的 stale 项：`manage-prod.sh` 文件不存在、www 服务器 `<待补>`、监控/心跳 `<待补>`；并按 H4 把 back 管理面从 `admin` 改称 `console`（同步 `ecosystem.md:125` / `brand-guide.md:152`） | V3-1..6 | 文档每条都能在盘上找到对应物；子域命名全库一致 | 逐条 `ls` + grep 核对 |
-| V3-8 | **T3-4 真机注册**：非 VM 真机走完「注册→密钥→连接→互通」 | H2, H5, H6, H8, V1, V3-6 | 真机 `node_id` 落库、心跳在线、与另一节点互通 | 真机实测 + back 数据 |
-| V3-9 | **G4**：外网可注册、可互通、`mynet update` 升级不断线 | V2-8, V3-8 | `long-range-plan-t.md:121-123` 三条判据全过 | 外网实测 |
+| V3-0 | ~~Docker 路线~~ **已撤**：`deploy/{docker-compose.yml,caddy-compose.yml,Caddyfile}` 删除；路线改为**主机 + nginx + rsync** | — | — | ✅ 2026-09-24（用户裁定；见下「为什么撤 Docker」） |
+| V3-1 | ~~`deploy/Dockerfile`~~ → **改为补主机部署入口 `manage-prod.sh`**（registry 称其为推荐路径但**文件不存在**） | — | `./manage-prod.sh deploy/sync/status/rollback` 可用；远端前置守卫生效 | ✅ 2026-09-24（守卫矩阵实测：合规→0；priv 0644/0640、APP_KEY 空、无 .env→各 1） |
+| V3-2 | **按 H1 裁定改走 nginx**：`deploy/Caddyfile` 已删，其意图（TLS + api/gw 反代 + 安全头）转为 `deploy/nginx.conf` | H1 ✅, H2, H3 | `nginx -t` 通过 | ✅ 2026-09-24（语法实测通过，仅缺生产机的证书文件）；四个子域 curl 实测待 H2/H3 |
+| V3-3 | ~~compose 收敛~~ **随 V3-0 一并作废**（不再有 compose）。gateway 在主机上以 systemd 运行，redis 由主机提供 | V1-5 | gateway 主机可跑 + redis 可达 | ☐（改为主机侧待办） |
+| V3-4 | ~~compose healthcheck~~ **随 V3-0 作废**；健康检查改由 nginx 的 `/up` 与脚本 verify 承担 | V3-0 | `curl https://api.mynet.club/up` → 200 | ✅ 已并入 V3-1 的 verify_deployment |
+| V3-5 | **重做 T3-3**：备份加密（现在明文 tar.gz）+ 恢复脚本 + **恢复演练** + 密码不走命令行（现在 `-p"$DB_PASSWORD"` 进 `ps`）+ cron 真装（现在只是 README 注释） | — | 从备份**真恢复出一个可用库**；`ps` 里看不到密码 | ☐ |
+| V3-6a | **按 H7 裁定把 `back_priv` 改为 0600 文件**：文件优先，**权限过宽即拒绝且不回退 env** | H7 ✅ | 代码只从文件读；权限实测；缺/空文件明确报错 | ✅ 2026-09-24（10 测试；「不回退」那条是被测试抓出来的） |
+| V3-6b | **补 `spec/node-keying.md` 的 back_priv 条目**（现在该文件 grep 0 命中 → 规范缺位）：形态、权限、轮换、泄露处置、为什么保护等级高于节点私钥 | V3-6a | 规范与实现一致 | ☐ |
+| V3-6 | `back_priv`/`back_pub` 生成并入 `crt` 凭证库、注入生产 | H6, V3-6a | 节点面 DH+HMAC 在生产真验通过 | 真机心跳 200 | ☐（需 H6） |
+| V3-7 | 补 `deployment-registry.md` 的 stale 项（**`manage-prod.sh` 已由 V3-1 补上**，可勾掉）、www 服务器/监控待补；并按 H4 把 back 管理面从 `admin` 改称 `console`（同步 `ecosystem.md:125` / `brand-guide.md:152`） | V3-1..6 | 文档每条都能在盘上找到对应物；子域命名全库一致 | 逐条 `ls` + grep 核对 | ☐ |
+| V3-8 | **T3-4 真机注册**：非 VM 真机走完「注册→密钥→连接→互通」 | H2, H5, H6, H8, V1, V3-6 | 真机 `node_id` 落库、心跳在线、与另一节点互通 | 真机实测 + back 数据 | ☐（需人工闸门） |
+| V3-9 | **G4**：外网可注册、可互通、`mynet update` 升级不断线 | V2-8, V3-8 | `long-range-plan-t.md:121-123` 三条判据全过 | 外网实测 | ☐（需人工闸门） |
+
+#### 为什么撤 Docker（V3-0，2026-09-24）
+
+`deployment-registry.md`（部署元数据 SSOT）写的是：
+
+| 项目 | 服务器 | 部署路径 | 部署命令 |
+|---|---|---|---|
+| mynet_ctl | `10.182.236.180`（公网 `52.77.179.176`） | `/data/app/mynet.club/ctl` | `bash scripts/deploy/deploy.sh`（rsync + 远程 artisan） |
+| mynet_back | 同上 | `/data/app/mynet.club/api` | `./manage-prod.sh deploy` |
+| mynet_gui | 同上 | `/data/app/mynet.club/my/public` | `bash deployment.sh`（本地 build + rsync dist/） |
+
+三者**共置同机、各是独立 nginx server block**，证书在
+`/etc/letsencrypt/live/mynet.club/`，**主机 nginx 终结 TLS**。部署方式是 **rsync**。
+
+而 `deploy/docker-compose.yml` 把 app/db/gateway 装进容器、暴露 8080，
+与这个拓扑不符（caddy-compose 更直接占宿主 80/443，与现有
+`listen 172.26.3.227:443` + 前置公网 LB 冲突 —— H1 已裁定复用现有 nginx）。
+
+**原计划条目「V3-1: deploy/ 下没有 Dockerfile、`build: .` 必失败」把问题定错了**：
+它把「compose 无法构建」当成缺陷，而正确判断是**这个 compose 与该项目的部署模型不符**。
+修法不是补 Dockerfile 去迎合一个本不该存在的 compose，而是撤掉它、补上真正缺的
+`manage-prod.sh`。
+
+> 教训：**先确认技术选型是否成立，再补实现**。我照着计划表写了 Dockerfile
+> 之后才被问「为什么用 Docker」—— 那一步本该在动手前做。
+> 计划表里的条目也是可能定错的，不是免检的。
+>
+> 相关：`repo-migration.md` 里 mynet_back 的 Dockerfile 若曾被列入搬运清单，同样作废。
 
 ### V4 · 规模化与可观测
 
