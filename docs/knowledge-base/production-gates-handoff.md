@@ -218,3 +218,50 @@ crt use <ctl release token 条目> -- \
 > 第 4、5 步的顺序有讲究：先开总闸再部署 gateway，会让期间的每次入队都尝试通知一个
 > 不存在的上游（best-effort 静默降级，只是日志噪音）；反过来则 gateway 起来了但没人通知它。
 > 两者都不致命，但**先 5 后 4** 更干净。
+
+---
+
+## 5. 运维陷阱：Redis 键名带 `APP_NAME` 派生的前缀
+
+`config/database.php` 的 Redis 选项里有
+
+```php
+'prefix' => env('REDIS_PREFIX', Str::slug(env('APP_NAME', 'laravel'), '_').'_database_'),
+```
+
+所以**键名不是裸的 `node:status:<id>`**，而是 `<slug(APP_NAME)>_database_node:status:<id>`。
+staging 上 `APP_NAME=MyNetBackStage` → 前缀 `mynetbackstage_database_`；
+生产 api 的 `APP_NAME` 不同，前缀也就不同。
+
+**后果**：任何按裸键名扫描的运维脚本 / 监控 / 排障命令，在换了 `APP_NAME` 的环境上
+会**静默扫不到东西** —— `redis-cli --scan --pattern 'node:*'` 返回 0 个键，
+看起来像「心跳没写进 Redis」，实际写得好好的。本轮就误判过一次
+（V4-2 的验证记录里写的是裸键名，那是本地环境的形状）。
+
+**正确做法**（三选一）：
+
+```bash
+# 1) 从应用侧问，前缀由框架自己加/去
+php -r '…bootstrap…; print_r(Illuminate\Support\Facades\Redis::keys("node:status:*"));'
+
+# 2) 先取前缀再拼
+P=$(php artisan tinker --execute='echo config("database.redis.options.prefix");')
+redis-cli -n 1 --scan --pattern "${P}node:status:*"
+
+# 3) 显式固定 REDIS_PREFIX（推荐用于生产：让键名不随 APP_NAME 漂移）
+#    .env: REDIS_PREFIX=mynet_database_
+```
+
+⚠️ 建议生产**显式设 `REDIS_PREFIX`**：否则改一次 `APP_NAME`（比如 branding 调整）
+就会让既有键全部「消失」—— 数据还在，但按旧前缀写、按新前缀读，
+表现为「节点全部离线」，而心跳其实一直在写。
+
+**staging 实测的 4 个键**（`REDIS_DB=1`）：
+
+| 键（去前缀） | 类型 | 内容 | TTL |
+|---|---|---|---|
+| `node:status:<id>` | hash | `status=online` · `last_heartbeat` · `updated_at` | 1032s |
+| `node:status:all` | zset | `<id> → last_heartbeat` 时间戳 | 无 |
+| `node:<id>:monitor` | string | `is_running` / `connected_peers` / `uptime_seconds` / `rx_bytes` … | 1632s |
+| `node:vpn_interfaces:<id>` | string | 接口列表（type / ifname / status） | 1032s |
+
