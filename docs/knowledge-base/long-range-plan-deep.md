@@ -247,12 +247,39 @@ CPI-62 缺 OS 路由 / CPI-54 授权绕过-安全）。
   已改为启动也跑一遍）、CPI-66（`gnb --systemd` 忽略 `pid-file` →
   `IsProcessAlive` 恒 false → `Start()` 会 spawn 第二个 gnb 抢同一 tun →
   已改为委托 systemctl，并新增「gnb 恰好 1 个实例」断言）。
-  验收脚本重构后 **40 通过 / 0 失败**（比之前多的 2 条正是钉 double-spawn 的）。
-- **仍缺 `mynet install`**：单元文件与 env 示例已在仓里
-  （`deploy/systemd/{mynetd,mynet_gnb}.service` + `deploy/mynetd.env.example`），
-  但把它们装到 `/etc/systemd/system` 并 `daemon-reload && enable --now`
-  这一步目前是**手工做的**，`cmd_install.go` 只复制二进制。
-  一键装机（`integration-plan.md` 的 D-8 首次运行向导）还差这一段。
+  验收脚本重构后 **40 通过 / 0 失败**（多出的 2 条正是钉 CPI-66 的
+  「gnb 恰好 1 个实例」）。
+
+  **重启验证（2026-09-25，节点 192.168.0.16）** —— 这才是 CPI-64 要求的
+  「断开控制通道之后再回来看」的最终形态：
+  `sudo shutdown -r now` → 约 2 分 10 秒回连 → **零人工干预**自动恢复：
+    uptime 496135s → **40s**（真重启过）
+    mynetd / mynet_gnb 两单元 active + enabled（开机自动拉起）
+    gnb 1 个进程、运行 31s；tun `10.0.0.16/32`（平台分配的地址）
+    路由 `10.0.0.10 scope link` ← **启动生命周期自动重装**（CPI-65 那条修复在这里被验到）
+    journal 14:34:07 四步齐全：拉 bundle → 刷新驱动配置 → 起驱动 → 装内核路由
+    ping **0% 丢包** avg 0.528ms
+  心跳在重启后继续累积（291/295 行），Redis presence 回到 `online`
+  （重启与验收脚本的 `systemctl restart` 各造成一次瞬时 offline 窗口，
+  均在下一个心跳周期内自行恢复 —— 30s 间隔，属预期行为）。
+  **至此 CPI-64 可以说真正闭合：结论不再依赖任何人连着 SSH。**
+- ~~**仍缺 `mynet install`**~~ → ✅ **已实现**（`mynet_agent 7788834` + `733f561`）。
+  此前 `cmdInstall` 只复制二进制，然后打印「请按平台执行 systemctl/launchctl」
+  就返回 0 —— **单元文件本身没有被安装**，装完仍是「没有服务、重启就没了」而它报成功。
+  现在做完整条链：写二进制 → 建 $home → 写 /etc/mynet/mynetd.env（0600）→
+  写单元（**内嵌**在二进制里，见 `mynet/units/`）→ daemon-reload → enable --now。
+  内嵌是因为 `//go:embed` 的路径不能越过包目录，而 install 要在**分发出去的二进制**
+  里带着单元 —— 否则新机器上只有 mynet，install 只能让你手抄，那等于没装。
+  `uninstall` 与之成对（disable --now → 删单元/env/二进制），且**明确不动**
+  `$home` 下的节点身份与密钥（卸载不该替人决定丢业务数据）。
+  `--gateways` 必填（不给则 mynetd 是「纯本机模式」，装了等于没装）；
+  `--dry-run` 只看不做；覆盖二进制前先 `systemctl stop`（否则 `text file busy`
+  会留下装一半的状态 —— 真机验证时踩到）。
+  **真机验证**：两台均改为 `mynet install` 装法，从「彻底清空」到
+  `enabled + started` 到互通 **0% 丢包**，一条命令完成；install 如实打印
+  「下一步（节点身份，install 不代劳）」。
+  集成计划的 D-8「首次运行向导」还差**交互式引导**那一段（登录 → 选节点 → 下载配置），
+  但装机本身已闭合。
 - **wireguard 那条链**：`refresh-config` 写 `var/wg.conf` 而 `wg-quick` 读
   `/etc/wireguard/<iface>.conf`，路径断点与 gnb 同构（gnb 侧已修，wg 侧待 install 阶段）。
   wg 也还没有对应的 systemd 单元。
