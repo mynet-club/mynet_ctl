@@ -191,7 +191,13 @@ T3-5（G4 外网可用）、T4-4（双 gateway）、T4-6（真节点压测）、
 （gnb 自己的在线判据，PONG 位置位才打这行；`InDirect` 表示走中继）
 与 `addr4_ping_latency_usec` 实测值。
 
-**可重跑**：`mynet_agent/scripts/e2e/phase6_tunnel.sh`，实测 **38 通过 / 0 失败**。
+**可重跑**：`mynet_agent/scripts/e2e/phase6_tunnel.sh`，当前实测 **40 通过 / 0 失败**
+（在 systemd 托管的 `/opt/mynet` 布局上，日志里 `via=systemd`）。
+
+> ⚠️ 最初那次报告的是 38/0，且当时 gnb 是从 SSH 会话里 `setsid nohup` 起的 ——
+> 那个绿**是会话依赖的**（详见 CPI-64 与下面「仍未达成」里的说明）。
+> 多出的 2 条断言是「gnb 恰好 1 个实例」，钉的是 CPI-66 的 double-spawn 风险。
+> 引用旧数字时请连同这个限定一起引用。
 
 ```sh
 P6_NODE_A=192.168.0.32 P6_NODE_B=192.168.0.16 \
@@ -226,14 +232,35 @@ CPI-62 缺 OS 路由 / CPI-54 授权绕过-安全）。
   并顺带修掉 `ToHex()` 的 GNB 布局错误（编码了未 clamp 的 SHA512；
   该错因 `ToHex` 生产零调用者 + 签名侧会再 clamp 而一直藏着）。
   真机对照 `gnb_crypto` 产物，结构同构。
+- ~~**节点侧尚未装成 systemd 服务**~~ → ✅ **已装**（`mynet_agent 87e874c`）。
+  两台验证机现由 `mynetd.service` + `mynet_gnb.service` 托管，
+  cgroup 在 `/system.slice/`（不再是 `session-N.scope`）、active + enabled。
+  ⚠️ 这条闭合的过程本身查出一个**影响验收结论有效性**的问题，见 CPI-64：
+  此前 gnb 是从 SSH 会话里 `setsid nohup` 起的，而 systemd 按 **cgroup** 而非 ppid
+  追踪进程 —— 会话一断整组被回收。journal 里 `gnb_tun: Link DOWN` 与
+  `session-1605.scope: Deactivated successfully` 是**同一秒**。
+  也就是说先前那次「38 通过 / 0 失败」**只在有人连着 SSH 时成立**，
+  人一断开隧道就没了，而所有断言当时都是绿的。
+  **教训：验证常驻服务必须在断开控制通道之后再回来看一次；
+  「我连着的时候它是好的」不构成任何结论。**
+  同一轮还查出 CPI-65（tun 重建后 /32 路由丢失，mynetd 启动时不走生命周期 →
+  已改为启动也跑一遍）、CPI-66（`gnb --systemd` 忽略 `pid-file` →
+  `IsProcessAlive` 恒 false → `Start()` 会 spawn 第二个 gnb 抢同一 tun →
+  已改为委托 systemctl，并新增「gnb 恰好 1 个实例」断言）。
+  验收脚本重构后 **40 通过 / 0 失败**（比之前多的 2 条正是钉 double-spawn 的）。
+- **仍缺 `mynet install`**：单元文件与 env 示例已在仓里
+  （`deploy/systemd/{mynetd,mynet_gnb}.service` + `deploy/mynetd.env.example`），
+  但把它们装到 `/etc/systemd/system` 并 `daemon-reload && enable --now`
+  这一步目前是**手工做的**，`cmd_install.go` 只复制二进制。
+  一键装机（`integration-plan.md` 的 D-8 首次运行向导）还差这一段。
 - **wireguard 那条链**：`refresh-config` 写 `var/wg.conf` 而 `wg-quick` 读
   `/etc/wireguard/<iface>.conf`，路径断点与 gnb 同构（gnb 侧已修，wg 侧待 install 阶段）。
+  wg 也还没有对应的 systemd 单元。
 - **V1-6 命令闭环**未在真环境复验（H6 的 back_face 密钥已就位、`X-Node-Verified` 已修，
   前置条件满足了，但这一轮没跑命令下发）。
-- **节点侧尚未装成 systemd 服务**：两台验证机上 mynetd 是手工 `setsid nohup` 起的
-  （现已改为 root 跑），重启机器不会自动拉起。单元已写好
-  （`deploy/systemd/mynetd.service` + `mynetd.env.example`），待 `mynet install` 落地。
 - **真实 NAT 穿透 / path MTU / 吞吐**未验：两台节点机在同一 LAN，属 1→10 范畴。
+- **只验过 gnb 一条驱动链**：0→1 的七项判据是在两个 gnb 节点上达成的；
+  wireguard 节点尚未跑通同等链路。
 
 ---
 

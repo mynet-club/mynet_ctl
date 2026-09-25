@@ -656,6 +656,99 @@
   伪装成「设计如此」。
 - **优先级**：🟡 P2 → ✅ 已修
 
+#### CPI-64. `setsid nohup` 起的守护进程活不过 SSH 会话 —— Phase 6 的绿是**会话依赖**的
+- **现象**：装服务前复查，两台上 gnb 都不见了、`gnb_tun` 消失。journal：
+  ```
+  13:35:09 systemd-networkd: gnb_tun: Link DOWN
+  13:35:09 systemd[1]: session-1605.scope: Deactivated successfully.
+  13:36:15 gnb_tun: Link UP
+  13:37:18 gnb_tun: Link DOWN
+  ```
+  DOWN 与 session scope 失效是**同一秒**；UP/DOWN 的间隔正好是一次次 ssh 连上又断开。
+- **根因**：`setsid nohup` 只改了 **ppid**，而 **systemd 按 cgroup 而非 ppid 追踪进程**。
+  gnb 即便双 fork 成了 ppid=1 的守护进程，仍留在 `session-N.scope` 的 cgroup 里，
+  会话结束时被整组回收。node.conf 里的 `daemon on` **不足以**让它脱离会话。
+- **⚠️ 对验收结论的影响（最该记住的一条）**：Phase 6 那次「38 通过 / 0 失败」
+  **只在有人连着 SSH 时成立**。人一断开隧道就没了，而所有断言当时都是绿的。
+  这类问题只有把验收状态**放一段时间再回来看**才会暴露 ——
+  一次性跑完就宣布达成，正好是它最容易骗过人的时机。
+- **✅ 已修**（`mynet_agent 87e874c`）：新增 `deploy/systemd/mynet_gnb.service`
+  （`gnb --systemd -c ${MYNET_HOME}/var/gnb`，Type=simple + Restart=always）。
+  用 `--systemd` 而非自我 daemon 化：带该 flag 时 gnb 忽略 `daemon on` 保持前台
+  （`gnb_argv.c:439-440` → `gnb_conf_file.c:458`、`gnb_argv.c:741-742`），
+  前台正是 `Type=simple` 要的（进程死了 systemd 立刻知道、能 Restart）。
+  同一份 node.conf 两种模式都能用 —— 这正是当初渲染器写 `daemon on` 而不是
+  `daemon off` 的原因。
+  实测两台均在 `/system.slice/`（不再是 `session-N.scope`）、active + enabled。
+- **教训**：验证一个常驻服务时，**必须在断开控制通道之后再回来看一次**。
+  「我连着的时候它是好的」不构成任何结论。
+- **优先级**：🔴 P0（验收结论有效性）→ ✅ 已修
+
+#### CPI-65. tun 重建后 /32 主机路由丢失，mynetd 启动时不走生命周期
+- **现象**：装成服务后重启，gnb 由它自己的单元拉起、`gnb_tun` 也在，
+  但 **B 侧 `ip route show dev gnb_tun` 是空的** → A→B ping 100% 丢包，
+  而 A 侧路由还在（它是上一轮手工 apply 留下的）。症状与 CPI-62 同形。
+- **根因**：内核不会在 tun 重建时自动恢复此前 `ip route replace` 加进去的路由；
+  而 mynetd **只在 `bundle_changed` 时**走生命周期，启动路径只做「拉 bundle」，
+  于是重启后没人重装路由。
+- **✅ 已修**（`mynet_agent 87e874c`）：mynetd 启动拉取成功后也跑一遍
+  `runBundleLifecycle()`（refresh-config → service start → apply --auto）。
+  `-once` 时跳过（那是一次性验收探针，不该顺手改被测机器的内核路由）。
+  实测 journal 四步齐全，B 侧路由自动恢复成 `10.0.0.10 scope link`。
+- **教训**：「配置变更时做 X」和「启动时做 X」是两条路径，只实现前者的话，
+  重启就是一个从未被测过的状态。凡是幂等的收敛动作，启动时都该跑一遍。
+- **优先级**：🟠 P1 → ✅ 已修
+
+#### CPI-66. `gnb --systemd` 忽略 `pid-file` → `Start()` 会 spawn 出第二个 gnb
+- **根因**：`gnb_conf_file.c:349` 的 `pid-file` 解析条件带 `&& 0 == conf->systemd_daemon`
+  （`ctl-block` 同理，:336）。所以 systemd 模式下**根本没有 pid 文件** →
+  `readPidFile()` 失败 → `IsProcessAlive()` 恒 false → `Start()` 认为没在跑，
+  于是 spawn **第二个 gnb**，两个进程抢同一个 tun 与 UDP 端口。
+- **症状**：隧道时通时断，而两边日志都"正常"（各自都觉得自己起成功了）。
+- **✅ 已修**（`mynet_agent 87e874c`）：`systemdManages()` 用
+  `systemctl show -p LoadState --value <unit>` == `loaded` 判断，命中就把
+  Start/Stop/IsProcessAlive 全部委托 systemctl。
+  ⚠️ 判据不能用 `systemctl is-active` —— 它区分不了「单元不存在」与
+  「单元存在但没跑」（两者都输出 inactive/unknown + 非零退出码）。
+  Stop 也必须委托，否则与单元的 `Restart=always` 打架（kill 掉立刻又被拉起，
+  看起来像"停不掉"）。
+- **副作用（正向）**：这让 `mynet service` 终于符合 D-7 对它的原始定义
+  「进程生命周期（委托 procd/systemd/launchd）」；直接 spawn 退化为
+  没有服务管理器时的退路（容器内 / macOS / 手工调试），两条路都有测试。
+- **验收**：phase6_tunnel.sh 新增断言「gnb 恰好 1 个实例」（每节点 1 条，共 2 条），
+  专门钉这个 double-spawn 风险。
+- **教训**：一个 flag 会**关闭**另一些配置键的解析（`--systemd` 关掉 daemon /
+  pid-file / ctl-block），这种耦合不写在文档里就一定会踩。改启动方式前
+  先把它对配置解析的影响读一遍。
+- **优先级**：🟠 P1 → ✅ 已修
+
+#### CPI-67. 用非引号 heredoc 生成远端脚本 → 注释里的反引号在**生成期**被执行
+- **位置**：`mynet_agent/scripts/e2e/phase6_tunnel.sh` 的 `node_script()`
+- **根因**：原来用非引号 `<<NODE`，于是脚本正文里所有 `$`、`$( )`、
+  以及**注释里的 markdown 反引号**都会在「生成这段脚本」的时候就被工作站 shell
+  展开/执行。实测：注释里写了一句「退回手工 `mynetd -once`」，
+  生成时它真的在工作站上跑了 mynetd，报
+  `command substitution: syntax error near unexpected token '<'`；
+  而生成出来的脚本因为反引号被吃掉变成**未闭合**，整文件 EOF 语法错。
+- **为什么之前没炸**：更早几版被误执行的内容恰好无害（比如 `$(wc -c < …)`
+  在生成机上只是找不到文件）。**能跑通纯属运气**，不是设计正确。
+- **✅ 已修**（`mynet_agent 87e874c`）：改成引号 heredoc `<<'NODE'`（零展开），
+  动态值（MYNET_HOME / gateway / 对端 IP）全部由 `on()` 用**环境变量**送入。
+  现在生成期输出为空 = 没有任何东西被误执行，且注释里的反引号原样保留。
+- **顺带两处取数坑**（同一类：假设 shell 行为跨实现一致）：
+  - `sudo sh -c "wc -c < $DIR/*.private"` 取不到值 —— sudo 起的 `/bin/sh`
+    在 Debian 上是 **dash，而 dash 不在重定向里展开通配符**（bash 会），
+    于是它把字面量 `security/*.private` 当文件名。改用 `sudo find` 拿名字 +
+    `sudo wc -c FILE`（用参数而非重定向：重定向由外层 shell 以普通用户身份做会 EACCES）。
+  - 远端 bash 的 `cannot change locale (en_US.UTF-8)` 警告走 stderr，
+    被 `2>&1` 收进来后会污染「取最后一行」和「只留数字」两类解析
+    （实测把计数器值整个替换成了那条警告）。统一在 `on()` 里滤掉。
+- **教训**：**往远端送脚本时，「生成」与「执行」必须分离。**
+  生成期不做任何展开、参数走环境变量。否则注释都能变成被执行的代码 ——
+  这与本项目反复踩的「`$VAR` 后紧跟全角标点被并入变量名」是同一类错误：
+  假设引号/分词/展开在另一个上下文里行为一样。
+- **优先级**：🟠 P1（验收工具自身的可信度）→ ✅ 已修
+
 ---
 
 ## 📐 架构设计决策（非 bug，易被误判）
