@@ -656,6 +656,57 @@
   伪装成「设计如此」。
 - **优先级**：🟡 P2 → ✅ 已修
 
+#### CPI-68. 登录响应里有**三个装饰品**：refresh_token 与两个 expires_in 都是假的
+- **位置**：`mynet_back` 的框架 auth 模块
+  （`vendor/dsplat/.../Concerns/BuildsUserTokenResponse.php:44`、
+  `vendor/dsplat/.../Http/Controllers/UserAuthController.php:139`）
+- **现状（当时）**：
+  | 字段 | 声称 | 实际 |
+  |---|---|---|
+  | `refresh_token` | 7 天会话凭证 | `Str::random(60)` **当场编**，不赋值、不入库、不校验、无端点 |
+  | `auth_token_expires_in: 1800` | 30 分钟过期 | `createToken('auth_token')` **不传 expiresAt** → `expires_at` 恒 NULL，**永不过期** |
+  | `refresh_token_expires_in: 604800` | 7 天 | 硬编码元数据，无人 enforce |
+  也就是说**「会话」这个概念从来没建过，而登录响应长得像建过**。
+  全仓唯一的 `refresh_token` 数据库列在 `OauthAccount`（存的是 **OAuth 供应商**给的
+  refresh token，与自建登录无关）。
+- **后果**：集成方照着响应做就会走到死路 —— LuCI 就在调不存在的 `/auth/refresh-token`。
+  且因为三个值都不经服务器校验，**只看响应形状的话改前改后一模一样**，
+  这正是它能骗这么久的原因。
+- **✅ 已修**（`mynet_back f60cf1c` + `mynet_agent fa7497a/b40d472`）：
+  1. **建在已有的 `user_sessions` 上**，不另起表 —— 框架登录时就写它
+     （`SessionService::recordSession`：token_id/session_id/device_fingerprint/
+     is_anomalous），另起表会造出两个「会话」，`/mfa/sessions` 就对不上。
+     加 5 列：`refresh_token_hash`（**sha256，只存哈希**）、`refresh_token_prev_hash`、
+     `refresh_expires_at`、`refresh_rotated_at`、`revoked_at`（写不物理删，留痕）。
+  2. **轮转 + 重用检测**：每次刷新换新 refresh token，旧值挪进 prev_hash；
+     拿「已轮转过」的旧 token 再来刷新 = 泄漏或状态错乱信号 →
+     **当场吊销整个会话并清哈希**。不轮转的话 7 天固定，泄漏窗口太长。
+  3. **不改 vendor、不动路由顺序**：用**容器绑定**把
+     `UserAuthController` 指到子类 —— `Route::getController()` 是
+     `$this->container->make($class)`（`Illuminate\Routing\Route::getController`）。
+     不能靠改路由：`RouteCollection` 同 URI **先注册者胜**，而 auth 路由由框架
+     ServiceProvider 加载，顺序不受我们控制。效果是**登录响应形状不变、值变真**，
+     GUI/LuCI 无需跟着改解析。
+  4. 客户端（`mynet_agent`）：`credential.json` 成为**会话存储**（0600，
+     与 LuCI 侧 `/etc/mynet/conf/credential.json` 同路径同字段），
+     `backClient` 在 401 时自动续期并**立刻落盘轮转后的新值**（只更新内存的话
+     下次续期会撞重用检测、把整个会话吊销 —— 这就是「要轮转就必须有持久化」的因果）。
+  5. `logout` 先 POST `/api/v1/auth/revoke-session` 再删本地文件：
+     只删本地文件不叫登出，只是忘了。
+- **实测（真 staging）**：登录 → credential 里 `refresh_token` 60 字符、
+  两个 `expires_at` 都落盘 → 续期成功且两对 token 都换过 →
+  拿轮转前的旧值再续 → `401 REFRESH_TOKEN_REUSED` 且会话被吊销、哈希被清 →
+  同会话的新 token 也随之失效。
+- **教训（两层）**：
+  1. **响应里的字段名不等于契约。** 三个字段都出现在响应里、都被前端解析，
+     而没有一个被服务器校验。核实契约要去读**实现**（有没有入库、有没有 enforce），
+     不能读响应示例。
+  2. **短测暴露不了这类 bug。** agent 侧第一版漏存 `refresh_token`，
+     而「一条命令几分钟跑完」时 30 分钟 access token 够用 —— 一切正常。
+     只有把**产物读回来核对**才发现 `refresh_token = <0 字符>`。
+     验收要看落盘结果，不能只看命令退出码。
+- **优先级**：🔴 P0（会话/认证的地基）→ ✅ 已修
+
 #### CPI-64. `setsid nohup` 起的守护进程活不过 SSH 会话 —— Phase 6 的绿是**会话依赖**的
 - **现象**：装服务前复查，两台上 gnb 都不见了、`gnb_tun` 消失。journal：
   ```
