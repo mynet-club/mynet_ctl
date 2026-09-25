@@ -208,8 +208,12 @@ CPI-62 缺 OS 路由 / CPI-54 授权绕过-安全）。
 
 **仍未达成 / 已知缺口**（不假装完成）：
 
-- **CPI-63**：mynetd 非 root 读不到 `0600 root:root` 的 `gnb.map`，
-  心跳里 `connected_peers` / `rx_bytes` / `tx_bytes` 恒 0（接口状态正常）。监控面缺数据。
+- ~~**CPI-63**：mynetd 非 root 读不到 `0600 root:root` 的 `gnb.map`~~
+  → ✅ **2026-09-25 已解**（用户裁定：节点模式 mynetd 以 root 跑，`mynet_agent 10f7e22`）。
+  实测 `connected_peers=1`、`rx/tx=4116`（此前恒 0），完整监控链
+  gnb ctl block → `mynet metrics` → 心跳 → MariaDB 首次打通。
+  顺带把 `bundle_changed` 接成完整生命周期（`refresh-config → service start → apply --auto`），
+  实测从 back 触发 `bundle/publish` 后节点**零人工干预**跑完三步、隧道未断。
 - **CPI-60**：`RouteController::getRequests()` 是 TODO 桩，GUI 里看不到待批准申请。
 - **CPI-61**：`mynet setup` 对 gnb 节点生成 x25519 密钥（类型错），Phase 6 是用
   `gnb_crypto` 外部生成后写进 `conf/mynet.conf` 的。
@@ -217,6 +221,8 @@ CPI-62 缺 OS 路由 / CPI-54 授权绕过-安全）。
   `/etc/wireguard/<iface>.conf`，路径断点与 gnb 同构（gnb 侧已修，wg 侧待 install 阶段）。
 - **V1-6 命令闭环**未在真环境复验（H6 的 back_face 密钥已就位、`X-Node-Verified` 已修，
   前置条件满足了，但这一轮没跑命令下发）。
+- **节点侧尚未装成 systemd 服务**：两台验证机上 mynetd 是手工 `setsid nohup` 起的，
+  重启机器不会自动拉起。单元已写好（`deploy/systemd/mynetd.service`），待 `mynet install` 落地。
 - **真实 NAT 穿透 / path MTU / 吞吐**未验：两台节点机在同一 LAN，属 1→10 范畴。
 
 ---

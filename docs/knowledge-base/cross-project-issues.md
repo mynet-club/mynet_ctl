@@ -583,16 +583,39 @@
 - **优先级**：🔴 P0（0→1 硬阻断）→ ✅ 已修
 
 #### CPI-63. mynetd 非 root 读不到 `gnb.map` → 心跳里 peers/rx/tx 恒 0
-- **位置**：gnb 以 root 跑并把 `gnb.map` 建成 `0600 root:root`；mynetd 是非 root
+- **位置**：gnb 以 root 跑并把 `gnb.map` 建成 `0600 root:root`；mynetd 原是非 root
   （它启动时自己就打印「mynetd 无需 root」）
-- **现状**：CPI-57 修好后接口状态正常上报了，但 `GetAllPeers()` 读不到 ctl block
+- **现状（当时）**：CPI-57 修好后接口状态正常上报了，但 `GetAllPeers()` 读不到 ctl block
   （`open ctl block error`），于是走降级分支：报接口在、**不报 peer 数与流量**。
   实测 `node_monitor_snapshots` 里 `connected_peers=0`、`rx_bytes=0`、`tx_bytes=0`。
-- **这是有意的降级而非 bug**（少报数字只是数据不全，误报离线才是状态错误 —— 见 CPI-57），
-  但**监控面确实缺数据**。
-- **待定方案**（需要用户裁定）：① mynetd 提权跑；② 让 gnb 的 map 可组读
-  （需改 gnb 或用 umask/ACL 包一层）；③ 由 root 的旁路采集器读 ctl block 再喂给 mynetd。
-- **优先级**：🟡 P2（不阻断 0→1，但监控不完整）
+- **根因澄清**：那条「mynetd 无需 root」的提示**是模式盲的**。
+  `dev-plan.md` 的 D-8 原文是「去掉强制 root（**console 模式**）」，D-12 定义 console 模式为
+  「无 WS、无节点身份、无 presence、无 commands[]…非 root」。而我们跑的是**节点模式**
+  （配了 `MYNET_GATEWAYS`），要 ① 起 gnb（建 tun 需 CAP_NET_ADMIN）② apply 写内核路由
+  ③ 读 gnb.map —— 三件都要特权，且**失败时都不报错**，只静默降级。
+  所以这不是「要不要提权」的取舍，是提示写错了适用范围。
+- **✅ 已修**（`mynet_agent 10f7e22`，**用户 2026-09-25 裁定**）：
+  1. root 提示改为分模式：console 保持 D-8；节点模式高声 Warn 并列出三条后果；
+     未配 gateways 的纯本机模式不误用隧道话术。**不做 fail-fast** ——
+     mynetd 的核心职责（WS + 拉 bundle + 心跳）确实不需要 root，整体拒启会打断
+     合法的半特权部署与守护 V1-10 的 `bundle_pull.sh`。
+  2. 生产部署走 `deploy/systemd/mynetd.service`（root）。
+     ⚠️ 该单元**刻意不加** `ProtectSystem=strict` / `ProtectHome=true` / `PrivateTmp`：
+     它们分别会让 mynetd 写不了 `$MYNET_HOME/var`、读不到含节点私钥的 `mynet.conf`、
+     以及让 `/tmp` 与手工调试时看到的不是同一个。**不要照抄 gateway 单元那套硬化**。
+- **实测结果**（两台真节点机，mynetd 以 root 跑）：
+  - 节点侧 `mynet metrics --json`：`peers=1 peers_up=1 addrs=["10.0.0.16","64:ff9b::a00:10"] rx_bytes=4116 tx_bytes=4116`
+  - back 侧 `node_monitor_snapshots`：`connected_peers=1 total_peers=1 rx=4116 tx=4116`，各 109 行
+  - 完整监控链首次打通：gnb ctl block → `mynet metrics` → 心跳 → MariaDB
+- **顺带解开的**：`bundle_changed` 此前只跑 `refresh-config`（只写配置文件），
+  不重启驱动（gnb 的 `HotReload` 是 false，配置改了必须重启才生效）、也不装路由
+  （= CPI-62 那个形态）。现已接成 `refresh-config → service start → apply --auto`，
+  实测从 back 触发 `bundle/publish` 后节点**零人工干预**跑完三步，隧道未断、
+  gnb 进程数仍为 1（`Start()` 的存活短路生效，没起重复实例）。
+- **教训**：外部命令的退出码不是契约（见 CPI-58）；而「非 root 也能跑」这类说法
+  必须写清**在哪个模式下成立** —— 模式盲的能力声明会把一个部署错误
+  伪装成「设计如此」。
+- **优先级**：🟡 P2 → ✅ 已修
 
 ---
 

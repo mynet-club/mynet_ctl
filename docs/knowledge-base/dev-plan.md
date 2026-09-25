@@ -212,7 +212,7 @@ mynet（配置工具 + 系统能力）
 | D-5 | **echarts 按需引入** | `mynet_gui` | 那个 1MB chunk 压到 100–200 KB |
 | D-6 | **内化 `bin/mynet` 的 5 条命令链** | `conf/command.linux.json` + mynetd handler | `mynet` 降级为可选运维 CLI |
 | D-7 | **`mynet` 子命令收口**（配置工具 + 系统能力） | `cmd/` | `setup`/`install`/`uninstall`/`update`/`config` + **`detector`**/**`metrics`**/**`apply`**/**`service`**/**`driver`** + `status`/`monitor`/`refresh-*`/`check`/`nodes`/`platform` |
-| D-8 | **去掉强制 root**（console 模式） | `cmd/mynetd/main.go:98-100` | console 模式非 root 可跑 |
+| D-8 | **去掉强制 root**（**仅 console 模式**） | `cmd/mynetd/main.go` | console 模式非 root 可跑。⚠️ **2026-09-25 澄清适用范围**：本条只覆盖 console 模式（D-12：无 WS/无节点身份/不碰驱动）。**节点模式**（配了 `MYNET_GATEWAYS`）要起 gnb（建 tun）、写内核路由、读 `0600 root:root` 的 `gnb.map`，**必须 root**（用户裁定，见 CPI-63）。此前代码里那条「mynetd 无需 root」的提示是**模式盲**的，把部署错误伪装成了「设计如此」 |
 | D-9 | **补 `driver` 域**（列驱动 / 安装 / 升级）。与 D-7 **scope 互补**：`upgrade_service` 的 `Component` 已有 `mynet`/`gnb`/`wireguard` 三类，`mynet update` 走 `ComponentMynet`、`driver` 域走 `ComponentGNB/WG`。**共用一个实现，两个入口** | `internal/localapi/` + `internal/application/upgrade_service.go` | `POST /api/v1/driver/install` 与 CLI 都调 `upgrade_service` |
 | D-10 | **补 `POST /api/v1/nodes/switch`** | `internal/localapi/` | 首次向导最后一步 |
 | D-11 | **mynetd 默认即瘦**——它本身不含探测/写入/驱动/进程管理（见 §1.1）。只保留 **`embed` 构建开关**（是否 embed WebUI） | `internal/` | 桌面构建 = mynetd + embed；OpenWrt 构建 = mynetd 无 embed。**不再需要 `thin`/`noembed` 标签去裁业务** |
