@@ -355,6 +355,247 @@
 
 ---
 
+### 📝 Phase 6（两节点真互通）发现的缺陷（2026-09-25 记录，发现即记）
+
+> **共同点，也是这一批最该记住的一条**：下面 12 个缺陷，本地 189 个单元测试
+> **一个都没报**。因为它们全部停在「配置写出来了 / 接口返回 200 了」，
+> 没有一个真去起隧道、真去 ping、真去查库。
+> 0→1 的判据是「两节点真互通 + 心跳有数据」，只有跑到那一步才会现形。
+> 这正是 AGENTS.md §7.1 D2/D4 说的：测试要打真的，勾选要附实测输出。
+
+#### CPI-52. IP 池分配子系统整体未迁移（V2 迁移遗漏）
+- **位置**：`mynet_back/app/Modules/VPN/Models/IPPool.php`（迁移后是 29 行裸 Eloquent 类，**零方法**）
+- **现象**：`POST /api/v1/ippools` → 500 `Call to undefined method IPPool::getIPAddressGroup()`
+  （`IpPoolDomainService.php:354` ← `createIPGroup()` ← `:231 allocateToUser()`）
+- **根因**：调用方搬过来了、**被调方没搬**。旧仓 `mynet_main/app/Models/IPPool.php` 有 13 个方法约 500 行。
+- **阻断链**（每一环都实测过）：`ip_pools` 0 行 → `allocateNodeIpFromPool()` **静默 return**
+  （`NodeDomainService:1113-1131`，且只在 `app.debug` 时记日志，staging 是 false → 一声不响）
+  → `node_ips` 0 行 → 19 个节点全部 `node_ip=null` → `NetworkSemanticsProjector:59-72`
+  只从 `node_ips` 取 `IP_TYPE_VPN` → `interfaceAddresses` 空 → bundle 的 `network.addresses=[]`
+  → 两节点不可能互通。
+- **三处不能照搬**（照搬即复现 bug）：
+  1. **status 语义相反**：旧仓 `STATUS_ALLOCATED=0` / `STATUS_AVAILABLE=1` 且建池写 0，
+     而新表 `status` 默认 1、`allocateNodeIpFromPool` 查 `where('status',1)`
+     → 池建得出来却永远查不到，**症状与没修一模一样**。
+  2. **序号唯一性范围变了**：旧仓「Zone 内唯一，不同 Zone 可重复」，
+     新表 `ip_group_sequence_number` 是**全局 UNIQUE** → 按租户扫会每次撞唯一键。
+  3. 旧仓把最多 50 次重试圈在**嵌套事务**里，只会长时持锁；UNIQUE 约束本身就给了原子认领保证。
+- **✅ 已修**（`mynet_back aef8834`）：迁移 `getIPAddressGroup` + `tryCreateIPGroup` +
+  `findFirstAvailableSequence` + `calculateIPRangeFromSequence`。6 测试 / 23 断言，4 个变异全验证会红。
+- **未迁移**：`prefer_continuous`（旧仓 249-540 共 292 行连续空隙启发式）。
+  **不留「调不存在的方法」那种定时炸弹**：显式返回空 ips + 记 warning，
+  让 `allocateToUser` 走它本来就有的回退分支，响应里 `allocation_mode` 如实是 `'random'`。
+- **教训**：PHP 是动态派发，「调用方搬了、被调方没搬」**不会**在编译期或静态检查里暴露，
+  只会在真跑那条路时 500。迁移时要**按调用图逐个核实被调方存在**，别只看调用方。
+- **优先级**：🔴 P0（0→1 硬阻断）→ ✅ 已修
+
+#### CPI-53. gnb 最后一公里根本没实现（渲染格式 4 处错 + 生命周期 3 处错 + Start 零调用者）
+- **位置**：`mynet_agent/mynet/driver/gnb.go`
+- **现象**：`refresh-config` 退出码 0、文件也写了，但**隧道起不来**。写出的配置 gnb 解析后几乎是空的。
+- **渲染格式（4 处全错，每处都对着 C 源码核实）**：
+  | 我们写的 | gnb 要的 | 后果 | 证据 |
+  |---|---|---|---|
+  | `node <id>` | `nodeid <id>` | `strncmp("node 1","nodeid",6)` 不匹配 → **静默丢弃**，本机 uuid 没设上 | `gnb.go:303` vs `gnb_conf_file.c:293` |
+  | `<nodeID> <prefix>`（空格+CIDR） | `<uuid>\|<ip>\|<点分掩码>` | 分隔符不认 → `num!=3` → `continue`，**整份 route.conf 全被跳过** | `gnb.go:131` vs `gnb_conf_file.c:919-928` |
+  | 不写 address.conf | `<attrib>\|<uuid>\|<host>\|<port>` | 缺文件时 gnb 直接 return **不报错**，但节点没有任何对端传输地址 | `gnb_conf_file.c:50-63` |
+  | 不写 security/ 与 ed25519/ | 128/64 hex **无换行** | 读不到私钥就 `exit(0)`；裸 `read()` 要求读满，多一个换行都不行 | `gnb_keys.c:60-61,68-73,84-89,103,108-112` |
+- **route.conf 必须含本机自己那一行**：gnb 是靠 route.conf 里 `uuid==本机` 的那条
+  来设自己的 tun 地址的（`gnb_conf_file.c:938-946`）。bundle 的 `gnb.routes` 只含对端，
+  本机地址在 `gnb.nodes` 里 —— 所以渲染要以 `nodes` 为主源。
+- **生命周期（3 处全错）**：
+  1. `Start()` = `gnb_ctl -b <conf>/gnb.map`。`-b` 是 `--ctl-block`（指定读哪块共享内存），
+     **不是启动命令**；且 gnb_ctl 没有 `-s`/`-a` 时只打开映射就 `return 0`，
+     文件不存在也只打印 error 后 `exit(0)` → **Start() 会假装成功**。
+     真正的守护进程是 `gnb -c <conf_dir>`（`gnb_argv.c:899`）。
+  2. `Stop()` = `gnb_ctl -k`，而 gnb_ctl 的 getopt 串是 `"b:n:csa:o46h"`（`gnb_ctl.c:102`），
+     long_options 里也没有 k —— **这个 flag 根本不存在**。
+  3. `IsProcessAlive()` = `pgrep -f gnb_es`，而 `gnb_es` 是上游的 endpoint scanner，
+     **不是**主守护进程。两种错：本机跑着 gnb 却报 not alive；别处恰好有 gnb_es 时误报 alive。
+- **`Start()`/`Stop()` 全仓零调用者**（只有 `Reload()` 调 `Start`，而 `Reload()` 也零调用者），
+  `mynet service` 是返回 1 的桩 → 配置写得再对也没人起进程。
+- **对照 wireguard**：`wg-quick up <iface>` 语义是**对的**，但同样没人调用，
+  且写 `var/wg.conf` 而 wg-quick 读 `/etc/wireguard/<iface>.conf` —— 路径断点同构。
+  差异只在：wg 的 Start 语义对，gnb 的 Start 语义错。
+- **✅ 已修**（`mynet_agent a1c1514`）：渲染器全部重写、`Start()` 改 `gnb -c`、
+  `Stop()` 改读 pid 文件发 SIGTERM、`IsProcessAlive()` 改按自己的 pid + `kill -0`、
+  实现 `cmdService` 给 `Start()` 找到调用者。14 个新测试，7 个变异全验证会红。
+  `daemon on` 是两种模式都对的选择：自己起时 gnb 双 fork 父进程立即 `exit(0)`
+  （`gnb.c:397-399`），被 systemd 以 `--systemd` 拉起时该键被忽略、保持前台
+  （`gnb_argv.c:439-440` + `gnb_conf_file.c:458`），正是 E-2 那个模型。
+- **wg 那条路径断点仍未修**（要等 install 阶段落地），已写进 `cmdService` 注释，不假装能用。
+- **教训**：「退出码 0 + 文件写出来了」不等于「配置是对的」。
+  渲染器必须有**对着对端解析器源码**的契约测试，且夹具要用真数据形状。
+- **优先级**：🔴 P0（0→1 硬阻断）→ ✅ 已修（wg 侧 🟡 待 install 阶段）
+
+#### CPI-54. 授权绕过：软删除的行照样进 bundle（安全）
+- **位置**：`NetworkSemanticsProjector.php:176,185,190` + `BundleEnvelopePublisher.php:197,262`（共 6 处）
+- **根因**：这 6 处用了**无参** `withoutGlobalScopes()`。它的原意（见 `:171` 注释）是绕开
+  TenantScope —— 节点通道走 HMAC、没有「当前租户」上下文，`BelongsToTenant` 会
+  fail-closed 成 `WHERE 1=0` 让投影恒空。但无参形式会把**所有**全局作用域一起摘掉，
+  包括 `SoftDeletingScope`。而 Node / NodeIP / NodeKey / Route 四个模型**全都** use SoftDeletes。
+- **后果最严重的是 Route**：`RouteDomainService::deleteRoute()` 走 `$route->delete()`，
+  软删只置 `deleted_at`、**status 仍是 STATUS_ENABLED** → 撤销授权后该行照样命中
+  projector 的 `where('status', ENABLED)` → 对端的公钥、路由、endpoint 继续下发，
+  **隧道照样能建**。这是授权绕过，不是显示问题。
+- **不一致本身就是线索**：projector 取 NodeIP 那处手工补了 `->whereNull('deleted_at')`，
+  但 publisher 取**对端** NodeIP 那处没补，Route 与 Node 两处也都没补 —— 逐个手工补、补漏了。
+- **✅ 已修**（`mynet_back cdf9130`）：6 处统一改成 `withoutGlobalScopes([TenantScope::class])`，
+  只摘租户作用域，让 SoftDeletingScope 恢复生效。
+- **教训**：`withoutGlobalScopes()` **永远应该带参数**。无参形式是「我不知道有哪些作用域，
+  全都关掉」—— 而 SoftDeletingScope 正是最不该被顺手关掉的那个。
+- **优先级**：🔴 P0（安全）→ ✅ 已修
+
+#### CPI-55. ifname 超长，会被 gnb 静默截断
+- **位置**：`BundleEnvelopePublisher.php:131,287`（原为 `'gnb_tun_'.$nodeId`）
+- **根因**：node_id 是 16 位，拼出来 **24 字符**。而 gnb 的 ifname 缓冲区是 16 字节且
+  硬截断到 15 字符（`gnb_conf_file.c:275-277`：`memset(…,0,16)` + `strncpy(…,16)` +
+  `ifname[15]='\0'`），Linux 的 `IFNAMSIZ` 同样是 16。
+- **后果**：接口被**静默**建成 `gnb_tun_2132596` 这种谁也没预期的名字，
+  之后所有按接口名做的操作（加地址、加路由、查状态）全对不上，**且不报错**。
+- **✅ 已修**（`mynet_back cdf9130`）：改为常量 `GNB_IFNAME = 'gnb_tun'`
+  （正是 gnb 自己在 Linux 上的默认名，`gnb_argv.c:224`）。agent 侧另加一道
+  `checkGnbIfname()` 显式拒绝 >15 字符，不让它静默截断。
+- **教训**：跨语言/跨进程的定长缓冲区，**生产端必须知道消费端的上限**。
+  一台主机跑多个 gnb 实例需要另一套短后缀方案，属未实现，不假装支持。
+- **优先级**：🟠 P1 → ✅ 已修
+
+#### CPI-56. 空 `peer_public_keys` 编码成 `[]`（同一规则两处实现，只修了一处）
+- **位置**：`BundleEnvelopePublisher.php:283`（直接拼 PHP 数组，**不经过** `GnbIdentity` 值对象）
+- **根因**：这个坑此前修过（PHP 空关联数组 `json_encode` 成 JSON 数组 `[]`，
+  Go 的 `map[string]string` 解码直接失败，症状是「越新的节点越拿不到配置」），
+  但**只修在 `GnbIdentity::toArray()` 里**。publisher 是另一条生产路径，一直没修。
+- **为什么没被发现**：agent 侧加了解码兜底（`bundle_envelope.go` 的
+  `GnbIdentity.UnmarshalJSON` 容忍 `[]`）—— **正好把 back 侧的缺陷掩盖了**。
+- **✅ 已修**（`mynet_back cdf9130`）：抽成 `GnbIdentity::peerMapForJson()` 静态方法，
+  两条生产路径共用，消除「同一条规则两处实现」这个它能活下来的根因。
+- **教训**：一端加了容错，另一端就会失去暴露缺陷的机会。
+  容错要加，但**生产端不该靠对端兜** —— 契约测试必须钉生产端的输出形状。
+- **优先级**：🟠 P1 → ✅ 已修
+
+#### CPI-57. gnb 侧心跳不发 `vpn_interfaces`，被 back 判成离线（含一句没核实的错误假设）
+- **位置**：`mynet_agent/mynet/metrics_vpn.go:60-70`（`probeGNB`）+ `cmd/mynetd/heartbeat.go`
+- **现象**（Phase 6 实测，非常矛盾）：隧道 `ipv4 Direct Point to Point`、双向 ping 0% 丢包、
+  gnb 计数器 0→840 字节，而 back 侧 Redis `status=offline`、
+  `node_monitor_snapshots` **0 行**、`nodes.last_seen` NULL。
+- **根因链**：`probeGNB` 里 `projectPeers("gnb", "", peers)` 把接口名**硬编码成空串**
+  → `heartbeat.go` 因 ifname 是 back 的 `required_with:vpn_interfaces`（空值会 422）
+  而整段跳过不发 → back 的 `isVpnInterfaceDown(null)` 第一行就是
+  `if (empty($vpnInterface)) return true;`（注释：「如果没有 VPN 接口信息，视为网络不可用」）
+  → `markNodeOffline()` 并**提前 return，连 node_monitor 都不处理**
+  （`NodeHeartbeatController.php:88-108`）。**一个原因同时造成全部四个症状。**
+- **最该记住的一点**：`heartbeat.go` 里原本写着
+  「back 的 `isVpnInterfaceDown(null)` 不会因此判节点下线」——
+  **那是没核实的错误假设，实测正好相反**。典型 D5。
+- **更讽刺的是**：`probeWireGuard` 早就用一大段注释写下了这个坑并正确处理了
+  （`metrics_vpn.go:29-39`：「读不到 peer 也要报接口存在，少报数字只是数据不全，
+  误报离线是**状态错误**」）—— 同一条红线，wg 侧学到了、gnb 侧没跟上。
+- **✅ 已修**（`mynet_agent b08e65c`）：`probeGNB` 对齐 `probeWireGuard` 的形态。
+  接口名从 bundle 的 `gnb.options.ifname` 取（那正是我们渲染进 node.conf 的值，
+  权威且读取不需特权），存在性与 UP 用 `net.InterfaceByName` 判
+  （标准库、跨平台、不 exec、不要 root）。读不到 peer 时照样报接口在。
+  「gnb 侧拿不到接口名」这个前提也不成立了 —— 不是从 gnb_ctl 拿，是从 bundle 拿。
+- **教训**：写「对端不会因此怎样」这类断言时，**必须去读对端源码**。
+  同一个坑在同一个文件里被 wg 侧记录过，gnb 侧却重踩 —— 说明教训没有横向传播。
+- **优先级**：🔴 P0（0→1 硬阻断）→ ✅ 已修
+
+#### CPI-58. `gnb_ctl` 两处「exit 0 但根本没干活」
+- **位置**：`mynet_agent/mynet/driver/gnb.go` 的 `IsAvailable()` / `GetAllPeers()` / `Refresh()`
+- **三条都是退出码 0 而没干活**（全部实测）：
+  1. 缺 `-b`：gnb_ctl 只打印 **usage** 就 `exit 0` → `IsAvailable()` 恒为真，
+     `GetAllPeers()` 把那段 usage 当状态解析 → **0 个 peer**
+  2. 缺 `-c`：只输出头部（`conf_dir`/`node_num`/`wan*_port`），**没有任何 node 段**
+  3. `gnb.map` 是 `0600 root:root`（gnb 以 root 跑），mynetd 非 root 读到
+     `open ctl block error`，而 gnb_ctl **仍然 exit 0**
+- **后果**：`mynet metrics` 一直报 `vpn=[{"driver":"gnb","up":true}]` 却没有 peers ——
+  那个 `up:true` 来自**一段帮助文本**。
+- **✅ 已修**（`mynet_agent b08e65c`）：改为 `gnb_ctl -b <ConfDir>/gnb.map -c -s`，
+  并用「输出里必须有 `node_num[`」作为真读到状态的判据 ——
+  它是 `gnb_ctl_dump_status` 的头部字段，usage 与错误信息里都没有。
+- **教训**：外部命令的**退出码不是契约的一部分**，除非你验过它在失败路径上也非零。
+  很多 CLI 在「参数不对」时打 usage 然后 `exit 0`。
+- **优先级**：🟠 P1 → ✅ 已修
+
+#### CPI-59. `mynetd -once` 的竞态：可能在启动拉取完成前就退出
+- **位置**：`mynet_agent/cmd/mynetd/main.go`（启动拉取在 goroutine 里，`-once` 分支无同步）
+- **现象**（Phase 6 真机实测）：同一条命令在两台机器上，节点 B 落盘了
+  `var/bundle.json`（1453 字节），节点 A 的 `var/` **全空** ——
+  两边退出码都是 0，A 的日志停在 `transport: connected` 就没了，**没有任何错误行**。
+- **为什么严重**：`-once` 是**验收脚本用来当一次性探针**的模式（flag 说明写的就是
+  「只探测一次心跳就退出（调试）」）。一个不确定的探针比没有探针更糟 ——
+  它会随机给出「通过」和「什么都没发生」两种结果，而两者退出码相同。
+- **且它已经在糊别的测试**：`scripts/e2e/bundle_pull.sh` 此前在 `-once` 后 `sleep 1`，
+  然后 `elif before == after → ok「文件未变」` —— 而 `before == after` 在
+  「拉取根本没发生」时同样成立 → 判过，**等于没测**。
+- **✅ 已修**（`mynet_agent 1e9ca89`）：加 `bundlePullDone` channel，goroutine 退出时 close，
+  `-once` 分支 select 等它（上限 `bundleSyncTimeout`=15s，超时明确 Warn）。
+  修复后在原先失败的节点 A 上连跑 3 次，3/3 落盘。`bundle_pull.sh` 的 sleep 去掉、
+  弱断言改成「日志里必须出现『启动拉取 bundle』，否则判竞态复发」。
+- **教训**：本文件此前已踩过一次同形状的坑（`:78-80` 注释：心跳 reporter 还没绑上就跑完，
+  表现为「采了但没上报」）—— **同一个形状的静默失败，第二次**。
+  「一次性探针」模式必须等所有异步启动动作收敛后才返回。
+- **优先级**：🟠 P1 → ✅ 已修
+
+#### CPI-60. `RouteController::getRequests()` 是 TODO 桩，导致验收脚本假绿
+- **位置**：`mynet_back/app/Modules/VPN/Controllers/Api/V1/RouteController.php`
+- **现状**：方法体是 `// TODO: 实现从数据库获取申请数据` + 硬编码返回
+  `['pending' => [], 'sent' => []]`，**从不查库**，HTTP 200。
+- **后果 1（产品）**：GUI 里永远看不到待批准的连接申请。
+- **后果 2（验收）**：`scripts/e2e/zero_to_one.sh` Phase 4 那条
+  「✓ B 能列到连接申请（HTTP 200）」是**假的绿** —— 端点返 200 + 空数组，
+  断言只看状态码就过了。我自己写的脚本被这个桩骗了。
+- **旁证**：库里两条 `node_route_requests` 都还是 `pending`（一条是 9-24 23:51 的旧跑），
+  说明 `accept-request` 这步**从来没被任何脚本调用过**。
+- **未修**：Phase 6 绕过了它（`send-request` 的响应里直接带 `id`，
+  `accept-request/{id}` 吃 id 即可）。但产品面这个洞还在。
+- **教训**：断言「能列到」就必须断言**列表内容**，不能只断言状态码。
+  一个返回 200 + 空集合的桩，能骗过所有只看状态码的验收。
+- **优先级**：🟠 P1（产品面）· 验收脚本侧已改为不依赖它
+
+#### CPI-61. `mynet setup` 对 gnb 节点生成的是 x25519 密钥（类型错）
+- **位置**：`mynet_agent/mynet/cmd_setup.go:42-54`
+- **现状**：`ecdh.X25519().GenerateKey()`，输出 `algorithm: x25519`、私钥 64 hex。
+  而 **GNB 需要 Ed25519 的 128-hex 私钥**（`clamp(SHA512(seed))` 布局）。
+- **后果**：用 `mynet setup` 给 gnb 节点生成的密钥**用不了**。
+  Phase 6 是用 `gnb_crypto -c -p … -k …` 在节点机上生成的（那才是对的布局）。
+- **注**：`mynet/keys/node_face.go:62` 的注释与 `4cb8b01` 的修复都说明
+  签名器**已经**能吃 128-hex 布局，缺的只是 setup 侧不会生成它。
+- **未修**：不在 Phase 6 关键路径上（密钥可以外部生成后写进 `conf/mynet.conf`）。
+- **优先级**：🟡 P2
+
+#### CPI-62. bundle 的 `network.routes` 硬编码为空 → 隧道通了但流量不进隧道
+- **位置**：`BundleEnvelopePublisher.php`（`compose()` 里 `'routes' => []`）
+- **现象**（Phase 6 实测，最迷惑的一环）：`gnb_ctl -s` 里对端
+  `ipv4 Direct Point to Point`、`addr4_ping_latency_usec 832`、`crypto_key` 非零、
+  `static_address_list num[1]` —— **隧道已建好、PONG 正常、会话密钥已协商**，
+  但 ping 对端 overlay IP **100% 丢包**，gnb 的 in/out 计数恒 0。
+- **根因**：`ip route get 10.0.0.16` 命中的是**默认路由**（`via 192.168.0.1 dev ens18`），
+  包从物理口出去被 LAN 网关丢掉，根本没进 `gnb_tun`。而 `ip route show dev gnb_tun` 是空的
+  —— tun 地址是 /32，Linux 只建 local 路由、不建 link 路由；gnb 自己也**不写内核路由表**。
+- **两份 routes 是两回事**：`gnb.routes` 填了（喂 gnb 的 route.conf，管 overlay 内部转发），
+  `network.routes` 是空的（喂 agent 的 `refresh-routes` → `apply`，管**内核路由表**）。
+- **✅ 已修**（`mynet_back fa1139a`）：gnb 分支按 `$peerTun` 生成 /32 主机路由
+  （`dev=gnb_tun`，不带 `via` —— tun 是点对点接口，带网关 `ip route` 会拒）。
+  **只加对端的 /32，绝不动对端整个 /24** —— 这是
+  `node-connectivity-checklist.md` 里「路由劫持」那条教训。
+  wireguard 分支不加：wg-quick 会按 peer 的 AllowedIPs 自动装路由。
+- **教训**：「隧道建立」与「流量进隧道」是两件事，中间隔着一张内核路由表。
+  只验前者会得到「一切正常但完全不通」的现场。
+- **优先级**：🔴 P0（0→1 硬阻断）→ ✅ 已修
+
+#### CPI-63. mynetd 非 root 读不到 `gnb.map` → 心跳里 peers/rx/tx 恒 0
+- **位置**：gnb 以 root 跑并把 `gnb.map` 建成 `0600 root:root`；mynetd 是非 root
+  （它启动时自己就打印「mynetd 无需 root」）
+- **现状**：CPI-57 修好后接口状态正常上报了，但 `GetAllPeers()` 读不到 ctl block
+  （`open ctl block error`），于是走降级分支：报接口在、**不报 peer 数与流量**。
+  实测 `node_monitor_snapshots` 里 `connected_peers=0`、`rx_bytes=0`、`tx_bytes=0`。
+- **这是有意的降级而非 bug**（少报数字只是数据不全，误报离线才是状态错误 —— 见 CPI-57），
+  但**监控面确实缺数据**。
+- **待定方案**（需要用户裁定）：① mynetd 提权跑；② 让 gnb 的 map 可组读
+  （需改 gnb 或用 umask/ACL 包一层）；③ 由 root 的旁路采集器读 ctl block 再喂给 mynetd。
+- **优先级**：🟡 P2（不阻断 0→1，但监控不完整）
+
+---
+
 ## 📐 架构设计决策（非 bug，易被误判）
 
 #### mynet_gui 生产 VITE_API_BASE_URL=https://my.mynet.club（同源反代）

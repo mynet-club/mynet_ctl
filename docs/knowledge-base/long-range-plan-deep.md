@@ -158,6 +158,69 @@ T3-5（G4 外网可用）、T4-4（双 gateway）、T4-6（真节点压测）、
 | V0-5 | 人工闸门 H1/H4/H7 三个**裁定**类 | ✅ 已裁定（见 §3 与 `mynet-overview.md` §15） |
 | V0-6 | 反纸面达成五条 D1–D5 写进 `AGENTS.md` §7.1 DoD | ✅ 已完成 |
 
+---
+
+### 🎯 0→1 达成（2026-09-25，真 staging + 两台真节点机）
+
+**判据**：注册 → 建节点 → 交换公钥 → 加好友 → 授权连接 → **两节点真互通** → 心跳/监控有数据。
+**七项全部达成**，且互通附三重独立证据（不是只看 ping 通）。
+
+| 环节 | 实测证据 |
+|---|---|
+| 注册 / 登录 / 租户上下文 | `zero_to_one.sh` Phase 0-1b 全绿（`--preflight-only` 复验 4/4，gateway `conns=2`） |
+| 建节点 + **IP 池分配** | `POST /ippools` → 201，A 得序号 1 / `10.0.0.10-15`，B 得序号 2 / `10.0.0.16-21`；建节点后 `node_ip` = `10.0.0.10` / `10.0.0.16`（此前 19 个节点全 `null`，见 CPI-52） |
+| 交换公钥 | 密钥在**节点机上**用 `gnb_crypto` 生成，只上传公钥（`PUT /nodes/{id}/keys`，`key_type=gnbkey`）；响应不含 `private_key`，私钥全程未出节点 |
+| 加好友 | A/B 已是好友（`social/data` 里 `friend_user_id` 对得上） |
+| 授权连接 | `send-request` → id `5028568742677534`，`accept-request/{id}` → 200 `status=accepted`。**这一步此前任何脚本都没调过**（库里两条旧申请至今 `pending`） |
+| bundle 下发 | 两节点各拉到 1495 字节 envelope，含 `peer_public_keys`(1) / `static_nodes`(1) / `network.routes` / `gnb.nodes`(self+peer) |
+| 渲染 gnb 原生配置 | `var/gnb/` 下 `node.conf`(`nodeid`) + `route.conf`(2 行三段点分) + `address.conf`(4 段) + `security/*.private`(128B) + `security/*.public`(64B) + `ed25519/<peer>.public`(64B) |
+| 起隧道 | `mynet service start gnb` → `started gnb`（0-1s 返回）；`service status` → `running=true`；`gnb_tun` UP 且持有平台下发的 overlay 地址 |
+| 装 OS 路由 | `refresh-routes` → plan → `sudo mynet apply` → `ip route get <对端>` = `dev gnb_tun src <本机>` |
+| **两节点真互通** | 双向 `ping -c 5` **0% 丢包**（A→B avg 0.551ms，B→A avg 0.535ms） |
+| 心跳/监控有数据 | `node_monitor_snapshots` 各 8 行；`nodes.node_status` 1→**2**、`last_seen` 已写；Redis `status=**online**` + `node:vpn_interfaces` = `{"type":"gnb","ifname":"gnb_tun","status":"up","ip":"10.0.0.10/32"}` |
+
+**互通的三重独立证据**（缺一条都不算数）：
+
+1. **双向 ping 0% 丢包**
+2. **在 `gnb_tun` 上 tcpdump 抓到成对的 ICMP request/reply** —— 抓的是隧道接口本身，
+   绕过隧道就不会有包。overlay 的 `10.0.0.0/8` 与 underlay 的 `192.168.0.0/24` 不重叠，
+   所以也不存在「从底层绕过去」的捷径。
+3. **gnb 自己的 in/out 计数器 ping 前后增长**（`3024/3024 → 3864/3864`，两端一致）
+
+另附 `gnb_ctl -b <map> -c -s` 双向报 `ipv4 Direct Point to Point`
+（gnb 自己的在线判据，PONG 位置位才打这行；`InDirect` 表示走中继）
+与 `addr4_ping_latency_usec` 实测值。
+
+**可重跑**：`mynet_agent/scripts/e2e/phase6_tunnel.sh`，实测 **38 通过 / 0 失败**。
+
+```sh
+P6_NODE_A=192.168.0.32 P6_NODE_B=192.168.0.16 \
+P6_ID_A=<A 的 node_id> P6_ID_B=<B 的 node_id> \
+P6_IP_A=10.0.0.10 P6_IP_B=10.0.0.16 \
+  sh scripts/e2e/phase6_tunnel.sh
+```
+
+**这一轮撞出 12 个缺陷（CPI-52 ~ CPI-63），其中 5 个是 0→1 硬阻断**
+（CPI-52 IP 池未迁移 / CPI-53 gnb 最后一公里未实现 / CPI-57 心跳被判离线 /
+CPI-62 缺 OS 路由 / CPI-54 授权绕过-安全）。
+**本地 189 个单元测试一个都没报** —— 因为它们全部停在「配置写出来了 / 接口返回 200 了」，
+没有一个真去起隧道、真去 ping、真去查库。这是 §7.1 D2/D4 最直白的一次印证。
+
+**仍未达成 / 已知缺口**（不假装完成）：
+
+- **CPI-63**：mynetd 非 root 读不到 `0600 root:root` 的 `gnb.map`，
+  心跳里 `connected_peers` / `rx_bytes` / `tx_bytes` 恒 0（接口状态正常）。监控面缺数据。
+- **CPI-60**：`RouteController::getRequests()` 是 TODO 桩，GUI 里看不到待批准申请。
+- **CPI-61**：`mynet setup` 对 gnb 节点生成 x25519 密钥（类型错），Phase 6 是用
+  `gnb_crypto` 外部生成后写进 `conf/mynet.conf` 的。
+- **wireguard 那条链**：`refresh-config` 写 `var/wg.conf` 而 `wg-quick` 读
+  `/etc/wireguard/<iface>.conf`，路径断点与 gnb 同构（gnb 侧已修，wg 侧待 install 阶段）。
+- **V1-6 命令闭环**未在真环境复验（H6 的 back_face 密钥已就位、`X-Node-Verified` 已修，
+  前置条件满足了，但这一轮没跑命令下发）。
+- **真实 NAT 穿透 / path MTU / 吞吐**未验：两台节点机在同一 LAN，属 1→10 范畴。
+
+---
+
 ### V1 · 拱顶石：gateway 可执行化
 
 **出口判据 G-V1**：`mynet_gateway` 二进制能起、能监听 8710、节点能建 WS 连接、
