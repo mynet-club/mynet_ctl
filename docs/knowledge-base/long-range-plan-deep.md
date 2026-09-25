@@ -214,15 +214,25 @@ CPI-62 缺 OS 路由 / CPI-54 授权绕过-安全）。
   gnb ctl block → `mynet metrics` → 心跳 → MariaDB 首次打通。
   顺带把 `bundle_changed` 接成完整生命周期（`refresh-config → service start → apply --auto`），
   实测从 back 触发 `bundle/publish` 后节点**零人工干预**跑完三步、隧道未断。
-- **CPI-60**：`RouteController::getRequests()` 是 TODO 桩，GUI 里看不到待批准申请。
-- **CPI-61**：`mynet setup` 对 gnb 节点生成 x25519 密钥（类型错），Phase 6 是用
-  `gnb_crypto` 外部生成后写进 `conf/mynet.conf` 的。
+- ~~**CPI-60**：`RouteController::getRequests()` 是 TODO 桩~~
+  → ✅ **已修**（`mynet_back 884cf9c` + `mynet_agent e5f3657`）。
+  ⚠️ 同时**修正我先前对影响的高估**：GUI 走的是 `/route/data` 的 `requests` 子对象
+  （`useRoutes.ts:70/73`），一直是好的；`GET /route/requests` 全仓**没有调用方**，
+  产品面影响接近零。真正被骗到的是 `zero_to_one.sh` Phase 4 —— 它只断言状态码，
+  于是「✓ B 能列到连接申请」是假的绿，而且**从来没调过 `accept-request`**。
+  现在断言内容 + 补上批准 + 补齐 Phase 3 的可重入性，真 staging 实测 21/0。
+- ~~**CPI-61**：`mynet setup` 对 gnb 节点生成 x25519 密钥~~
+  → ✅ **已修**（`mynet_agent 38de1b9`）：加 `--vpn-type`（默认 gnb），
+  并顺带修掉 `ToHex()` 的 GNB 布局错误（编码了未 clamp 的 SHA512；
+  该错因 `ToHex` 生产零调用者 + 签名侧会再 clamp 而一直藏着）。
+  真机对照 `gnb_crypto` 产物，结构同构。
 - **wireguard 那条链**：`refresh-config` 写 `var/wg.conf` 而 `wg-quick` 读
   `/etc/wireguard/<iface>.conf`，路径断点与 gnb 同构（gnb 侧已修，wg 侧待 install 阶段）。
 - **V1-6 命令闭环**未在真环境复验（H6 的 back_face 密钥已就位、`X-Node-Verified` 已修，
   前置条件满足了，但这一轮没跑命令下发）。
-- **节点侧尚未装成 systemd 服务**：两台验证机上 mynetd 是手工 `setsid nohup` 起的，
-  重启机器不会自动拉起。单元已写好（`deploy/systemd/mynetd.service`），待 `mynet install` 落地。
+- **节点侧尚未装成 systemd 服务**：两台验证机上 mynetd 是手工 `setsid nohup` 起的
+  （现已改为 root 跑），重启机器不会自动拉起。单元已写好
+  （`deploy/systemd/mynetd.service` + `mynetd.env.example`），待 `mynet install` 落地。
 - **真实 NAT 穿透 / path MTU / 吞吐**未验：两台节点机在同一 LAN，属 1→10 范畴。
 
 ---

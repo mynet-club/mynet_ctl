@@ -537,30 +537,69 @@
 
 #### CPI-60. `RouteController::getRequests()` 是 TODO 桩，导致验收脚本假绿
 - **位置**：`mynet_back/app/Modules/VPN/Controllers/Api/V1/RouteController.php`
-- **现状**：方法体是 `// TODO: 实现从数据库获取申请数据` + 硬编码返回
+- **现状（当时）**：方法体是 `// TODO: 实现从数据库获取申请数据` + 硬编码返回
   `['pending' => [], 'sent' => []]`，**从不查库**，HTTP 200。
-- **后果 1（产品）**：GUI 里永远看不到待批准的连接申请。
-- **后果 2（验收）**：`scripts/e2e/zero_to_one.sh` Phase 4 那条
+- **后果 1（产品）—— ⚠️ 此处修正我先前的高估**：我最初写「GUI 里永远看不到待批准的
+  连接申请」，**这是错的**。查下来 GUI 走的是 `/route/data` 的 `requests` 子对象
+  （`mynet_gui/src/composables/useRoutes.ts:70/73` → `PendingConnectionsPage.vue`），
+  而 `/route/data` 一直在正常调 `getUserRouteRequests()`。本端点
+  `GET /route/requests` 在**全仓（gui/web/desktop/openwrt/utc）没有任何调用方**。
+  所以产品面影响接近于零。
+- **后果 2（验收，这才是真问题）**：`scripts/e2e/zero_to_one.sh` Phase 4 那条
   「✓ B 能列到连接申请（HTTP 200）」是**假的绿** —— 端点返 200 + 空数组，
-  断言只看状态码就过了。我自己写的脚本被这个桩骗了。
+  断言只看状态码就过了。**我自己写的验收脚本被一个桩骗了。**
 - **旁证**：库里两条 `node_route_requests` 都还是 `pending`（一条是 9-24 23:51 的旧跑），
-  说明 `accept-request` 这步**从来没被任何脚本调用过**。
-- **未修**：Phase 6 绕过了它（`send-request` 的响应里直接带 `id`，
-  `accept-request/{id}` 吃 id 即可）。但产品面这个洞还在。
-- **教训**：断言「能列到」就必须断言**列表内容**，不能只断言状态码。
-  一个返回 200 + 空集合的桩，能骗过所有只看状态码的验收。
-- **优先级**：🟠 P1（产品面）· 验收脚本侧已改为不依赖它
+  说明 `accept-request` 这步**从来没被任何脚本调用过**。而 Phase 4 的名字写着
+  「连接授权 → bundle 下发」，它其实只走到了「申请已发出」。
+- **✅ 已修**：
+  - back 侧 `884cf9c`：委托给既有的 `RouteRequestDomainService::getUserRouteRequests()`
+    （:434-464，早已被 `/route/data` 消费），所以本端点与 `/route/data` 的
+    `data.requests` **逐字节同形**，零前端改动。补 `catch (DomainException)`
+    与兄弟方法一致（CPI-32）。新增 `RouteRequestsContractTest`（5 个 / 35 断言），
+    **断言内容而非状态码**；变异验证：退回桩 → 3 条红。
+  - agent 侧 `e5f3657`：Phase 4 改为断言 pending 里确有这条、id 一致、
+    且能直接喂给 `accept-request`；**补上 accept-request**；Phase 3 的可重入性补齐
+    （此前只把「发申请」做成 409→继续，后半段仍硬要求有待接受项，
+    于是已是好友时重跑必停在「取不到 request_id」）。
+    实测真 staging **21 通过 / 0 失败**。
+- **教训（两条，都比这个 bug 本身值钱）**：
+  1. 断言「能列到」就必须断言**列表内容**。一个返回 200 + 空集合的桩，
+     能骗过所有只看状态码的验收。
+  2. **报告缺陷影响时不要凭端点名字推断谁在用它。** 我看到「GUI 要列申请」
+     就断定 GUI 坏了，实际 GUI 走的是另一个端点。查调用方是三分钟的事，
+     省下来的是别人按错误结论去排优先级。
+- **优先级**：🟡 P2（产品面影响小；验收面已修）→ ✅ 已修
 
 #### CPI-61. `mynet setup` 对 gnb 节点生成的是 x25519 密钥（类型错）
 - **位置**：`mynet_agent/mynet/cmd_setup.go:42-54`
-- **现状**：`ecdh.X25519().GenerateKey()`，输出 `algorithm: x25519`、私钥 64 hex。
-  而 **GNB 需要 Ed25519 的 128-hex 私钥**（`clamp(SHA512(seed))` 布局）。
-- **后果**：用 `mynet setup` 给 gnb 节点生成的密钥**用不了**。
-  Phase 6 是用 `gnb_crypto -c -p … -k …` 在节点机上生成的（那才是对的布局）。
-- **注**：`mynet/keys/node_face.go:62` 的注释与 `4cb8b01` 的修复都说明
-  签名器**已经**能吃 128-hex 布局，缺的只是 setup 侧不会生成它。
-- **未修**：不在 Phase 6 关键路径上（密钥可以外部生成后写进 `conf/mynet.conf`）。
-- **优先级**：🟡 P2
+- **现状（当时）**：`ecdh.X25519().GenerateKey()`，输出 `algorithm: x25519`、私钥 64 hex。
+  而 **GNB 需要 Ed25519 的 128-hex 私钥**（`clamp(SHA512(seed))` 布局），
+  且 gnb 读 `security/<uuid>.private` 时要求**恰好 128 字节**、读不满就 `exit(0)`
+  （`gnb_keys.c:68-73`）。Phase 6 只能绕开 setup、在节点机上用
+  `gnb_crypto -c -p … -k …` 生成后手工写进 `conf/mynet.conf`。
+- **顺着这条线查出一个更隐蔽的错**：`GNBKeyPair.ToHex()` 的注释写着
+  「as GNB expects」，实际编码的是 `kp.PrivateKey` —— 那是**未 clamp** 的原始
+  `SHA512(seed)`（clamp 只落在副本 `ProcessedPrivateKey` 上）。而 GNB 期望
+  `clamp(SHA512(seed)[0:32]) || SHA512(seed)[32:64]`（权威依据
+  `mynet_gnb/src/libs/ed25519/keypair.c:8-12`，clamp 是**就地**作用在写盘缓冲区上；
+  `gnb_keys.c:74` 读盘后**不再 clamp**）。
+  **为什么能一直藏着**：`ToHex` 在生产代码里零调用者（只有测试用），
+  而 Go 侧签名走 `scalarFromGNBPrivate()` 会显式再 clamp 一次（幂等），
+  对两种输入都自洽 —— 所以 `TestSignGNB_MatchesStdlib` 一直是绿的。
+- **✅ 已修**（`mynet_agent 38de1b9`）：`ToHex()` 改为输出 GNB 落盘格式；
+  `cmdSetup` 加 `--vpn-type gnb|wireguard`（**默认 gnb**，与 back 的
+  `$isGnb = primaryVpnType() !== WIREGUARD` 判定一致）；`--print-keys` 明确给出
+  「把 public_hex 用用户 token PUT 到 /nodes/{id}/keys，key_type 填 **gnbkey**
+  而不是 ed25519」的下一步（填错会落到 CPI-37 那条「algorithm 标错 → 节点面全 401」）。
+  顺带删掉零调用者且逻辑也错的 `ToGNBFormat()`（32 字节分支产出
+  `scalar || SHA512(scalar)[32:]`，而正确的 nonce 半是 `SHA512(seed)[32:]`）。
+- **验证**：8 个新测试；真机上把 setup 产物与 `gnb_crypto` 产物并排比对，
+  128/128、64/64、clamp 位都为真 → **结构同构**。3 个变异全验证会红
+  （ToHex 退回未 clamp → 「byte[0]&7=7」；默认改 wireguard；gnb 分支改走 wg）。
+- **教训**：一个函数注释里写着「as X expects」而**生产零调用者**，
+  它的正确性就从未被任何东西检验过。死代码不是无害的 ——
+  它是「看起来能用其实是错的」API，等着下一个人接上去。
+- **优先级**：🟡 P2 → ✅ 已修
 
 #### CPI-62. bundle 的 `network.routes` 硬编码为空 → 隧道通了但流量不进隧道
 - **位置**：`BundleEnvelopePublisher.php`（`compose()` 里 `'routes' => []`）
