@@ -174,3 +174,137 @@ E 防火墙放行 + 回程
 
 **处置**：`GNB_PID=… sh verify_gnb_es_orphan.sh --crash`  
 定位不到时：`sh verify_gnb_es_orphan.sh --inspect` —— **只列候选（pid/ppid/exe/cmd/端口/TUN），不自动杀**，由人判断后带 `GNB_PID` 再操作。
+
+---
+
+## 6. Q&A：互通排障（2026-09-27 实测）
+
+> 目标：客服 / 排障 / Agent 问答可直接引用。每条含**症状 → 判据 → 处置**。
+
+### Q1. ping 通，SSH / HTTP 不通？
+
+**症状**
+- `ping <对端overlay>` 正常（小包）
+- `nc -z <ip> 22` 或 TCP 握手成功
+- `ssh` 卡在 banner / `curl http://` 超时
+
+**判据（三步）**
+
+```bash
+# ① 二分包长：>~288B payload 即失败 → 高度疑似对等配置
+for s in 50 200 280 290 400 1400; do ping -c 1 -s $s -t 2 <ip>; done
+
+# ② 对照本机 node.conf 是否有 zip（与对端一致）
+grep -E 'zip|crypto' $MYNET_HOME/driver/gnb/conf/<nodeId>/node.conf
+
+# ③ 对等检查
+mynet config parity --json
+```
+
+**根因**：**对等配置（尤其 `zip`）不一致**。对端 `zip auto` 时会压帧；本机未开 zip 则大包解不开 → **静默丢弃**（不是报错）。
+
+**处置**
+1. `node.conf` 两端对齐：`zip auto` + `zip-level -1`（与工作对端 10.182.236.180 同款）
+2. 重启 gnb（`mynet service restart gnb`）
+3. 再用 `ping -s 1400` 与 SSH 验证
+
+**易误判**
+- 以为是 gnb 二进制回归 / 系统坏了 / MTU —— 先 diff 历史可用 `node.conf`
+- 以为云端 bundle 会带 zip —— **bundle.gnb.options 不含 zip/crypto**
+
+---
+
+### Q2. 点「停止」后界面显示「异常 / 启动失败」？
+
+**症状**：手动停止后状态不是「已停止」，而是「异常」「gnb 已退出」。
+
+**判据**：`gnb.pid` 是否仍在；进程是否已退。
+
+**根因**：Stop 未删 pid 文件 → 状态机判「pid 在、进程没了」= FAILED。
+
+**处置**
+- 新版：`Stop()` 成功后删除 `gnb.pid`，状态为 `STOPPED/已停止`
+- 若仍见 pid 残留：手动删 pid 或查 gnb 是否异常退出（`/var/log/mynet/gnb.err`）
+
+---
+
+### Q3. 对端还用旧公钥，换新密钥后连不上？
+
+**场景**：其它节点已交换过本节点公钥，且**不会自动更新** public。
+
+**处置**
+- **不要**「生成并同步新密钥」
+- 用 **「仅同步现有公钥」**（`mynet config keys sync`）：不换身份，只登记公钥
+- 若已换错：从备份恢复旧密钥对，再 `keys sync`
+
+**自检**：`mynet config keys --json` 的 `public_hex` 应与对端持有的公钥一致（可用 `config parity` / 云端 bundle 的 `peer_public_keys` 对照）。
+
+---
+
+### Q4. 恢复备份 / 手动导入后通不了？
+
+**处置顺序**
+1. `mynet config parity` —— 看 zip/crypto/passcode 是否与对端一致
+2. critical 不一致 → 改 `node.conf` 对齐后再 `service restart`
+3. 仍不通 → 对照 Q1 包长二分
+
+**导入命令**（会先自动快照现状）
+```bash
+mynet config import <file.tar.gz>   # 或省略文件名用 backups/ 最新
+mynet config parity
+```
+
+---
+
+### Q5. 如何确认「对等配置」包含哪些项？
+
+| 键 | 级别 | 说明 |
+|---|---|---|
+| `zip` / `zip-level` | **critical** | 压缩帧格式，必须一致 |
+| `crypto` | **critical** | 数据面加密算法（默认 xor） |
+| `passcode` | **critical** | 启用则两端相同；都无则一致 |
+| `safe-index` | 建议 | gnb 默认 off |
+| `multi-socket` / `unified-forwarding` | 建议 | 行为相关 |
+
+**工具**：`mynet config parity --json`  
+**基线**：工作对端 `10.182.236.180`（node `4997342800601732`）实测可用配置。
+
+---
+
+### Q6. 排障命令速查
+
+```bash
+# 状态
+curl -s localhost:8096/api/v1/node-status | python3 -m json.tool
+
+# 对等
+mynet config parity --json
+
+# 运行日志（WebUI 诊断 → 日志 / 或）
+curl -s 'localhost:8096/api/v1/logs?lines=40'
+
+# 包长
+for s in 50 288 290 1400; do ping -c 1 -s $s -t 2 <ip>; done
+
+# 停止是否干净
+mynet service stop gnb && ls $MYNET_HOME/driver/gnb/conf/<id>/gnb.pid
+```
+
+---
+
+## 7. 三平台能力对齐（2026-09-27）
+
+| 能力 | macOS | Windows | Linux |
+|---|---|---|---|
+| System 探测 | **真**（sw_vers/uname/sysctl） | **真** | **真**（os-release…） |
+| Routing 探测 | **真**（route/ifconfig） | **真**（route print） | **真**（ip/ifconfig） |
+| Firewall 探测 | **真**（pfctl） | **真**（netsh advfirewall） | **真**（iptables/ufw/fw3/firewalld） |
+| Service 探测 | **真**（launchctl） | **真**（sc queryex） | **真**（systemd/procd/sysv） |
+| OS 路由 apply | **真** | **真** | **真** |
+| gnb 启停 / spawn | **真** | **真**（wintun） | **真** |
+| metrics | **真** | **真** | **真** |
+| localapi 路由存在性 | **真** | **真** | **真** |
+| mynetd Windows 服务 | — | **真**（SCM） | — |
+| 托盘 tray | 有（CGO） | 有 | 视构建 |
+
+交叉编译产物：`mynet{,-windows.exe}` / `mynetd{,-windows.exe}` 三端均可 `CGO_ENABLED=0` 出包。

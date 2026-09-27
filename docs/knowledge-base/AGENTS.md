@@ -227,6 +227,18 @@ operator / platform / plugin / ticket / sms / form / knowledge / conversation �
 | **无条件 `Unregister` 会误摘新连接** | 节点重连时新连接先登记、旧连接的收尾 defer 后跑。旧连接若无条件 `Unregister(nodeID)`，会把刚登记的新连接摘掉，表现为「节点明明连着却显示离线」。要用 `UnregisterIf(nodeID, c)` 比对指针 |
 | **有缓冲 channel 不等于消息会送达** | `Conn.send` 是 `make(chan []byte, 16)`，`Notify` 投进去就返回 nil。没有 writeLoop 排空时，投满 16 条后一律 `errSendFull`，而前 16 条**永远发不出去**——推送看起来「成功」了，节点却什么都收不到 |
 
+**网络互通 / 对等配置类**（2026-09-27 实测，Q&A 高频）：
+
+| 坑 | 后果 |
+|---|---|
+| **`zip` 两端不一致 → 大包/TCP 静默丢** | 对端 `zip auto` 而本机缺 `zip` 时：小 ping（≤~288B payload）通、`nc -z` TCP 握手通，但 **SSH banner / HTTP 响应全超时**。抓包可见对端 UDP 大帧已到本机 gnb，却进不了 tun。**修**：`node.conf` 两端同为 `zip auto`（+`zip-level -1`）。`mynet config parity` 可查 |
+| **云端 bundle 不下发 zip/crypto** | bundle.gnb.options 只有 multi_socket/safe_index/mtu/ifname。**对等项要靠本地约定或 parity 基线**（参考工作对端 10.182.236.180），不能假设「pull 下来就是全的」 |
+| **配置生成漏键 =「旧版一直好的」被破坏** | 症状像 gnb 回归或系统坏了；实为 `RenderGNBNodeConf` 漏写 `zip` 等键。**排查顺序**：先 diff `node.conf` 与历史可用配置，再怀疑二进制 |
+| **手动 stop 后显示「启动失败」** | `Stop()` 不删 `gnb.pid` 时，状态机判「pid 在、进程没了」= FAILED。**修**：Stop 成功后删 pid；无 pid 显示 `STOPPED/已停止` |
+| **仅同步公钥场景** | 对端已交换过旧公钥、又不会自动更新时：**不要生成新密钥**，只 `config keys sync` 上传当前公钥。换新钥会导致对端仍用旧公钥解不开 |
+
+详见 `node-connectivity-checklist.md` §Q&A。
+
 **Shell / 脚本类**（2026-09-24 V3 实测新增）：
 
 | 坑 | 后果 |

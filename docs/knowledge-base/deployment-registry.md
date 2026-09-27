@@ -144,3 +144,16 @@
 
 **结论**：监控面整体属**未建立**状态，是 V4（规模化与可观测）的内容，不要按本表
 以为生产已有监控。
+
+## api2 退役（2026-09-26）
+
+| 项 | 状态 |
+|---|---|
+| 域名 | `api2.mynet.club` → **410 Gone** |
+| 应用目录 | `/data/app/mynet.club/api2` 不存在（早已移除）；`api_pre_p3` 为晋升前 api 快照 |
+| 老库 `mynet` | **数据保留**，159 表；未 DROP |
+| 备份 | `/data/backup/mynet/api2-retire-20260926_010200/mynet.sql.enc`（AES-256-CBC，口令 `/etc/mynet/backup.pass`） |
+| 承接者 | `api.mynet.club`（`/data/app/mynet.club/api`，库 `mynet_back`） |
+| nginx | 旧站点已移除，仅保留 `api2.mynet.club.retired` 410 块 |
+
+⚠️ MariaDB 不支持 `ALTER DATABASE … READ ONLY`；冻结方式 = nginx 410 + 无应用/无 cron 写入 + 全量备份。
