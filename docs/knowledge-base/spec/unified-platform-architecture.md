@@ -116,10 +116,51 @@ user 层**本就没有 role 与 permission 概念**，因此 back 不需要 RBAC
 
 > **第三条（用户明确）**：**先不碰平台与租户，只把消费者层跑通**。
 > admin/operator[tenant] 那些是后事。
+>
+> ⚠️ **范围更新（2026-10-01，用户裁定）**：第三条覆盖的是**平台 admin**（`admin.mynet.club`），
+> **`console` 租户后台自 2026-10-01 起开工**——计划见 `dev-plan.md` 轨道 G。
+> 定性：租户/RBAC/Zone 全是框架自带（`TenantDomainService.php:186` 即拿 Tenant 当 Zone），
+> 缺口是 back 只有 **user 作用域**接口、没有**租户作用域**那组
+> （`NodeController.php:86` 列表硬过滤 `user_id`；本服务 docblock 自陈「不存在『管理员看全量』的旁路」）。
 
-已实测确认边界成立：`tenant.permission` 门禁挂载的路由**全部属 vendor 模块**，
-back 自有 **0 条**。`bootstrap/app.php` 中 `tenant.permission` / `rbac.permission` / `mcp.auth`
-三个别名是为**框架 vendor 模块**注册的，必须保留，**但不得挂到 back 自有路由上**。
+历史上实测确认过边界成立：`tenant.permission` 门禁挂载的路由**全部属 vendor 模块**，
+back 自有 **0 条**。（下文「裁定更新」把这条例外解开，并更正了「三个别名已注册」那句——
+实际一条都没注册，`rbac.permission` 因此有 91 条 vendor 路由命中即 500。）
+
+> **裁定更新（2026-10-01，用户）**：「`tenant.permission` 不得挂到 back 自有路由上」随第三条
+> （先不碰平台与租户）一起生效，console 开工后**只对 `tenant.permission` 解除**——租户面接口就是
+> 「业务叠加在框架 console 面上」，门禁本该用它（上文身份表 ② 行早已写明 `tenant.permission`
+> 仅 `tenant_admin` 可进）。**`rbac.permission`（平台 admin）与 `mcp.auth` 仍不得挂 back 自有路由**，
+> 本次更新不涉及它们。
+>
+> ⚠️ **同一日再实测更正两处「别名现状」**（原文写「三个别名已为 vendor 模块注册、必须保留」，
+> 与代码不符）：`bootstrap/app.php` 此前只注册了 `tenant.ensure`，**`tenant.permission` /
+> `rbac.permission` / `mcp.auth` 三条从未注册**。后果分两种：
+> · `tenant.permission` / `mcp.auth` —— `php artisan route:list` 实测 0 条路由引用，缺着无害；
+> · **`rbac.permission` 有 91 条 vendor 路由在用**（module-infrastructure 的 `Routes/api.php`
+>   与 `Routes/admin.php`，如 `api/v1/admin/auth/identity/merge-revocations`），
+>   别名缺失 → 命中即 `BindingResolutionException: Target class [rbac.permission] does not exist.`
+>   （本机 curl 实测；生产被 `bootstrap/app.php` 的兜底压成 500）。
+>   **待裁定，不在 G-3 范围内**：注册别名等于把这 91 条平台 admin 面接活（与安全口径相悖），
+>   不注册则它们恒 500。back 的立场应是「平台 admin 面不出网」，靠路由裁剪而非靠报错。
+>
+> **租户面命名 = `/api/v1/console/*`**（业务段直接叠在框架 console 段下；不用产品名 `scrm`，
+> 也不新开 `tenant` 段——`IdentifyDomain`/`CheckPermission` 的口径本来就是 console）。
+> ⚠️ **路径与域名在 back 这里都给不出 `console` 面**（2026-10-01 实测，比原判断更强）：
+> · 路径：`IdentifyDomain.php:112-120` 的 `platformPathType` 按 `/admin` → `/console` → `/api`
+>   顺序前缀匹配，`/api/v1/console/*` **先命中 `/api`** → 判成 `api` 面；
+> · 域名：抬到 `console` 面要靠 `config('domain.platform_domains.console')`（`:64-68`），
+>   而 `domain.*` 整组属**未安装的 module-domain**（vendor 与本仓均无 `config/domain.php`）→ 恒 null；
+> · 且 back 本就没挂 `IdentifyDomain`。
+> · 更关键的是 `CheckPermission.php:33-38` 在 `domainType` 为 **null 时走 default 分支直接放行**（fail-open），
+>   所以「只挂 `tenant.permission`」不构成闸门。
+>
+> **成立的做法（G-3 切片已落地）**：面归属由**路由组自己声明** —— back 侧
+> `App\Http\Middleware\IdentifyConsoleDomain`（别名 `domain.console`）把 `domainType` 定为 `console`，
+> 与 `tenant.permission:tenant_admin` 成对挂 `v1/console` 组，从而走 `checkConsoleAccess`
+> （`:56-97`：Operator 须在 `operator_tenants` 属于当前租户且角色 `tenant_admin`；User 无条件 403）。
+> `domain.console` **只挂这一组**，绝不 prepend 到 api 组（否则用户面普通 User 全被 403）。
+> 路径本身另外有用：nginx location、relay `deniedFragments`、日志与 CORS 分流。
 
 > 对本设计的影响：L2～L7 的一切「授权」都基于 `Connection`/`ConnectionGrant` 业务授权，
 > **不依赖**框架的 Operator/RBAC 门禁。不要因为 scrm-platform 在其模块路由上使用
