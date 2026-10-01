@@ -273,7 +273,7 @@ mynet（配置工具 + 系统能力）
 |---|---|---|---|
 | G-1 | **vendor 迁移落库**：`operators`/`operator_tenants` + auth module 的 `permissions`/`roles`/`role_permissions`（`multi-tenant-saas-module-auth/Database/migrations/2025_01_01_000004_auth_module.php:133,145,164`）。⚠️ `framework_core` 整包跑会撞 app 已建的 13 张表（`spec/back-baggage-cleanup.md:59`）→ **按缺口补、带 `hasTable`/`hasColumn` 守卫**。零业务代码 | `mynet_api/database` | ☑ 2026-10-01：MySQL `mynet_api_dev` 73 表，五张目标表齐（`operator_tenants` 外键已生效）。⚠️ vendor DDL 是 **MySQL-only**（`MySqlOnlyMigration::skip()` 在非 MySQL 驱动**抛异常**，不是跳过），本地必须用 MySQL，SQLite 跑不了 |
 | G-2 | **console SPA 资产落地**：`mynet_api/public/console/` 当前缺（`public/` 只有 `index.php`），构建产物从框架参考仓取（`framework/scrm-platform/public/console/`） | `mynet_api/public/console/` | ☑ 2026-10-01：浏览器登录 → `auth/user` 200 → 工作台出租户信息。⚠️ 这份产物是 **scrm 产品的 console**（品牌「内行私域通」、侧栏走 module-loader），只用来验证通路；back 自己的页面是 G-4 |
-| G-3 | **租户作用域 API**（按 `tenant_id` 过滤，供 Operator 用）：① 节点列表+监控汇总（只读聚合）**← 列表半条已落 2026-10-01，见下「G-3 首条竖切片」；监控汇总未做** ② 路由授权审批 ③ 社交关系管理 ④ 服务策略。**命名已钉死（2026-10-01 用户裁定）：`/api/v1/console/<域>`**——业务段直接叠在框架 console 段下，不用产品名 `scrm`（那是 scrm-platform 自己的段，见本节末「命名与门禁」），也不新开 `tenant` 段 | `app/Modules/*/Controllers/Console/V1/` + `routes/api.php` 的 `v1/console` 组（`auth:sanctum` + `domain.console` + `tenant.identify` + **`tenant.permission:tenant_admin`**） | 四组接口可查可操作本租户资源；跨租户越权有测试挡住；**User 的 Bearer 打进来一律 403**（门禁靠「面声明 + role 参数」，路径与域名都判不出 console 面，见「命名与门禁」） |
+| G-3 | **租户作用域 API**（按 `tenant_id` 过滤，供 Operator 用）：① 节点列表+监控汇总（只读聚合）**← 两条都已落 2026-10-01/10-02，见下「G-3 首条竖切片」** ② 路由授权审批 ③ 社交关系管理 ④ 服务策略。**命名已钉死（2026-10-01 用户裁定）：`/api/v1/console/<域>`**——业务段直接叠在框架 console 段下，不用产品名 `scrm`（那是 scrm-platform 自己的段，见本节末「命名与门禁」），也不新开 `tenant` 段 | `app/Modules/*/Controllers/Console/V1/` + `routes/api.php` 的 `v1/console` 组（`auth:sanctum` + `domain.console` + `tenant.identify` + **`tenant.permission:tenant_admin`**） | 四组接口可查可操作本租户资源；跨租户越权有测试挡住；**User 的 Bearer 打进来一律 403**（门禁靠「面声明 + role 参数」，路径与域名都判不出 console 面，见「命名与门禁」） |
 | G-4 | **console 业务模块页**：挂进框架 module-loader（框架侧 `resources/js/console/` 只有挂点骨架，无业务页），对着 G-3 做四组页面 | 前端模块（参照 `scrm-platform-front` 范式） | 租户管理员在 console 完成节点/路由/社交/服务的典型管理动作 |
 | G-5 | **菜单与权限项注册**：业务权限进框架 `permissions`/菜单表，`tenant_admin` 角色可见 | 迁移/seed 或 G-3 配套注册 | ⚠️ 落点校正（2026-10-01 实测）：侧栏菜单来自**前端 module-loader 的静态路由表**，scrm 产物**根本不调** `/api/v1/console/menu`（该端点本身可用：带 token/会话返回 工作台·成员·积分·三方登录·支付·短信…）。所以 G-5 实际是「前端模块注册（随 G-4 做）+ 权限项入库」，后端 menu API 只是自研 host 的可选面 |
 | G-6 | **部署**：`console.mynet.club` nginx server block（现落泛解析，`cross-project-issues.md:113`）+ 证书 SAN 确认（H3） | 生产机 nginx + certbot | 域名单独出 console SPA，不与 api 混 block。**两条 Cookie 会话前置**（2026-10-01 本地实测出来的）：① `SANCTUM_STATEFUL_DOMAINS` 只列 console 域、**不要**列 `my.mynet.*`（api 组挂了 `EnsureFrontendRequestsAreStateful`，命中域的写请求会吃 CSRF 校验，GUI 不带 `X-XSRF-TOKEN` → 全 419；模板已改 `.env.example:67-71`）；② console 与 api 跨域，`config/cors.php:11` 的 `supports_credentials` 现为 **false**，Cookie 会话发不过去 —— 需 true + `CORS_ALLOWED_ORIGINS` 精确列 console 源（不能用 `*`） |
@@ -333,6 +333,28 @@ mynet（配置工具 + 系统能力）
 | `app/Modules/VPN/Controllers/Console/V1/NodeController.php` | `GET /api/v1/console/nodes`：租户作用域只读列表。隔离逻辑不复制，仍走 `NodeDomainService::getNodeList()`（`tenant_id` 过滤 + 只在 filters 带 `user_id` 时才追加用户过滤，`:57-72`）——这里**不传** `user_id`；`tenant_id` 只取 `TenantContext::getId()`，**不吃请求参数** |
 | `app/Modules/VPN/tests/Feature/Console/ConsoleNodeAccessTest.php` + `tests/Schema/OperatorModule.php` | 7 条：租户管理员看全租户、跨租户只看自己、query 塞 `tenant_id` 不能扩权、同租户普通 User 403、非 `tenant_admin` 的 Operator 403、未鉴权 401、**用户面仍按 owner 收敛**。全量 `php artisan test` 259 通过 |
 | 真机（MySQL + `php -S`）复核 | Operator 会话 `POST console/auth/login` → `GET console/nodes` = **200**（带出演示节点与 `meta.tenant_id`）；成员 Bearer + `X-Tenant-ID` 打同一路径 = **403 `仅团队管理员可以访问管理后台`**；同 Bearer 打 `/api/v1/nodes` = **200** |
+
+**G-3 ① 后半条：监控汇总（2026-10-02 已落，仍只读）**
+
+| 落点 | 内容 |
+|---|---|
+| `routes/api.php` 的 `v1/console` 组 | 新增 `GET /api/v1/console/monitor/overview`。**同组即同门禁**——闸门是组级中间件，新接口挂在里面就自动继承 `domain.console` + `tenant.permission:tenant_admin`，不需要再来一套 |
+| `app/Modules/VPN/Controllers/Console/V1/MonitorController.php` | 汇总 = 按 `node_status` 计数 + 每节点**最近一条** `node_monitor_snapshots`。`?status=` 过滤时**列表与汇总同口径**（各算一遍会出「总数 1、从未报到 1」这种自相矛盾的页面） |
+| `tests/Concerns/BuildsConsoleFixtures.php` | console 测试的 fixture 地基（两租户 × 多成员 × Operator/roles）从 `ConsoleNodeAccessTest` 抽出，与 `tests/Schema/*` 同级。抽的理由只有一条：每条竖切片都要证明同一件事，复制必然各自漂（漏一处 `tenant_users.is_active`，归属校验就白测了） |
+| `ConsoleMonitorOverviewTest`（6 条）+ 原 `ConsoleNodeAccessTest`（7 条） | 全量 `php artisan test` **281 通过**。断的是**值**不是状态码：新旧两条快照并排种，取错那条照样 200 |
+| 真机（MySQL）复核 | Operator 会话 → **200**，`summary` 给出 `nodes_total=1 / online=0 / enabled_offline=1 / never_reported=1 / peers_connected_sum=2 / rx=111 / tx=222`，`nodes[0].snapshot` 带出 `uptime_seconds=3600`；成员 Bearer + `X-Tenant-ID` → **403**（与 `console/nodes` 同一文案）；无凭证 → **401**；同 Bearer 打 `/api/v1/nodes` → **200** |
+
+> 监控汇总的三个**口径约束**（都是读代码定下来的，不是这里发明的）：
+> · **在线 = `node_status === STATUS_ONLINE`**，由 `NodeMonitorService::syncNodeStatus()`（`:245-300`）
+>   从心跳反推：mynetd 在跑 → ONLINE，停了 → 退回 ENABLED，`DISABLED/UNCONFIGURED` 尊重人工设置不改。
+>   这里**不加**「N 秒没心跳算掉线」的阈值——back 全仓没有这个窗口定义，凭空造一个必与 mynetd
+>   实际上报节奏漂；只把 `last_seen` 是否为空作为「有没有报过到」的事实摊给前端。
+> · **`node_monitor_snapshots` 没有 `tenant_id` 列** → 租户收敛只能走「先按 `tenant_id` 取节点、
+>   再用这批 `node_id` 取快照」。直接对快照表聚合就是跨租户串数，而且接口照样 200。
+>   取「最近一条」用 `MAX(snapshot_at)` 而非 `MAX(snapshot_id)`：`HasGlobalId` 明写 ID **完全无序**。
+> · **不聚合 `nodes.node_traffic`**：全仓只有读它回显的地方（`NodeDomainService.php:408`），
+>   **没有任何地方写它**，是旧库残留列，拿它当租户流量指标会恒 0 或恒旧数。
+> 另：`peers_connected_sum` 是「各节点视角的 peer 数之和」，链路两端各计一次，**不是**租户内链路条数。
 
 > 两处断言容易测出**假阳性**，已在用例里注明：① 只断 403 不够，`missing_tenant` 分支也返 403，
 > 必须断文案；② User 那条必须显式带 `X-Tenant-ID`，否则根本没认出租户。
@@ -462,7 +484,7 @@ P0 ──┬──────────────────────�
 | | | | **▶ M2 控制面完成 · M3 产品面可用 · M4 平台面收口** | | |
 | 65 | **S10 console 租户后台** | G-1 | vendor 迁移落库（operators/RBAC，按缺口补） | — | ☑ |
 | 66 | | G-2 | console SPA 构建资产进 `public/console/` | G-1 | ☑ |
-| 67 | | G-3 | 租户作用域 API（节点/路由审批/社交/服务策略）——**① 节点列表 + 闸门已落，剩 监控汇总/②③④** | B-1 | ◐ |
+| 67 | | G-3 | 租户作用域 API（节点/路由审批/社交/服务策略）——**① 节点列表 + 监控汇总已落，剩 ②③④** | B-1 | ◐ |
 | 68 | | G-4 | console 业务模块页（挂框架 module-loader） | G-3 | ☐ |
 | 69 | | G-5 | 菜单 + 权限项注册进框架 `permissions`/菜单表 | G-3 | ☐ |
 | 70 | | G-6 | 部署：`console.mynet.club` server block + 证书 SAN（H3） | G-2 | ☐ |
