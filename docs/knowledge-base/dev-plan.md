@@ -273,7 +273,7 @@ mynet（配置工具 + 系统能力）
 |---|---|---|---|
 | G-1 | **vendor 迁移落库**：`operators`/`operator_tenants` + auth module 的 `permissions`/`roles`/`role_permissions`（`multi-tenant-saas-module-auth/Database/migrations/2025_01_01_000004_auth_module.php:133,145,164`）。⚠️ `framework_core` 整包跑会撞 app 已建的 13 张表（`spec/back-baggage-cleanup.md:59`）→ **按缺口补、带 `hasTable`/`hasColumn` 守卫**。零业务代码 | `mynet_api/database` | ☑ 2026-10-01：MySQL `mynet_api_dev` 73 表，五张目标表齐（`operator_tenants` 外键已生效）。⚠️ vendor DDL 是 **MySQL-only**（`MySqlOnlyMigration::skip()` 在非 MySQL 驱动**抛异常**，不是跳过），本地必须用 MySQL，SQLite 跑不了 |
 | G-2 | **console SPA 资产落地**：`mynet_api/public/console/` 当前缺（`public/` 只有 `index.php`），构建产物从框架参考仓取（`framework/scrm-platform/public/console/`） | `mynet_api/public/console/` | ☑ 2026-10-01：浏览器登录 → `auth/user` 200 → 工作台出租户信息。⚠️ 这份产物是 **scrm 产品的 console**（品牌「内行私域通」、侧栏走 module-loader），只用来验证通路；back 自己的页面是 G-4 |
-| G-3 | **租户作用域 API**（按 `tenant_id` 过滤，供 Operator 用）：① 节点列表+监控汇总（只读聚合）**← 两条都已落 2026-10-01/10-02，见下「G-3 首条竖切片」** ② 路由授权审批 ③ 社交关系管理 ④ 服务策略。**命名已钉死（2026-10-01 用户裁定）：`/api/v1/console/<域>`**——业务段直接叠在框架 console 段下，不用产品名 `scrm`（那是 scrm-platform 自己的段，见本节末「命名与门禁」），也不新开 `tenant` 段 | `app/Modules/*/Controllers/Console/V1/` + `routes/api.php` 的 `v1/console` 组（`auth:sanctum` + `domain.console` + `tenant.identify` + **`tenant.permission:tenant_admin`**） | 四组接口可查可操作本租户资源；跨租户越权有测试挡住；**User 的 Bearer 打进来一律 403**（门禁靠「面声明 + role 参数」，路径与域名都判不出 console 面，见「命名与门禁」） |
+| G-3 | **租户作用域 API**（按 `tenant_id` 过滤，供 Operator 用）：① 节点列表+监控汇总（只读聚合）**← 两条都已落 2026-10-01/10-02，见下「G-3 首条竖切片」** ② 路由授权审批 **← 只读审批台已落 2026-10-02，见下；Operator 代批待裁定** ③ 社交关系管理 ④ 服务策略。**命名已钉死（2026-10-01 用户裁定）：`/api/v1/console/<域>`**——业务段直接叠在框架 console 段下，不用产品名 `scrm`（那是 scrm-platform 自己的段，见本节末「命名与门禁」），也不新开 `tenant` 段 | `app/Modules/*/Controllers/Console/V1/` + `routes/api.php` 的 `v1/console` 组（`auth:sanctum` + `domain.console` + `tenant.identify` + **`tenant.permission:tenant_admin`**） | 四组接口可查可操作本租户资源；跨租户越权有测试挡住；**User 的 Bearer 打进来一律 403**（门禁靠「面声明 + role 参数」，路径与域名都判不出 console 面，见「命名与门禁」） |
 | G-4 | **console 业务模块页**：挂进框架 module-loader（框架侧 `resources/js/console/` 只有挂点骨架，无业务页），对着 G-3 做四组页面 | 前端模块（参照 `scrm-platform-front` 范式） | 租户管理员在 console 完成节点/路由/社交/服务的典型管理动作 |
 | G-5 | **菜单与权限项注册**：业务权限进框架 `permissions`/菜单表，`tenant_admin` 角色可见 | 迁移/seed 或 G-3 配套注册 | ⚠️ 落点校正（2026-10-01 实测）：侧栏菜单来自**前端 module-loader 的静态路由表**，scrm 产物**根本不调** `/api/v1/console/menu`（该端点本身可用：带 token/会话返回 工作台·成员·积分·三方登录·支付·短信…）。所以 G-5 实际是「前端模块注册（随 G-4 做）+ 权限项入库」，后端 menu API 只是自研 host 的可选面 |
 | G-6 | **部署**：`console.mynet.club` nginx server block（现落泛解析，`cross-project-issues.md:113`）+ 证书 SAN 确认（H3） | 生产机 nginx + certbot | 域名单独出 console SPA，不与 api 混 block。**两条 Cookie 会话前置**（2026-10-01 本地实测出来的）：① `SANCTUM_STATEFUL_DOMAINS` 只列 console 域、**不要**列 `my.mynet.*`（api 组挂了 `EnsureFrontendRequestsAreStateful`，命中域的写请求会吃 CSRF 校验，GUI 不带 `X-XSRF-TOKEN` → 全 419；模板已改 `.env.example:67-71`）；② console 与 api 跨域，`config/cors.php:11` 的 `supports_credentials` 现为 **false**，Cookie 会话发不过去 —— 需 true + `CORS_ALLOWED_ORIGINS` 精确列 console 源（不能用 `*`） |
@@ -362,6 +362,17 @@ mynet（配置工具 + 系统能力）
 > （`NodeController.php:97-105` → 列表在 `data.nodes.data`），console 面给 `data.nodes`（列表）+ `data.meta`（分页）。
 > G-4 前端按后者写；用户面那形状不改（有现网客户端在读）。
 
+
+**G-3 ② 路由授权审批（2026-10-02 已落，只读审批台）**
+
+| 落点 | 内容 |
+|---|---|
+| `routes/api.php` 的 `v1/console` 组 | `GET /api/v1/console/route-requests`，同组同门禁（组级中间件自动继承，不必再来一套） |
+| `Console/V1/RouteRequestController.php` | 列表（`source_*` / `target_*` 摊平标签，沿用用户面 `formatRouteRequest()` 命名）+ 全租户状态汇总 + 分页（`per_page` 上限 100）。**不提供 accept/reject**：`acceptRouteRequest()` 硬校验 `target_user_id === 当前用户`（`RouteRequestDomainService.php:320-324`），这条不是权限装饰而是**被申请方的同意语义本身**；Operator 代批要另写「以成员身份应答」的域入口并配审计 → **待用户裁定** |
+| 口径一：`status='expired'` 是**死值** | 全仓无人写它（无命令类、`routes/console.php` 只有 inspire、`bootstrap/app.php` 无 `withSchedule()`），而 `expired_at`（建单时 `now()->addDays(7)`，`:137`）也没有任何读方。后果：**pending 永久堆积**，且 `acceptRouteRequest()` 的过期判定用 `isExpired()`（比 status 不比时间），**逾期七天的申请照样批得动**。接口因此独立给 `is_overdue` = `pending 且 expired_at < now`，不拿 status 当过期 |
+| 口径二：汇总**不随 `?status=` 归零** | 与监控汇总**相反**，是刻意的：审批台的 pending 数回答「还有多少要处理」，跟着筛选归零会读成假平安 |
+| `ConsoleRouteRequestTest`（11 条） | 全量 `php vendor/bin/phpunit` **292 通过**（原 281）。其中一条是**变异测出来的**：删掉控制器里那句显式 `where('tenant_id')`，前 10 条**全绿**（本表模型带框架 `BelongsToTenant`，平时是 TenantScope 在挡，删了等于没测）。补的 `test_tenant_filter_survives_framework_unscoped_bypass` 用 `TenantScope::allowUnscoped()` 把框架豁免整条打开（队列/CLI/系统回调的正道，也是标记泄漏态），此时只剩显式 where —— 删它立刻红（多出别租户一行）。那句 where 在豁免场景下是唯一防线，所以必须留 |
+| 真机（MySQL，`sql_mode` 含 `ONLY_FULL_GROUP_BY`） | 聚合与排序**分成两条查询**（`base()` 不带 `orderBy`，`query()` 才带）：合一条会 1055（排序列不在 GROUP BY），而 sqlite 测试库不报 —— 又一处「测试全绿、真库全红」。Operator → **200**：`summary = {total:3, pending:2, pending_overdue:1, accepted:1, rejected:0, expired:0}`，平台租户那 1 条**没进列表**；`?status=pending` → 列表 2 条而 `summary.accepted` 仍 1；`?status=bogus` → **422**；成员 Bearer + `X-Tenant-ID` → **403**（文案同 `console/nodes`），同 token 打用户面 `/api/v1/route/requests` → **200**；无凭证 → **401** |
 
 **缺口尺寸（给 G-3/G-4 估量用）**：scrm console 产物登录后自动打
 `/api/v1/scrm/{dashboards/overview,dashboards/trend,dashboards/channels-distribution,dashboards/setup-checklist,agents,notifications/unread-count,scene-context}` —— 全 404。
@@ -484,7 +495,7 @@ P0 ──┬──────────────────────�
 | | | | **▶ M2 控制面完成 · M3 产品面可用 · M4 平台面收口** | | |
 | 65 | **S10 console 租户后台** | G-1 | vendor 迁移落库（operators/RBAC，按缺口补） | — | ☑ |
 | 66 | | G-2 | console SPA 构建资产进 `public/console/` | G-1 | ☑ |
-| 67 | | G-3 | 租户作用域 API（节点/路由审批/社交/服务策略）——**① 节点列表 + 监控汇总已落，剩 ②③④** | B-1 | ◐ |
+| 67 | | G-3 | 租户作用域 API（节点/路由审批/社交/服务策略）——**①② 已落（②只读，代批待裁定），剩 ③④** | B-1 | ◐ |
 | 68 | | G-4 | console 业务模块页（挂框架 module-loader） | G-3 | ☐ |
 | 69 | | G-5 | 菜单 + 权限项注册进框架 `permissions`/菜单表 | G-3 | ☐ |
 | 70 | | G-6 | 部署：`console.mynet.club` server block + 证书 SAN（H3） | G-2 | ☐ |
