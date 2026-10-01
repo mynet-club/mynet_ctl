@@ -176,6 +176,18 @@
       "minLength": 1,
       "description": "host 或 host:port。无端口时由驱动补默认端口（GNB index=9016）。"
     },
+    "ListenEntry": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^[0-9]{1,5}$"
+        },
+        {
+          "$ref": "#/$defs/HostPort"
+        }
+      ],
+      "description": "gnb 的 listen 值，**优先裸端口**（\"9016\"）。gnb 解析器按形态分流（gnb_conf.c:71-81 check_listen_string + gnb_conf_file.c:300-333）：纯数字→同时绑 [:::port] 和 0.0.0.0:port（双栈同端口）；含':'→只设 IPv4，IPv6 留在出厂默认 9001；'['开头→只设 IPv6。所以 back 侧下发 '0.0.0.0:9016' 会静默放弃 IPv6 侧，而全网对它的 index/对端宣告都在 9016 —— 现网网关 182 就是这个形态（v4 在 9016、v6 在 9001，map 叫 /tmp/gnb.9001.map）。端口来源：node_configs.config.listen > nodes.node_port > fleet 默认 9016（gnb）/51820（wg）；非法值一律拒绝发布，不回退。"
+    },
     "NodeRef": {
       "type": "object",
       "required": [
@@ -200,7 +212,7 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 65535,
-          "description": "传输层监听端口（GNB UDP / WG listen port）。"
+          "description": "传输层监听端口（GNB UDP / WG listen port）。与 gnb.listeners 同一个数（back 侧来源：node_configs.config.listen > nodes.node_port > fleet 默认 9016/51820）。此前 gnb 节点这里是 null → 被 array_filter 掉，走 RenderGNBNodeConfFromBundle 的 `listen %d` 分支会因为端口缺失而**不写 listen 行**，节点落在出厂默认 9001 —— 后台改端口没反应的另一半原因。"
         }
       }
     },
@@ -337,9 +349,9 @@
         "listeners": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/HostPort"
+            "$ref": "#/$defs/ListenEntry"
           },
-          "description": "UDP 监听地址。"
+          "description": "UDP 监听地址。生产侧一律**只发一个裸端口**（见 ListenEntry）。"
         },
         "nodes": {
           "type": "array",
@@ -371,7 +383,7 @@
               "items": {
                 "$ref": "#/$defs/GnbEndpointHint"
               },
-              "description": "静态初始 endpoint（address.conf 角色）。运行时 learned endpoint 只进 Status。"
+              "description": "静态初始 endpoint（address.conf 角色 n）。**只来自后台手动填写**（nodes.endpoint）：设备上报 public_ip 自动写入的那条链已删 —— NAT 后的瞬时观测一旦固化成全网宣告，就会长期干扰 index 的自主发现。endpoint 只填 host 时由 back 用该节点自己的监听端口补全 host:port（agent 的 splitHostPort 对缺端口的行是整条静默丢弃）。常态下 address.conf 只应有 `i|0|` 行。"
             },
             "forward_nodes": {
               "type": "array",
