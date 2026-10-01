@@ -1,6 +1,6 @@
 # SPEC: VPN Driver 抽象层（driver-abstraction）
 
-> 更新：2026-09-21 | 适用：`mynet_agent`（实现）、`mynet_back`（配置生成）
+> 更新：2026-09-21 | 适用：`mynet_agent`（实现）、`mynet_api`（配置生成）
 > 来源规划：`integration-plan-v2.md` §3 W2
 > 状态：**设计稿**（P0 交付；P1 落接口壳）
 
@@ -50,7 +50,7 @@ VPNDriverFactory = { CreateDriver, DetectDriver }
 
 ```mermaid
 flowchart LR
-  BACK["mynet_back<br/>业务与拓扑权威"]
+  BACK["mynet_api<br/>业务与拓扑权威"]
   ENV["BundleEnvelope<br/>版本 / 节点 / 驱动 / generation"]
   GINT["GnbIntent<br/>route / discovery / forwarding / keys"]
   WINT["WireGuardIntent<br/>interface / peers / cryptokey routing"]
@@ -152,7 +152,7 @@ GNB 有四种彼此独立的身份/位置：
 3. index 类似 tracker：注册/查询 NAT 后 endpoint；普通数据面仍优先 P2P。
 4. P2P 失败后可 Standard Forwarding、显式 Relay 或 Unified Forwarding；中继保持
    GNB payload 的端到端保护，不等同 WireGuard hub。
-5. `proxy on` 是本仓 P2 补丁能力：准出无 route 时兜底到 f 节点、准入跳过白名单。
+5. `proxy on` 是本仓 P2 补丁能力：准出无 route 时兜底到**指定出口节点**（下一跳，等同 route.conf）、准入跳过白名单。
    **必须由目标二进制 build capabilities 声明，不能只看 driver 名推断。**
 
 ### 3.3 WireGuard 专属意图
@@ -259,6 +259,34 @@ VPNDriver
 
 密钥与落盘仍需遵守：GNB `security/*.private` 0600；WireGuard private key/PSK 不得
 进入命令行、日志或普通状态 dump。
+
+---
+
+## 5.1 接口名单权威（`node.interface`）—— 2026-10-01 定稿
+
+**只有一个字段是权威**：`node.interface`。back 侧来源是 `node_configs.config.ifname`
+（每节点事实；一台主机可能多个 zone 共存 —— 现网网关 182 的隧道口是 `gnb_tun_16`，
+`gnb_tun` 被另一个 zone 占用），缺省时取驱动声明的默认名（`vpn.gnb…ifname.default`）。
+`gnb.options.ifname` 是**过渡期别名**：back 两处发同一个值，老 agent 只读后者。
+
+节点侧统一走 `domain.BundleEnvelope.TunDevice()`（`shared/domain/bundle_envelope.go`）：
+权威缺失 → 暂用别名；两者都有值且不等 → **报错**；名字超 15 字符或含
+`[A-Za-z0-9._-]` 之外的字符 → **报错**。投影（`project_active.go` / `cmd_refresh.go`
+的 refresh-config）、OS 路由（`planFromBundle` 校验 `routes[].dev`）、proxy 策略路由
+（`ProxyRuntime.TunDevice`）、metrics（`gnbIfnameFromBundle`）**全部只经这一个解析口**。
+
+**阻断性配置一律不回退默认名**（用户裁定 2026-10-01）。理由不是洁癖而是失败形态：
+默认名在单 zone 机器上能用，在 182 这类机器上恰好是别人的接口，而
+`ip route … dev X` 只要 X 存在就执行成功 —— 回退等于把整台机器的流量搬进另一条隧道，
+**且不报错**。宁可 apply 失败、错误可见、该节点停在上一版配置。
+（local 模式例外：没有 back 参与，`driver.WriteIntent` 允许空 ifname 由 gnb 自己决定。）
+
+两步走的顺序是硬约束，不能颠倒：
+
+| 步 | 动作 | 出口判据 |
+|---|---|---|
+| **B-1**（已完成） | back 单源取值 + 写入门禁（`NodeConfig` 的 `saving`）+ 发布硬失败 + **读侧复用同一算法**（GUI 网络配置回显、`quickCreateNode` 不再种子常量）；agent 建立 `TunDevice()` 权威、仍**同时**发/容 `gnb.options.ifname` | `BundleEnvelopeGnbContractTest`（写入拒绝 422 / 脏值拒发布 / 缺省用默认名）+ `NodeIfnameAuthorityTest`（字段级写路径真的落库、读侧与 bundle 同源、wg 主驱动取 `wg0`）+ `bundle_envelope_tun_device_test.go` + `plan_device_test.go` |
+| **B-2**（待发版后） | back 停发 `gnb.options.ifname`，schema 里删该字段 | 现网 agent 全部 ≥ 带 `TunDevice()` 的版本；否则 182 这类机器会退回 gnb 默认名（= 事故复现） |
 
 ---
 

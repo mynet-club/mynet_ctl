@@ -1,7 +1,7 @@
 # SPEC: 控制面与传输（control-plane）
 
 > 更新：2026-09-21
-> 适用：`mynet_agent`（`mynetd` + `mynet_gateway`）、`mynet_back`、`mynet_gui` / `mynet_ui`
+> 适用：`mynet_agent`（`mynetd` + `mynet_gateway`）、`mynet_api`、`mynet_gui` / `mynet_ui`
 > 依赖：[`node-keying.md`](node-keying.md)、[`driver-abstraction.md`](driver-abstraction.md)、[`local-api.md`](local-api.md)、[`unified-platform-architecture.md`](unified-platform-architecture.md)
 > 状态：**设计稿**（gateway 未实现；本文档是实现前的契约 SSOT）
 
@@ -9,7 +9,7 @@
 
 ## 0. 一句话
 
-**节点面唯一入口是 `mynet-gateway`；`mynet_back` 退到内网；GUI 只跟本机 `mynetd` 说话。**
+**节点面唯一入口是 `mynet-gateway`；`mynet_api` 退到内网；GUI 只跟本机 `mynetd` 说话。**
 
 ```
 浏览器 ──> 127.0.0.1:8008 (mynetd httpd) ──> gateway ──> back ──> mysql
@@ -26,7 +26,7 @@ mynetd ═══════ WebSocket ═══════> gateway ── 内
 |----|------|------|---------|
 | ① 本机 | `mynetd` httpd（`local-api.md`） | 对 GUI 提供本机能力面；对需要 back 数据的查询做中继 | 不直连 back；不持有 back 凭据 |
 | ② 边缘 | `mynet-gateway` | 节点鉴权、连接注册、presence、通知推送、**字节中继** | 不解析业务载荷；不存业务数据 |
-| ③ 内网 | `mynet_back` | 业务权威（L1/L2/L3）：节点/路由/密钥/好友/命令队列/BundleEnvelope | 对节点不可达 |
+| ③ 内网 | `mynet_api` | 业务权威（L1/L2/L3）：节点/路由/密钥/好友/命令队列/BundleEnvelope | 对节点不可达 |
 
 ### 1.2 为什么这样切
 
@@ -55,8 +55,8 @@ mynetd ═══════ WebSocket ═══════> gateway ── 内
 | 面 | 面向 | 接口 | 行为 |
 |----|------|------|------|
 | **对外** | mynetd | `WS /v1/node/connect` | **Ed25519 challenge-response** 握手（目标方案，见 [`node-keying.md`](node-keying.md) §5）；建立长连接 |
-| **对内** | mynet_back | `POST /v1/notify` | 命令入队 / generation 变更时调用；向目标节点推通知 |
-| **查询** | mynet_back | `GET /v1/presence/{node_id}` | 节点是否在线（连接注册表） |
+| **对内** | mynet_api | `POST /v1/notify` | 命令入队 / generation 变更时调用；向目标节点推通知 |
+| **查询** | mynet_api | `GET /v1/presence/{node_id}` | 节点是否在线（连接注册表） |
 | **中继** | mynetd ↔ back | WS ↔ 内网 HTTP | mynetd 发 `fetch` → gateway 转 back → 回传响应；**不解析载荷** |
 
 ### 2.2 报文
@@ -118,8 +118,56 @@ G:  {"type":"fetch_result","req_id":"…","status":304,"headers":{...},"body":"<
 | `route_changed` | `RefreshRoutesHandler` | 重新生成 route 配置并 reload |
 | `service.*` | `ServiceHandler` | 起停 / 重载对应服务 |
 
-**心跳的职责退回原处**：周期性遥测 + **通知丢失时的兜底**
-（漏了一条通知，下次心跳仍会取到命令）。二者不再互相绑定。
+**心跳的职责退回原处**：周期性遥测上报。心跳**不是通知丢失的兜底** ——
+back 的响应里确实带 `commands[]`（`NodeHeartbeatController.php:150`），
+但 agent 的 `cmd/mynetd/heartbeat.go` 只做采集+上报、**不解析该字段**，
+bundle 更不在心跳路径上拉取。
+
+**通知丢失的自愈在 WS 连接层，不在心跳**（2026-10-01 定稿）：
+
+| 层 | 位置 | 作用 |
+|----|------|------|
+| ① 写路径推送 | `BundleInvalidator` → `NotifyGatewayBundleChanged` → gw `/v1/notify` | 内容真变才推；投递侧按 `gateway.notify_attempts` 重试，耗尽记 warning |
+| ② 事件处理不丢 | agent `eventDispatcher.runExclusive` | 单飞守卫期间到达的事件**按名合并、事后补跑**，不再直接丢弃 |
+| ③ 连接建立补拉 | agent `transport.Handlers.OnConnect` → `catchUpBundle` | 断线窗口里 gw 推过的事件不会补发，故**每次连上（含重连）对一次 ETag**：304 什么都不做，updated 走完整落地链 |
+| ④ 判活重连 | agent `WebSocketDialer` + `IdleTimeout` | pong（或任何下行帧）超 `IdleTimeout` 即主动断开 → 触发 ③；否则半死连接会让节点静默收不到任何下发 |
+| ⑤ pull 侧脏检查 | back `BundleRevisionSync::isStale` | 任何一次 bundle 拉取都会校验快照是否落后业务表，落后先重建再返回 |
+
+页面「主动刷新加载」= 前端调 publish/pull 接口，走的仍是 ①③⑤，不是新层。
+
+**①⑤ 覆盖的业务表**：`nodes` / `node_ips` / `node_keys` / `routes` / **`node_configs`**。
+`node_configs` 是 2026-10-01 补上的最后一块：envelope 的 `node.interface`、
+`gnb.options.ifname`、`network.routes[].dev` 与 proxy 段全部取自它
+（`BundleEnvelopePublisher::compose` → `resolveTunIfname`），而
+`saveCustomConfig` / `saveFullConfig` 两条写路径原本既不 invalidate 也不被脏检查看见
+—— 症状是「改接口名 HTTP 200 成功，bundle 里永远是默认接口名」。
+接口名是**每节点**事实（一台主机可能多个 zone 共存；现网网关 182 用 `gnb_tun_16`，
+`gnb_tun` 被另一 zone 占），所以只能由该节点自己的 `node_configs.config.ifname` 决定，
+不能改默认常量。
+
+**非法值硬失败，不回退**（2026-10-01 用户裁定：阻断性配置不许回退）。
+合法范围只有一份声明：`vpn.gnb.versions.default.modes.base.parameters.ifname`
+的 `default` + `validation`（`^[a-zA-Z0-9_]{1,15}$`），由 `NodeConfig::ifnameSpec()`
+读取；代码里不再复制长度/字符集常量。两道门禁同源：
+① 写入 —— `NodeConfig` 的 `saving` 事件（挂在模型上是因为写 config 的路径有**三条**：
+`saveCustomConfig` / `saveFullConfig` / `updateConfigField`，只有这一处全覆盖），
+不合法抛 `DomainException::validation` → 422，控制器 `catch (DomainException)` 走
+`domainErrorResponse`，库里不留半行脏值；② 发布 —— `resolveTunIfname` 对**历史脏值**
+（直接改库、门禁上线前写入的）同样抛错，该节点停在上一版 bundle。
+为什么不许回退：接口名决定「流量进哪条隧道」，回退出来的默认名在这类机器上往往是
+**另一个 zone 正在使用的接口**，而 `ip route ... dev X` 只要目标接口存在就执行成功 ——
+错配置不报错，比没配置更危险。缺省/空值不属此列：那是「这台不覆盖」的正常状态。
+
+**读侧不许自己拼「node_configs + 默认名」**：生效名的唯一算法是
+`BundleEnvelopePublisher::tunIfnameForNode(Node)`，bundle 的 compose 与 GUI 的
+`getNodeNetworkConfig` 都调它。两处历史上各自拼错过 —— 一处读 `$node->ifname`
+（nodes 表没这列，恒 null → 表单永远回显空），一处写死 `'gnb_tun'` 常量；
+`quickCreateNode` 也不再种子接口名，少一处常量副本。默认名的入口签名收 **Node**
+而不是类型字符串：`nodes.vpn_type` 自 A-7 是 `string[]`，调用点自己
+`(string)` 转一次就炸 500（staging 的 getNodeBundle 与这条链的第一版都踩过）。
+回归锁：`BundleEnvelopeGnbContractTest`（写入拒绝/脏值拒发布/缺省用默认名/非字符串
+值带 node_id 拒绝）+ `NodeIfnameAuthorityTest`（字段级写路径真的落库、网络配置端点
+写权威、读侧与 bundle 同源、wg 节点按主驱动取默认名）。
 
 #### 报文
 
@@ -342,13 +390,13 @@ GET /api/v1/relay?path=<back-api-path>
 
 ### 7.1 结论
 
-**坚决下架。** `mynet_proxy` 是节点侧手写配置的 CLI，其最重的职责已被 GNB 原生 `p2-route-proxy`（`node.conf` 的 `proxy on`）取代——未登记目的地兜底给 f 节点，`route.conf` 不再需要灌海量路由。
+**坚决下架。** `mynet_proxy` 是节点侧手写配置的 CLI，其最重的职责已被 GNB 原生 `p2-route-proxy`（`node.conf` 的 `proxy on`）取代——未登记目的地兜底给**指定出口节点**（下一跳，等同 route.conf 加 `出口|目的|mask`），`route.conf` 不再需要灌海量路由。
 
 ### 7.2 能力归宿（不是「换地方调 gnb」，而是「业务意图 → envelope → driver 各自落地」）
 
 | mynet_proxy 的能力 | 归宿 | 说明 |
 |-------------------|------|------|
-| 未登记目的地走代理 | **L2 TransportPolicy → L3 BundleEnvelope → L5 Driver** | gnb：`proxy on` + `address.conf` f 节点；wg：`AllowedIPs`（双向 cryptokey routing）。两者语义不同构，**不可压成扁平结构**（见 `driver-abstraction.md` §3） |
+| 未登记目的地走代理 | **L2 TransportPolicy → L3 BundleEnvelope → L5 Driver** | gnb：`proxy on` + **指定出口节点（下一跳）**；wg：`AllowedIPs`（双向 cryptokey routing）。两者语义不同构，**不可压成扁平结构**（见 `driver-abstraction.md` §3） |
 | OS 策略路由（`proxy_route.conf` / `route_policy.sh`） | **L6 NetworkBackend** | 驱动无关：`ip route` / pf 对 gnb0 与 wg0 一视同仁 |
 | IP 段列表 / 地域分流（chinaip/interip、NODE_REGION） | **L2 TransportPolicy 的输入** | 谁走谁是业务决策，应由 back 算好随 envelope 下发，不在节点上现算 |
 | `proxy_role.conf` / `proxy_peers.conf` 等节点本地状态 | **消亡** | 角色与拓扑是 back 的 L1/L2 数据 |
@@ -383,7 +431,7 @@ GET /api/v1/relay?path=<back-api-path>
 | 组件 | 仓 | 说明 |
 |------|----|------|
 | `mynet_gateway` | `mynet_agent`（`cmd/mynet_gateway`） | 同 Go module，可复用 `types` 与签名工具；将来拆独立仓随时可拆 |
-| gateway 集成（notify 调用） | `mynet_back` | 命令入队 / generation 变更处调用；失败静默降级 |
+| gateway 集成（notify 调用） | `mynet_api` | 命令入队 / generation 变更处调用；失败静默降级 |
 | 长连接协程 | `mynet_agent`（`mynetd`） | 收到通知触发 `RunOnce`；fetch 中继 |
 | GUI 接入 | `mynet_gui` / `mynet_ui` | 只调 `127.0.0.1:<port>/api/v1`，业务零持有 |
 | 部署/分发 | `mynet_ctl` | gateway 列表下发、安装时配置 |
