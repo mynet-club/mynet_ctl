@@ -447,7 +447,8 @@
               "type": "boolean"
             },
             "safe_index": {
-              "type": "boolean"
+              "type": "boolean",
+              "description": "gnb `safe-index`，**缺省 false**（与 gnb 出厂默认、config/vpn.php 该字段的 default 一致）。它不是「再加一层校验」而是二选一的协议实现：true 时客户端改走 gnb_secure_index_worker（索引帧 XOR + ed25519 签名），索引端只有同样开 safe-index 才会解密验签，且还需要索引节点自己的密钥对 + 其公钥已作为节点分发给全网，否则注册/探测帧零回包且不报错。权威是 node_configs.config.safe_index（on/off/1/0/true/false），非法值拒绝发布、不回退。"
             },
             "mtu": {
               "type": "integer",
