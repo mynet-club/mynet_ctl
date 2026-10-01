@@ -249,6 +249,7 @@ mynet（配置工具 + 系统能力）
 | F-3 | **跨驱动路由**（原 A-6）：A(gnb)→C(双驱动)→B(wg) 就是 `mynet apply` 写的一条 `ip route` | `mynet apply` | 通；**驱动层不感知对方存在** |
 | F-4 | **平台实现**：linux / darwin / windows / openwrt | `mynet` 内的平台分支 | 各平台 `ip route` / `route` / `netsh` / uci 落地 |
 | F-5 | **多写者收敛**（spec §1.4）：CLI route tools 不再直接写路由 | `internal/tools/` | 唯一写入者 = `mynet apply` |
+| F-6 | **`system.json` 机制**：`mynet detector` 生成（带 `generated_at` + 接口指纹）；mynetd 与 `mynet apply` 双消费；**网卡变化时 mynetd 触发重跑** | `$MYNET_HOME/var/system.json` | 指纹不匹配时自动重探测 |
 
 ---
 
@@ -368,11 +369,26 @@ mynet（配置工具 + 系统能力）
 | 落点 | 内容 |
 |---|---|
 | `routes/api.php` 的 `v1/console` 组 | `GET /api/v1/console/route-requests`，同组同门禁（组级中间件自动继承，不必再来一套） |
-| `Console/V1/RouteRequestController.php` | 列表（`source_*` / `target_*` 摊平标签，沿用用户面 `formatRouteRequest()` 命名）+ 全租户状态汇总 + 分页（`per_page` 上限 100）。**不提供 accept/reject**：`acceptRouteRequest()` 硬校验 `target_user_id === 当前用户`（`RouteRequestDomainService.php:320-324`），这条不是权限装饰而是**被申请方的同意语义本身**；Operator 代批要另写「以成员身份应答」的域入口并配审计 → **待用户裁定** |
-| 口径一：`status='expired'` 是**死值** | 全仓无人写它（无命令类、`routes/console.php` 只有 inspire、`bootstrap/app.php` 无 `withSchedule()`），而 `expired_at`（建单时 `now()->addDays(7)`，`:137`）也没有任何读方。后果：**pending 永久堆积**，且 `acceptRouteRequest()` 的过期判定用 `isExpired()`（比 status 不比时间），**逾期七天的申请照样批得动**。接口因此独立给 `is_overdue` = `pending 且 expired_at < now`，不拿 status 当过期 |
+| `Console/V1/RouteRequestController.php` | 列表（`source_*` / `target_*` 摊平标签，沿用用户面 `formatRouteRequest()` 命名）+ 全租户状态汇总 + 分页（`per_page` 上限 100）。**不提供 accept/reject**：`acceptRouteRequest()` 硬校验 `target_user_id === 当前用户`（`RouteRequestDomainService.php:322-325`），这条不是权限装饰而是**被申请方的同意语义本身**；Operator 代批要另写「以成员身份应答」的域入口并配审计 → **待用户裁定** |
+| 口径一：`status='expired'` 是**死值** | 全仓无人写它（无命令类、`routes/console.php` 只有 inspire、`bootstrap/app.php` 无 `withSchedule()`），而 `expired_at`（建单时 `now()->addDays(7)`）也没有任何读方。**2026-10-02 已在模型层修掉，见下「修雷」行**；接口侧只把它摊开：`is_overdue` 用模型的 `isAwaitingResponse()` 反面、`pending_overdue` 用 `expiredPending()` scope，两处都不在控制器重写时间比较 |
 | 口径二：汇总**不随 `?status=` 归零** | 与监控汇总**相反**，是刻意的：审批台的 pending 数回答「还有多少要处理」，跟着筛选归零会读成假平安 |
 | `ConsoleRouteRequestTest`（11 条） | 全量 `php vendor/bin/phpunit` **292 通过**（原 281）。其中一条是**变异测出来的**：删掉控制器里那句显式 `where('tenant_id')`，前 10 条**全绿**（本表模型带框架 `BelongsToTenant`，平时是 TenantScope 在挡，删了等于没测）。补的 `test_tenant_filter_survives_framework_unscoped_bypass` 用 `TenantScope::allowUnscoped()` 把框架豁免整条打开（队列/CLI/系统回调的正道，也是标记泄漏态），此时只剩显式 where —— 删它立刻红（多出别租户一行）。那句 where 在豁免场景下是唯一防线，所以必须留 |
 | 真机（MySQL，`sql_mode` 含 `ONLY_FULL_GROUP_BY`） | 聚合与排序**分成两条查询**（`base()` 不带 `orderBy`，`query()` 才带）：合一条会 1055（排序列不在 GROUP BY），而 sqlite 测试库不报 —— 又一处「测试全绿、真库全红」。Operator → **200**：`summary = {total:3, pending:2, pending_overdue:1, accepted:1, rejected:0, expired:0}`，平台租户那 1 条**没进列表**；`?status=pending` → 列表 2 条而 `summary.accepted` 仍 1；`?status=bogus` → **422**；成员 Bearer + `X-Tenant-ID` → **403**（文案同 `console/nodes`），同 token 打用户面 `/api/v1/route/requests` → **200**；无凭证 → **401** |
+
+**顺带修掉的雷：路由申请「过期」改为读时判时间（2026-10-02，mynet_api `bf17e3b`）**
+
+上一条只说了「接口摊开 `is_overdue`」，但雷在域里，不在接口上。修完的形状：
+
+| 落点 | 内容 |
+|---|---|
+| 判据收口 `NodeRouteRequestModel` | 新增 `TTL_DAYS`（建单与判过期共用一个数）、`isAwaitingResponse()`、`awaitingResponse()` / `expiredPending()` 两个 scope，并把 `isExpired()` 从「只比 status」改成「status=pending **且** `expired_at` 已过」。`status` 回到能兑现的语义——只记人工应答态；过期是**时间事实**，不改写 status |
+| 为什么不补定时任务写 `status='expired'` | 扫描要等一轮，**窗口内照样能批**，还把部署依赖（schedule/queue）压进一条业务规则。读时判时间没有这两种代价 |
+| 四路调用点（各错一次，故各改一处） | ① `acceptRouteRequest()` 的闸门（原恒 false）；② `checkRouteRequestReentry()` 第 1、2 步 —— 旧按 `status='pending'` 挡，**一条死申请永久挡住同方向与反方向的再申请**；③ `getUserRouteRequests()` 的「待我处理」/「我发出的」**两条列表**（各写一遍 where，缺一条只错一半）；④ `TipsSuggestionsService` 首页「你有 N 个待处理的连接请求」（原来是裸 `DB::table`，改成走模型以便复用 scope） |
+| `expired_at` 为 NULL = **不过期** | 存量行没这值；新语义不能反过来把历史数据判成过期（这条最容易在「顺手加个 `whereNotNull`」时写反） |
+| 用例位置：`tests/Unit/Domain/RouteRequestExpiryTest.php`（9 条） | ⚠️ **不是随手放这的**：`phpunit.xml` 的 Default/Unit 只收 `app/Modules/VPN/tests/{Unit,Feature}` 与 `tests/Unit/Domain`。最初写在 `app/Modules/VPN/tests/Domain/Services/` 下 —— **全套 292 绿、一条都没跑**（`--filter` 报 `No tests executed`）。新增域测试认准这两个可发现路径 |
+| 变异验证（每条都单独红过） | `isExpired()` 退回只比 status → 2 红（含「逾期的必须被拦下」）；删重入第 1 步的 `awaitingResponse()` → 同方向红；删第 2 步 → 反方向红；删 :476（待我处理）与删 :488（我发出的）分别红；TipsSuggestions 退回裸 `status='pending'` → 「逾期的不该再催我处理」红。全套 **301 绿**，pint 5 文件 PASS |
+| 真库（MySQL 8.4）核对 | `total=4 / pending=3 / awaiting=2 / expiredPending=1`（两 scope 互斥且并集 = 全部 pending），`status='expired'` 存量 **0 行** —— 枚举值确实无人写。另把审批台依赖的两条易撞 `ONLY_FULL_GROUP_BY` 的形状（`groupBy` 聚合、`paginate` + `with`）在真库上过了一遍 |
+| 未纳入本次 | 是否把存量 `status='pending'` 且逾期的行**回填/清扫**成 `expired`：现在读时判定已让功能正确，写回只是让库里的枚举值变好看 —— **待裁定**（与「Operator 代批」一并） |
 
 **缺口尺寸（给 G-3/G-4 估量用）**：scrm console 产物登录后自动打
 `/api/v1/scrm/{dashboards/overview,dashboards/trend,dashboards/channels-distribution,dashboards/setup-checklist,agents,notifications/unread-count,scene-context}` —— 全 404。
@@ -380,7 +396,6 @@ mynet（配置工具 + 系统能力）
 
 ---
 
-| F-6 | **`system.json` 机制**：`mynet detector` 生成（带 `generated_at` + 接口指纹）；mynetd 与 `mynet apply` 双消费；**网卡变化时 mynetd 触发重跑** | `$MYNET_HOME/var/system.json` | 指纹不匹配时自动重探测 |
 ## 2. 依赖与并行性
 
 ```
@@ -495,7 +510,7 @@ P0 ──┬──────────────────────�
 | | | | **▶ M2 控制面完成 · M3 产品面可用 · M4 平台面收口** | | |
 | 65 | **S10 console 租户后台** | G-1 | vendor 迁移落库（operators/RBAC，按缺口补） | — | ☑ |
 | 66 | | G-2 | console SPA 构建资产进 `public/console/` | G-1 | ☑ |
-| 67 | | G-3 | 租户作用域 API（节点/路由审批/社交/服务策略）——**①② 已落（②只读，代批待裁定），剩 ③④** | B-1 | ◐ |
+| 67 | | G-3 | 租户作用域 API（节点/路由审批/社交/服务策略）——**①② 已落（②只读，代批待裁定），剩 ③④**；②那条「过期」死值雷已于 2026-10-02 在模型层修掉（读时判时间，四路调用点同口径） | B-1 | ◐ |
 | 68 | | G-4 | console 业务模块页（挂框架 module-loader） | G-3 | ☐ |
 | 69 | | G-5 | 菜单 + 权限项注册进框架 `permissions`/菜单表 | G-3 | ☐ |
 | 70 | | G-6 | 部署：`console.mynet.club` server block + 证书 SAN（H3） | G-2 | ☐ |
