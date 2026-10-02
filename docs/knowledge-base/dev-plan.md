@@ -274,7 +274,7 @@ mynet（配置工具 + 系统能力）
 |---|---|---|---|
 | G-1 | **vendor 迁移落库**：`operators`/`operator_tenants` + auth module 的 `permissions`/`roles`/`role_permissions`（`multi-tenant-saas-module-auth/Database/migrations/2025_01_01_000004_auth_module.php:133,145,164`）。⚠️ `framework_core` 整包跑会撞 app 已建的 13 张表（`spec/back-baggage-cleanup.md:59`）→ **按缺口补、带 `hasTable`/`hasColumn` 守卫**。零业务代码 | `mynet_api/database` | ☑ 2026-10-01：MySQL `mynet_api_dev` 73 表，五张目标表齐（`operator_tenants` 外键已生效）。⚠️ vendor DDL 是 **MySQL-only**（`MySqlOnlyMigration::skip()` 在非 MySQL 驱动**抛异常**，不是跳过），本地必须用 MySQL，SQLite 跑不了 |
 | G-2 | **console SPA 资产落地**：`mynet_api/public/console/` 当前缺（`public/` 只有 `index.php`），构建产物从框架参考仓取（`framework/scrm-platform/public/console/`） | `mynet_api/public/console/` | ☑ 2026-10-01：浏览器登录 → `auth/user` 200 → 工作台出租户信息。⚠️ 这份产物是 **scrm 产品的 console**（品牌「内行私域通」、侧栏走 module-loader），只用来验证通路；back 自己的页面是 G-4 |
-| G-3 | **租户作用域 API**（按 `tenant_id` 过滤，供 Operator 用）：① 节点列表+监控汇总（只读聚合）**← 两条都已落 2026-10-01/10-02，见下「G-3 首条竖切片」** ② 路由授权审批 **← 只读审批台已落 2026-10-02，见下；Operator 代批待裁定** ③ 社交关系管理 ④ 服务策略。**命名已钉死（2026-10-01 用户裁定）：`/api/v1/console/<域>`**——业务段直接叠在框架 console 段下，不用产品名 `scrm`（那是 scrm-platform 自己的段，见本节末「命名与门禁」），也不新开 `tenant` 段 | `app/Modules/*/Controllers/Console/V1/` + `routes/api.php` 的 `v1/console` 组（`auth:sanctum` + `domain.console` + `tenant.identify` + **`tenant.permission:tenant_admin`**） | 四组接口可查可操作本租户资源；跨租户越权有测试挡住；**User 的 Bearer 打进来一律 403**（门禁靠「面声明 + role 参数」，路径与域名都判不出 console 面，见「命名与门禁」） |
+| G-3 | **租户作用域 API**（按 `tenant_id` 过滤，供 Operator 用）：① 节点列表+监控汇总（只读聚合）**← 两条都已落 2026-10-01/10-02，见下「G-3 首条竖切片」** ② 路由授权审批 **← 只读审批台已落 2026-10-02，见下；Operator 代批待裁定** ③ 社交关系管理 **← 待做（他会话正在改 `SocialController` / `SocialDomainService`，避开冲突后排到 ③）** ④ 服务策略 **← 只读总览已落 2026-10-02，见下；顺带取证 `node_services` 无可用写入方**。**命名已钉死（2026-10-01 用户裁定）：`/api/v1/console/<域>`**——业务段直接叠在框架 console 段下，不用产品名 `scrm`（那是 scrm-platform 自己的段，见本节末「命名与门禁」），也不新开 `tenant` 段 | `app/Modules/*/Controllers/Console/V1/` + `routes/api.php` 的 `v1/console` 组（`auth:sanctum` + `domain.console` + `tenant.identify` + **`tenant.permission:tenant_admin`**） | 四组接口可查可操作本租户资源；跨租户越权有测试挡住；**User 的 Bearer 打进来一律 403**（门禁靠「面声明 + role 参数」，路径与域名都判不出 console 面，见「命名与门禁」） |
 | G-4 | **console 业务模块页**：挂进框架 module-loader（框架侧 `resources/js/console/` 只有挂点骨架，无业务页），对着 G-3 做四组页面 | 前端模块（参照 `scrm-platform-front` 范式） | 租户管理员在 console 完成节点/路由/社交/服务的典型管理动作 |
 | G-5 | **菜单与权限项注册**：业务权限进框架 `permissions`/菜单表，`tenant_admin` 角色可见 | 迁移/seed 或 G-3 配套注册 | ⚠️ 落点校正（2026-10-01 实测）：侧栏菜单来自**前端 module-loader 的静态路由表**，scrm 产物**根本不调** `/api/v1/console/menu`（该端点本身可用：带 token/会话返回 工作台·成员·积分·三方登录·支付·短信…）。所以 G-5 实际是「前端模块注册（随 G-4 做）+ 权限项入库」，后端 menu API 只是自研 host 的可选面 |
 | G-6 | **部署**：`console.mynet.club` nginx server block（现落泛解析，`cross-project-issues.md:113`）+ 证书 SAN 确认（H3） | 生产机 nginx + certbot | 域名单独出 console SPA，不与 api 混 block。**两条 Cookie 会话前置**（2026-10-01 本地实测出来的）：① `SANCTUM_STATEFUL_DOMAINS` 只列 console 域、**不要**列 `my.mynet.*`（api 组挂了 `EnsureFrontendRequestsAreStateful`，命中域的写请求会吃 CSRF 校验，GUI 不带 `X-XSRF-TOKEN` → 全 419；模板已改 `.env.example:67-71`）；② console 与 api 跨域，`config/cors.php:11` 的 `supports_credentials` 现为 **false**，Cookie 会话发不过去 —— 需 true + `CORS_ALLOWED_ORIGINS` 精确列 console 源（不能用 `*`） |
@@ -389,6 +389,19 @@ mynet（配置工具 + 系统能力）
 | 变异验证（每条都单独红过） | `isExpired()` 退回只比 status → 2 红（含「逾期的必须被拦下」）；删重入第 1 步的 `awaitingResponse()` → 同方向红；删第 2 步 → 反方向红；删 :476（待我处理）与删 :488（我发出的）分别红；TipsSuggestions 退回裸 `status='pending'` → 「逾期的不该再催我处理」红。全套 **301 绿**，pint 5 文件 PASS |
 | 真库（MySQL 8.4）核对 | `total=4 / pending=3 / awaiting=2 / expiredPending=1`（两 scope 互斥且并集 = 全部 pending），`status='expired'` 存量 **0 行** —— 枚举值确实无人写。另把审批台依赖的两条易撞 `ONLY_FULL_GROUP_BY` 的形状（`groupBy` 聚合、`paginate` + `with`）在真库上过了一遍 |
 | 未纳入本次 | 是否把存量 `status='pending'` 且逾期的行**回填/清扫**成 `expired`：现在读时判定已让功能正确，写回只是让库里的枚举值变好看 —— **待裁定**（与「Operator 代批」一并） |
+
+**G-3 ④ 服务策略（2026-10-02 已落，只读总览，mynet_api `b2ed6d4`）**
+
+| 落点 | 内容 |
+|---|---|
+| `routes/api.php` 的 `v1/console` 组 | `GET /api/v1/console/services`，同组同门禁。**不提供 create/update/delete/share**：写路径要审计，且服务归属是成员本人 |
+| `Console/V1/ServiceController.php` | 列表（`owner` 摊成员身份、`endpoint` 摊地址端口、`bound_node_count` / `shared_with_count` 走真关联）+ 全租户汇总 + 分页（`per_page` 上限 100，同 ②）。顺序 = `service_priority` 升序 + `service_id` 唯一次级键（用户面按 priority+名字，分页必须有唯一收尾键，否则页边界会跳动） |
+| 口径一：`user_id = 0` 是**系统/公共服务哨兵**，不是「无归属」 | 用户面 `/services/public` 就是 `where('user_id', 0)`（`TenantScopedServiceService.php:31-33`）。console 侧因此给 `owner = null` + `is_system_service = true`，并分档计 `system` / `member`。当成普通成员处理会（a）让页面点进一个不存在的成员，（b）成员计数多 1 |
+| 口径二：**不可信列不摊成指标** | `service_current_connections` **不输出** —— 全仓只有 `?? 0` 的读、无任何写方，恒 0，摊出来会被 G-4 当活跃连接画进图。`service_approvals` **不给「待审批数」** —— 见下行。`service_bind_mode` 摊真值但注明「无任何查询读它」（零命中 `where('service_bind_mode')`） |
+| 口径三：服务**审批流是死的** | `POST services/request-approval/{id}` 直接返 **410**（`TenantServiceController.php:363-367`，「暂时关闭普通用户 public/open」）、`ServiceApprovalService` 全仓**零引用**、其转调的 `ServiceApprovalDomainService` 是空 stub —— 给这张死表配计数等于造一个不存在的流程。用户面 create/update 还一律硬写 `service_is_public = 0`（`:186,272`），所以该旗标只对 bundle 下发有意义，不是后台可拨的策略 |
+| ⚠️ `node_services` **没有可用写入方**（新发现，待裁定） | `bound_node_count` 现网几乎必然恒 0：唯一写路径 `PUT /nodes/{id}/network-config` 在 `Api\V1\NodeController.php:1463,1562` 把**应用服务类** `Services\NodeService` 当 Eloquent 模型用（`NodeService::where(...)` / `::addServiceToNode(...)`，两个方法都不存在），抛的是 `Error` 不是 `Exception`，故其下 `catch (\Exception)` 接不住 → 该接口是 **500** 而非优雅降级。真实的「哪些节点提供该 index 服务」实际从 `services` 直接解析（`BundleEnvelopePublisher::resolveIndexServers()` `:823-850`）。**本接口只摊这个事实，不在 ④ 里顺手修** |
+| `ConsoleServicePolicyTest`（14 条） | 全套 **315 绿**。逐条变异：删显式 `where('tenant_id')` → 仅 `allowUnscoped` 那条红（6 vs 5，同 ② 的两层隔离结论）；汇总按 `status=0` 数（NULL 落空）→ 2 红；筛选只认 `status=0` → 1 红（`service_status=NULL` 的存量行两边都不出现）；少校验 `owner` → 422 那条红（三个参数各测一条：静默返空列表与「确实没有服务」长得一模一样）；把 `current_connections` 摊出来 → 死列那条红；`user_id=0` 不当系统服务 → owner 那条红 |
+| 真机（MySQL 8.4，`ONLY_FULL_GROUP_BY`） | 临时凭证打真服务：Operator → **200**，`summary = {total:2, active:1, disabled:1, system:1, member:1, shared:1, members_with_services:1}`（`disabled` 那条正是 `service_status=NULL` 的存量形状），`bound_node_count` / `shared_with_count` 各 1；`?status=`/`?owner=system`/`?type=music` 正确收窄而 `summary.total` 不动；`?status=bogus`、`?owner=bogus` → **422**；无凭证 → **401**；同租户成员 Bearer → **403**。验证用的 4 行 fixture 与 2 个临时 token 已删净（`services` 回到 0 行） |
 
 **缺口尺寸（给 G-3/G-4 估量用）**：scrm console 产物登录后自动打
 `/api/v1/scrm/{dashboards/overview,dashboards/trend,dashboards/channels-distribution,dashboards/setup-checklist,agents,notifications/unread-count,scene-context}` —— 全 404。
@@ -510,7 +523,7 @@ P0 ──┬──────────────────────�
 | | | | **▶ M2 控制面完成 · M3 产品面可用 · M4 平台面收口** | | |
 | 65 | **S10 console 租户后台** | G-1 | vendor 迁移落库（operators/RBAC，按缺口补） | — | ☑ |
 | 66 | | G-2 | console SPA 构建资产进 `public/console/` | G-1 | ☑ |
-| 67 | | G-3 | 租户作用域 API（节点/路由审批/社交/服务策略）——**①② 已落（②只读，代批待裁定），剩 ③④**；②那条「过期」死值雷已于 2026-10-02 在模型层修掉（读时判时间，四路调用点同口径） | B-1 | ◐ |
+| 67 | | G-3 | 租户作用域 API（节点/路由审批/社交/服务策略）——**①②④ 已落（②④只读；②的「过期」死值雷已于 2026-10-02 在模型层修掉，读时判时间、四路调用点同口径），剩 ③ 社交（避开他会话的 SocialController 冲突）** | B-1 | ◐ |
 | 68 | | G-4 | console 业务模块页（挂框架 module-loader） | G-3 | ☐ |
 | 69 | | G-5 | 菜单 + 权限项注册进框架 `permissions`/菜单表 | G-3 | ☐ |
 | 70 | | G-6 | 部署：`console.mynet.club` server block + 证书 SAN（H3） | G-2 | ☐ |
@@ -552,6 +565,7 @@ P0 ──┬──────────────────────�
 | gnb_es 孤儿 | **E-1** 前置验证 |
 | 文档与代码漂移 | **E-10** |
 | `detector` 与 `tools/{firewall,routing}` 重复实现 | **F-1**（收敛成一套后删另一套）；`tools/firewall.go` 的 `parseIptablesOutput` 与 `detector/firewall_linux.go` 同名 |
+| `node_services` 表**无可用写入方**（`PUT /nodes/{id}/network-config` 是 500） | 2026-10-02 取证于 G-3 ④：`Api\V1\NodeController.php:1463,1562` 把应用服务类 `Services\NodeService` 当 Eloquent 模型用（`::where` / `::addServiceToNode` 均不存在），抛 `Error` 不被 `catch (\Exception)` 接住。真实读路径不依赖这张表（`BundleEnvelopePublisher::resolveIndexServers()` 从 `services` 解析）。**待裁定**：修 import（改指 `Models\NodeService`）还是整条路径重做——若判「表本就废弃」，G-4 界面不该出现节点-服务绑定视图 |
 
 ---
 
