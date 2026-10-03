@@ -1,3 +1,9 @@
+> ⚠️ **状态：已被取代（历史）**（2026-10-01 标注）。
+> 本方案的「tui → client」路线**已整体谢幕**：`mynet_client` / `mynet_tui` / `mynet_lua` 三仓均已退役，
+> 能力由 **`mynet_agent`（mynetd + mynet）** 承接，壳层见 `mynet_desktop` / `mynet_openwrt`。
+> 现行规划见 [`integration-plan-v2.md`](integration-plan-v2.md) 与 [`dev-plan.md`](dev-plan.md)。
+> 保留本文只为旧线决策考古，**不要再照它执行**。
+
 # MyNet 客户端迁移与优化方案
 
 > tui (Go) → client (Node.js) + lua (LuCI) 全面升级规划
@@ -329,7 +335,7 @@ OpenWrt 资源受限，不使用 Node.js 插件机制：
 
 ### 3.2 新方案：back 提供 config-bundle API
 
-**mynet_back 新增端点**：
+**mynet_api 新增端点**：
 
 ```
 GET /api/v2/nodes/{nodeId}/config-bundle
@@ -384,14 +390,14 @@ driver/gnb/conf/{nodeId}/
 
 ### 3.3 CTL 的角色
 
-CTL 不直接提供 config-bundle（配置属于 mynet_back 职责），但 CTL 的 `/setup/config-pack` 页面可以代理调用 back 的 config-bundle API，面向浏览器用户提供 ZIP 下载。
+CTL 不直接提供 config-bundle（配置属于 mynet_api 职责），但 CTL 的 `/setup/config-pack` 页面可以代理调用 back 的 config-bundle API，面向浏览器用户提供 ZIP 下载。
 
 ```
-客户端 → 直接调用 mynet_back /api/v2/nodes/{id}/config-bundle
+客户端 → 直接调用 mynet_api /api/v2/nodes/{id}/config-bundle
          （正常使用流程）
 
 浏览器 → CTL /setup/config-pack/{nodeId}
-         → CTL 代理调用 mynet_back config-bundle
+         → CTL 代理调用 mynet_api config-bundle
          → 打包成 ZIP 返回给浏览器
          （手动下载 / 调试场景）
 ```
@@ -491,7 +497,7 @@ $MYNET_HOME/                            # /opt/mynet 或 ~/.local/mynet
 
 ## 五、各项目具体升级工作
 
-### 5.1 mynet_back — 新增 config-bundle API
+### 5.1 mynet_api — 新增 config-bundle API
 
 | 优先级 | 工作项 | 说明 |
 |--------|--------|------|
@@ -761,7 +767,7 @@ http://router-ip/cgi-bin/luci/admin/services/mynet/
 │                    同步升级（一个迭代周期内）                       │
 │                                                                  │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐            │
-│  │  mynet_back  │  │  mynet_ctl   │  │  mynet_gnb   │            │
+│  │  mynet_api  │  │  mynet_ctl   │  │  mynet_gnb   │            │
 │  │ config-bundle│  │ 插件分发      │  │  mynet_utc   │            │
 │  │ action 心跳  │  │ apps.json 2.1│  │ CI 对接 CTL  │            │
 │  └──────┬───────┘  └──────┬───────┘  └──────────────┘            │
@@ -785,7 +791,7 @@ http://router-ip/cgi-bin/luci/admin/services/mynet/
 
 | 项目 | 核心工作 | 依赖关系 |
 |------|---------|----------|
-| **mynet_back** | config-bundle API；心跳 action 类型响应 | 无外部依赖，先行定义 API 契约 |
+| **mynet_api** | config-bundle API；心跳 action 类型响应 | 无外部依赖，先行定义 API 契约 |
 | **mynet_ctl** | apps.json v2.1（含 plugins）；插件 tgz 分发；config 校验端点；install.sh 更新 | 需 back 的 config-bundle 接口契约 |
 | **mynet_client** | 服务三层管理（GNB+路由+防火墙）；插件架构；config-bundle 集成；config check | 需 back API + CTL 分发 |
 | **mynet_lua** | config-bundle 集成；路由+防火墙 UCI 管理；心跳 cron；配置校验 | 需 back API + CTL 分发 |
@@ -814,7 +820,7 @@ Week 5: tui 最终版发布 + 观察期
 
 ## 九、完整 API 交互矩阵（新版）
 
-### mynet_client ↔ mynet_back
+### mynet_client ↔ mynet_api
 
 | 请求 | 端点 | 说明 |
 |------|------|------|
@@ -840,7 +846,7 @@ Week 5: tui 最终版发布 + 观察期
 | 插件下载 | `GET /api/v2/plugins/{id}/download/{file}` | 插件 tgz |
 | 更新检查 | `GET /api/v2/client/manifest` | 比对版本号 |
 
-### mynet_lua ↔ mynet_back
+### mynet_lua ↔ mynet_api
 
 与 client 相同（config-bundle + 状态上报），仅 HTTP 方式为 curl。
 

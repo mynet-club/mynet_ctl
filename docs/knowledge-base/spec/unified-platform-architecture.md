@@ -1,6 +1,6 @@
 # SPEC: 统一平台架构与实施计划
 
-> 更新：2026-09-21 | 适用：`mynet_back`（业务权威）、`mynet_agent`（节点执行）、`mynet_ctl`（安装分发）
+> 更新：2026-09-21 | 适用：`mynet_api`（业务权威）、`mynet_agent`（节点执行）、`mynet_ctl`（安装分发）
 > 状态：**设计稿**（已完成机制调研与草案撤回；本文档为正式设计）
 > 依赖：`driver-abstraction.md`（底层驱动差异分析）、`back-upshift-design.md`（业务上移边界）
 >
@@ -13,18 +13,18 @@
 
 ```mermaid
 flowchart TB
-    subgraph L1["L1 业务域层 — mynet_back"]
+    subgraph L1["L1 业务域层 — mynet_api"]
         BH["好友关系"]
         CN["连接管理"]
         KE["密钥交换"]
         AU["授权/撤销"]
     end
-    subgraph L2["L2 拓扑与策略层 — mynet_back"]
+    subgraph L2["L2 拓扑与策略层 — mynet_api"]
         TP["TransportPolicy"]
         TC["TransportPlan"]
         ND["NodeCapability"]
     end
-    subgraph L3["L3 配置发布层 — mynet_back → agent"]
+    subgraph L3["L3 配置发布层 — mynet_api → agent"]
         ENV["BundleEnvelope"]
         GNB_INT["GnbIntent"]
         WG_INT["WireGuardIntent"]
@@ -58,7 +58,7 @@ L1~L7 是**业务与驱动**分层；节点与 back 之间**怎么连**由
 [`control-plane.md`](control-plane.md) 单独定义：
 
 ```
-mynetd ══WebSocket══> mynet-gateway ──内网 HTTP──> mynet_back
+mynetd ══WebSocket══> mynet-gateway ──内网 HTTP──> mynet_api
                               ↑
                     节点面唯一入口；back 对节点不可达
 ```
@@ -76,7 +76,7 @@ mynetd ══WebSocket══> mynet-gateway ──内网 HTTP──> mynet_back
 
 ## 1. L1 业务域层
 
-**归属**：`mynet_back`
+**归属**：`mynet_api`
 **职责**：好友关系、连接生命周期、密钥管理、授权/撤销——完全不含驱动术语。
 
 ### 1.0 身份模型：admin / operator[tenant] / user 三重层 ⚠️
@@ -335,7 +335,7 @@ ConnectionGrant:    active → revoked (终态)
 
 ## 2. L2 拓扑与策略层
 
-**归属**：`mynet_back`
+**归属**：`mynet_api`
 **职责**：将业务 Connection 翻译成「怎样通信」——仍不生成驱动配置。
 
 ### 2.1 核心对象
@@ -354,7 +354,7 @@ NodeCapability      // 从 NodeIdentity + 运行状态推导
   vpn_type          string
   can_accept_inbound bool    是否可达
   has_public_endpoint bool   是否有公网地址
-  can_proxy         bool     是否可作代理节点（GNB f 节点 / WG hub）
+  can_proxy         bool     是否可作代理出口（指定下一跳）
   can_relay         bool     是否可作中继节点
   supports_ipv6     bool
   region            string|null
@@ -489,7 +489,7 @@ interface TransportPlannerDomainService
 
 ## 3. L3 配置发布层
 
-**归属**：`mynet_back` → `mynet_agent`
+**归属**：`mynet_api` → `mynet_agent`
 **职责**：将 TransportPlan 序列化为 BundleEnvelope，管理版本与发布。
 
 ### 3.1 BundleEnvelope Schema
@@ -680,7 +680,7 @@ agent 侧:
 - [x] PHP 和 Go 使用同一组 fixtures，双端解码结果一致
   - fixtures: `spec/fixtures/bundle-envelope-v2/`（7 个场景：gnb-minimal / gnb-peers-routes / gnb-proxy-relay / gnb-ipv6 / wireguard-minimal / wireguard-multi-peer / compat-extra-fields）
   - Go: `mynet_agent/internal/domain/bundle_envelope.go` + 测试
-  - PHP: `mynet_back/app/Modules/VPN/Domain/Bundle/` + `tests/BundleEnvelopeV2Test.php`
+  - PHP: `mynet_api/app/Modules/VPN/Domain/Bundle/` + `tests/BundleEnvelopeV2Test.php`
   - 两边 checksum 与 fixtures 预计算值一致（canonical JSON 算法已冻结，见 schema `$defs.checksumAlgorithm`）
 - [x] `generation` 单调递增，支持 ETag/304
   - 2026-09-22：back `config_revisions` + `rev-{YmdHis}-{seq}`；ETag=`"<checksum>"`；`/monitor/node/bundle` 与 `/nodes/{id}/bundle` 支持 If-None-Match→304
@@ -1113,7 +1113,7 @@ NetworkBackend.Apply 需要配置:
 
 ## 7. L7 观测与故障切换
 
-**归属**：`mynet_agent` + `mynet_back`
+**归属**：`mynet_agent` + `mynet_api`
 **职责**：区分期望态与运行时观测，驱动 `auto` 模式的故障切换。
 
 ### 7.1 核心概念

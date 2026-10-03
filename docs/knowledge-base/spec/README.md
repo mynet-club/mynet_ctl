@@ -38,7 +38,8 @@
 | [auth.md](auth.md) | 登录 / 登出 / Token 刷新 | ⚠️ **冻结（旧线）** |
 | [wizard.md](wizard.md) | 安装向导：首次配置、Zone/节点选择、配置同步 | ⚠️ **冻结（旧线）** |
 | [service.md](service.md) | 服务三层启停（GNB 进程 → 路由注入 → 防火墙） | ⚠️ **冻结（旧线）** |
-| [proxy.md](proxy.md) | 代理分流操作契约 | ⚠️ **冻结（旧线）**，新线见 control-plane.md §7 |
+| [proxy-split.md](proxy-split.md) | **代理分流（新线）**：三角色、双控、DNS 驱动域名分流、IP 兜底 | **现行** |
+| [proxy.md](proxy.md) | 代理分流操作契约 | ⚠️ **冻结（旧线）**，新线见 [proxy-split.md](proxy-split.md) |
 | [plugins.md](plugins.md) | 插件生命周期（heartbeat、updater、proxy）；心跳 HMAC 签名细节 | ⚠️ **冻结（旧线）** |
 | [debug-env.md](debug-env.md) | macOS 本地调试环境：vm（OpenWrt）/ vml（Debian+client） | ⚠️ **冻结（旧线）** |
 

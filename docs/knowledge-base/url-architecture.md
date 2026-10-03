@@ -29,6 +29,7 @@ CTL 的 URL 严格分为三类，**禁止混用**：
 /d/
 ├── apps.json                              # 产品索引
 ├── conventions.json                       # 命名规范（SSOT）
+├── docs/{name}.md(.sha256)                # 知识库公开文档（skill-kit 等，白名单）
 ├── {product}/manifest.json                # 版本清单（含 scripts 映射）
 ├── {product}/plugins.json                 # 插件列表
 ├── {product}/{filename}.tgz               # 二进制文件下载
@@ -67,6 +68,10 @@ GET /d/detect/openwrt.sh
 
 # 插件
 GET /d/plugins/mihomo_linux_amd64_v1.0.0.tgz
+
+# 知识库文档（skill 自升级源）
+GET /d/docs/skill-kit.md
+GET /d/docs/skill-kit.md.sha256
 ```
 
 ---

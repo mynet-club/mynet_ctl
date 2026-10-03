@@ -1,0 +1,25 @@
+=== SUBJECT SNAPSHOT 180-linux 2026-09-30T04:53:21Z ===
+--- ps ---
+root      305008  0.0  0.2  87620  2456 ?        Ssl  Sep29   0:18 /usr/local/mynet/driver/gnb/bin/gnb -P -l 9016
+root      347310  0.2  1.0  52432 10188 ?        Sl   03:22   0:11 /var/lib/mynet/driver/gnb/bin/gnb -c /var/lib/mynet/driver/gnb/conf/4997342800601732
+root      350491  0.0  0.3   6940  3340 ?        Ss   04:53   0:00 bash -c echo "=== SUBJECT SNAPSHOT 180-linux $(date -u +%Y-%m-%dT%H:%M:%SZ) ==="; echo "--- ps ---"; ps aux | grep -E "[g]nb"; echo "--- maps ---"; find /var/lib/mynet /opt/mynet /usr/local/opt/mynet /etc/mynet /usr/local/mynet /opt/mynet/var -name "gnb.map" 2>/dev/null; echo "--- bins ---"; find /var/lib/mynet /opt/mynet /usr/local/opt/mynet /etc/mynet /usr/local/mynet /usr/local/opengnb /usr/local/bin -name "gnb" -o -name "gnb_ctl" -o -name "gnb_es" 2>/dev/null | head -40; echo "--- node.conf ---"; find /var/lib/mynet /opt/mynet /usr/local/opt/mynet /etc/mynet -name "node.conf" 2>/dev/null
+--- maps ---
+/var/lib/mynet/driver/gnb/conf/4997342800601732/gnb.map
+/var/lib/mynet/state/last-good/20260930T002623Z/gnb.map
+/var/lib/mynet/state/last-good/20260930T000211Z/gnb.map
+/var/lib/mynet/state/last-good/20260930T002351Z/gnb.map
+/var/lib/mynet/state/last-good/20260930T001112Z/gnb.map
+/var/lib/mynet/state/last-good/20260930T000736Z/gnb.map
+--- bins ---
+/var/lib/mynet/driver/gnb
+/var/lib/mynet/driver/gnb/bin/gnb
+/usr/local/opengnb/bin/gnb_es
+/usr/local/opengnb/bin/gnb
+/usr/local/opengnb/bin/gnb_ctl
+--- node.conf ---
+/var/lib/mynet/driver/gnb/conf/4997342800601732/node.conf
+/var/lib/mynet/state/last-good/20260930T002623Z/node.conf
+/var/lib/mynet/state/last-good/20260930T000211Z/node.conf
+/var/lib/mynet/state/last-good/20260930T002351Z/node.conf
+/var/lib/mynet/state/last-good/20260930T001112Z/node.conf
+/var/lib/mynet/state/last-good/20260930T000736Z/node.conf

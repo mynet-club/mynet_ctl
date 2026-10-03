@@ -442,7 +442,7 @@ curl 'https://ctl.mynet.club/api/v2/detect/openwrt?distrib_arch=mipsel_24kc&dist
 
 ## 🔭 产品完整形态规划
 
-> 详见 [docs/architecture.md](../docs/architecture.md)。
+> 详见 [docs/ctl-product-architecture.md](../docs/ctl-product-architecture.md)。
 
 CTL 有三类受众，对应三种界面形态：
 

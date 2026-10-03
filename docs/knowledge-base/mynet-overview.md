@@ -36,11 +36,11 @@
 | 1 | 底层逻辑是 P2P UDP 组网 | `mynet_gnb`（opengnb） | **成熟**（1.6.8 + 本地补丁） |
 | 2 | gnb / wireguard 两种 P2P 实现 | `mynet_agent/driver/{gnb,wireguard}` | gnb **落地**；**wireguard 未实现** |
 | 3 | 各自协议与目录结构不破坏 | 补丁包机制 + 驱动写入边界 | **扎实** |
-| 4 | back 中心化社区化链接、交换公钥 | `mynet_back` + `mynet_gui` | **成熟**（含安全隐患，见 §11） |
+| 4 | back 中心化社区化链接、交换公钥 | `mynet_api` + `mynet_gui` | **成熟**（含安全隐患，见 §11） |
 | 5 | 自动发现 / 自动更新 | `mynet_agent`（mynetd/mynet）+ `mynet_ctl` | **基本落地** |
 | 6 | 界面交给本地：mynetd→gateway→back | `mynet_agent`（gateway 已实现） | agent 段**已实现**；**UI→mynetd 未接** |
 | 7 | 通过部分节点访问到不了的地方（proxy） | gnb `proxy on` / `mynet_proxy` | **两代并存，新线已定** |
-| 8 | 节点提供服务（如 web） | `mynet_back` 的 `services` 建模 | **已建模**，节点侧靠外部服务 + 路由 |
+| 8 | 节点提供服务（如 web） | `mynet_api` 的 `services` 建模 | **已建模**，节点侧靠外部服务 + 路由 |
 | 9 | 支持更多平台/终端 | `mynet_openwrt` / `mynet_desktop` | OpenWrt **成熟**；desktop **占位** |
 
 ---
@@ -55,7 +55,7 @@
 |---|---|---|
 | `mynet_gnb` | C | opengnb fork：构建、发布、**本地补丁包** |
 | `mynet_agent` | Go | 控制面：`mynetd` + `mynet` CLI + `mynet_gateway` + `mynet_proxy` + `mynet-updater` |
-| `mynet_back` | Laravel 13 / PHP | 业务权威：用户/租户/节点/路由/密钥/服务/社交 |
+| `mynet_api` | Laravel 13 / PHP | 业务权威：用户/租户/节点/路由/密钥/服务/社交 |
 | `mynet_ctl` | Laravel | 分发中心 + **知识库中枢** |
 | `mynet_ui` | Vue 3 + Vite + Tailwind | 本机 WebUI（静态） |
 | `mynet_gui` | Vue 3 + Quasar | 云端社区管理前端（服务 back） |
@@ -74,7 +74,7 @@
 
 | 域名 | 项目 |
 |---|---|
-| `api.mynet.club` | `mynet_back`（业务 API） |
+| `api.mynet.club` | `mynet_api`（业务 API） |
 | `ctl.mynet.club` | `mynet_ctl`（分发 + 知识库） |
 | `my.mynet.club` | `mynet_gui`（**用户交互前端**） |
 | `www.mynet.club` | `mynet_web`（官网 / 项目主页） |
@@ -91,8 +91,8 @@
 
 ⚠️ **2026-09-24 裁定（H1）**：生产入口**复用现有 nginx**（`172.26.3.227:443`，前置公网 LB，
 证书 `/etc/letsencrypt/live/mynet.club/`），**不引入 Caddy**。
-`mynet_back/deploy/{Caddyfile,caddy-compose.yml}` **已删除**（2026-09-24，V3-0）；
-Caddyfile 的意图（TLS + api/gw 反代 + 安全头）已转为 `mynet_back/deploy/nginx.conf`。
+`mynet_api/deploy/{Caddyfile,caddy-compose.yml}` **已删除**（2026-09-24，V3-0）；
+Caddyfile 的意图（TLS + api/gw 反代 + 安全头）已转为 `mynet_api/deploy/nginx.conf`。
 api/gw/console 各加 nginx server block。
 
 ---
@@ -101,7 +101,7 @@ api/gw/console 各加 nginx server block。
 
 数据面**完全由 gnb 承担**，MyNet 自己的代码不碰 UDP 组网逻辑。这一点在各层都有明确表述：
 
-- `mynet_back` 不碰数据面。`routes` 表只是「源节点 → 目标节点 + 可访问前缀」的**授权记录**，
+- `mynet_api` 不碰数据面。`routes` 表只是「源节点 → 目标节点 + 可访问前缀」的**授权记录**，
   back 把它投影成配置包下发给 agent，转发由节点自行 P2P 完成。
 - `mynet_agent` 只生成 `node.conf` / `route.conf` / `address.conf` 驱动 gnb，
   数据面二进制在 `driver/gnb/bin/gnb`。
@@ -395,7 +395,7 @@ mynetd ═══════ WebSocket ═══════> gateway ── 内
 |---|---|---|---|
 | ① 本机 | `mynetd` httpd | 对 GUI 提供本机能力面；对需要 back 数据的查询做**中继** | 不直连 back；不持有 back 凭据 |
 | ② 边缘 | `mynet-gateway` | 节点鉴权、连接注册、presence、通知推送、**字节中继** | 不解析业务载荷；不存业务数据 |
-| ③ 内网 | `mynet_back` | 业务权威 | **对节点不可达** |
+| ③ 内网 | `mynet_api` | 业务权威 | **对节点不可达** |
 
 **为什么这样切**（规范列出的收益）：
 
@@ -482,18 +482,18 @@ LAN 客户端请求
 ### 9.2 新线（目标）：gnb 原生 `proxy on`
 
 **`mynet_proxy` 坚决下架**，其最重的职责已被 gnb 原生 `p2-route-proxy` 取代——
-即 `node.conf` 的 **`proxy on`**：**未登记目的地兜底给 f 节点**，
+即 `node.conf` 的 **`proxy on`**：**未登记目的地兜底给指定出口节点**（下一跳，等同 route.conf），
 `route.conf` 不再需要灌海量路由。
 
 这正是 `mynet_gnb/packages/p2-route-proxy` 那个补丁做的事：
-- 准出：未匹配 `route.conf` 时兜底交给 f 节点转发；
+- 准出：未匹配 `route.conf` 时兜底交给**指定出口节点**（下一跳）；
 - 准入：`proxy on` 时跳过白名单（把 `GNB_PF_NOROUTE` 从致命改为放行）。
 
 **能力归宿**（规范 §7.2，注意这不是「换个地方调 gnb」）：
 
 | 旧能力 | 归宿 |
 |---|---|
-| 未登记目的地走代理 | **L2 TransportPolicy → L3 BundleEnvelope → L5 Driver**（gnb：`proxy on` + `address.conf` f 节点；wg：`AllowedIPs`） |
+| 未登记目的地走代理 | **L2 TransportPolicy → L3 BundleEnvelope → L5 Driver**（gnb：`proxy on` + 指定出口=下一跳；wg：`AllowedIPs`） |
 | OS 策略路由 | **L6 NetworkBackend**（驱动无关：`ip route`/pf 对 gnb0 与 wg0 一视同仁） |
 | IP 段列表 / 地域分流 | **L2 TransportPolicy 的输入**（谁走谁是业务决策，back 算好随 envelope 下发） |
 | `proxy_role.conf` 等节点本地状态 | **消亡**（角色与拓扑是 back 的 L1/L2 数据） |
@@ -600,7 +600,7 @@ API 面：`/services/{my,public,friends,anonymous,show,create,update,delete,shar
 | **L7 观测与故障切换** | agent | 期望态 vs 观测态、故障切换状态机、上报 | `DesiredState` / `ObservedState` / `FailoverStateMachine` |
 
 **§0.1 传输与控制面**（横切，不改变业务分层）：
-`mynetd ══WebSocket══> mynet-gateway ──内网 HTTP──> mynet_back`。
+`mynetd ══WebSocket══> mynet-gateway ──内网 HTTP──> mynet_api`。
 
 ### 12.1 L1 核心对象（业务的完整定义）
 
@@ -794,7 +794,7 @@ gnb 靠协议层自己兜底，wg 必须靠上层观测切换。硬压成一套�
 | **节点直连 = 智能同类型**（2026-09-23） | 节点↔节点**只同类型直连**（一节点一网卡）；双驱动节点可分别与 gnb/wg 建连；**gnb-only ↔ wg-only 不直连**。跨驱动互通 = 经双驱动节点的 **L6 路由桥**（apply 一条 route），不是节点间建连 |
 | **多节点并行分两步**（2026-09-23） | 短期互斥切换 `POST /api/v1/nodes/switch`；并行作为后续增量，不阻塞 M0–M1 |
 | **连接「已鉴权」置位时机**（2026-09-23） | gateway 维护连接状态表；back 验证通过**任意一次**节点通道请求即置位。回传机制：back 响应头 `X-Node-Verified: <node_id>`，gateway 解析后置位；伪造 node_id 不被置位 |
-| **mynet_back 按需 module 砍 logging**（2026-09-23） | 只留 `multi-tenant-saas` + `infrastructure` + `auth`；MyNet 不用审计日志，`logging` 一并砍 |
+| **mynet_api 按需 module 砍 logging**（2026-09-23） | 只留 `multi-tenant-saas` + `infrastructure` + `auth`；MyNet 不用审计日志，`logging` 一并砍 |
 | **D-4 作废：`mynet_gui` 才是用户交互前端**（2026-09-24） | `mynet_web` 只是**官网/项目主页**（`www.mynet.club`），`mynet_gui`（`my.mynet.club`，Vue3+Quasar，102 个页面）才是真正提供给用户交互的地方。原「合并 `mynet_ui`+`mynet_gui` → `mynet_web` 一份 WebUI」的 D-4 **作废**；S 段只搬了 `mynet_ui` 的 `local/` 6 页进 `mynet_web`，`mynet_gui` 一页未搬。**T2-6 的载体是 `mynet_gui`**，已挂载进 workspace（origin 原指 `luoyueliang/mynet_gui`、当时裁定「不新建 org 仓」；**2026-09-24 该仓已 transfer 到 `mynet-club/mynet_gui`**，本地 remote 已同步。是转移不是新建，见下方同日的新条目） |
 | **multi_tenant_saas 框架只使用不修改**（2026-09-24） | `vendor/dsplat/**` 只读。框架缺陷或新需求**回上游 `github.com/dsplat/*` 改**，这边 `composer update` 拉进来。定位问题先判根因在 `app/`（可改）还是 `vendor/dsplat/`（只出报告），别把框架 bug 当自己的 bug 绕过去。详见 `AGENTS.md` §1.8 |
 | **H1 生产入口复用现有 nginx，不引入 Caddy**（2026-09-24） | 生产已有 nginx（`listen 172.26.3.227:443`，前置公网 LB）+ Let's Encrypt 证书（`/etc/letsencrypt/live/mynet.club/`）。`deploy/caddy-compose.yml` 直接占宿主 80/443 与该拓扑冲突，且该文件本身是坏的（跨文件 `depends_on` 报 `invalid compose project`）。→ 只加 server block，Caddy 方案**已删除**（V3-0：`deploy/{Caddyfile,caddy-compose.yml}` 一并撤） |
@@ -808,7 +808,7 @@ gnb 靠协议层自己兜底，wg 必须靠上层观测切换。硬压成一套�
 ## 16. 一句话总结
 
 **MyNet 是一个「控制面中心化、数据面 P2P」的组网平台**：
-`mynet_back` 做中心撮合（社交图 + 路由授权 + 公钥目录），
+`mynet_api` 做中心撮合（社交图 + 路由授权 + 公钥目录），
 `mynet_agent` 做节点侧自动化——`mynetd` 是**纯通信层**（心跳、指令、WS、经网关回连），\n系统能力（探测/写入/配置/驱动）由**执行器**承载（桌面 `mynet`、OpenWrt Lua），
 `mynet_gnb`（opengnb）做真正的 UDP P2P 穿透与转发，
 `mynet_ctl` 做分发与文档中枢，`mynet_ui`/`mynet_gui` 分别做本机控制台与云端社区前端。

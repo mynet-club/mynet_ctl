@@ -17,7 +17,7 @@
 
 ⚠️ 两处文档待同步：公网 IP 不是 `52.77.179.176` 而是 `52.221.22.241`
 （`deployment-registry.md:23`、`long-range-plan-deep.md:61/130/443`）；
-证书目录带 `-0001` 后缀（两个 `nginx.conf` 已核正：`mynet_back c28b482`、`mynet_ctl 8d17181`，
+证书目录带 `-0001` 后缀（两个 `nginx.conf` 已核正：`mynet_api c28b482`、`mynet_ctl 8d17181`，
 且 `manage-prod.sh` 新增守卫 3 会在部署前上机核实路径存在）。
 
 **所以真正还卡着的执行类闸门只剩：H5（建库）· H6（back_priv）· H8（真机）· H11（CI secrets + tag）。**
@@ -33,7 +33,7 @@
 
 ### 1.1 工具已备好并双端验证过
 
-`mynet_back/deploy/gen-back-face-keys.sh`（本轮新增）。它的安全约束：
+`mynet_api/deploy/gen-back-face-keys.sh`（本轮新增）。它的安全约束：
 
 - 私钥**只写进 0600 文件，绝不打印到 stdout**（打印一次就进了终端回滚缓冲/日志/agent 上下文）；
   要核对身份只给 sha256 指纹
@@ -113,7 +113,7 @@ vendor 只读（AGENTS.md §1.8），所以只能动我方那 5 个迁移。两�
 
 比对命令（A 的前置）：
 ```bash
-cd mynet_back
+cd mynet_api
 # 框架侧建表名
 grep -rhoE "CREATE TABLE [\`']?[a-z_]+" vendor/dsplat/*/database/migrations/*.php | sort -u > /tmp/fw.txt
 # 我方建表名
@@ -124,8 +124,8 @@ comm -12 /tmp/fw.txt /tmp/our.txt          # 撞车的表
 ### 2.3 裁定后：一条命令产出 DDL
 
 ```bash
-cd mynet_back
-bash deploy/gen-schema.sh                      # → deploy/schema/mynet_back-schema.sql
+cd mynet_api
+bash deploy/gen-schema.sh                      # → deploy/schema/mynet_api-schema.sql
 ```
 
 `gen-schema.sh`（本轮新增）做的事：起**隔离的临时 MySQL**（自己的 datadir/端口/socket，

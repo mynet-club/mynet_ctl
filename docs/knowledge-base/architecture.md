@@ -1,10 +1,14 @@
 # MyNet 系统架构
 
-> 最后更新：2026-03-26
+> 最后更新：2026-10-01（按现状对齐：9 仓 / agent 线 / 三层凭证）  
+> **定位**：系统总览（启动三层 / `$MYNET_HOME` / 认证 / 同步 / 分发 / 数据库）。  
+> **L1–L7 分层权威**是 [`spec/unified-platform-architecture.md`](spec/unified-platform-architecture.md)——两者冲突时以后者为准。  
+> 路径细节权威是 [`spec/paths.md`](spec/paths.md)。  
+> CTL 站点产品规划不在此，在 [`../ctl-product-architecture.md`](../ctl-product-architecture.md)。
 
 ## 整体架构
 
-### 三层服务启动（mynet_client 管理 GNB）
+### 三层服务启动（mynet 执行器管理 GNB）
 
 ```
 Layer 1: GNB 进程启动
@@ -14,154 +18,146 @@ Layer 1: GNB 进程启动
 Layer 2: 路由注入
   ip route add / route add → TUN 接口
   ↓ 解析 route.conf，注入系统路由表
+  （写入归一：L6 单入口，见 spec/route-apply-unification.md）
 
 Layer 3: 防火墙规则
-  iptables / pfctl → 允许 TUN 流量
+  iptables / pfctl / fw4 → 允许 TUN 流量
+  （驱动 vs 系统分工，见 spec/route-firewall-split.md）
 ```
 
-### 客户端安装目录结构（$MYNET_HOME）
+**谁做这件事**：`mynet_agent` 的 **`mynet` 执行器**（偶发、用完即抛）。
+常驻的 `mynetd` **只做通信**（心跳、WS、取指令、结果上报、命令分派），
+**不含**进程生命周期 / 路由写入 / 驱动配置生成——硬约束见 `AGENTS.md` §1.2。
 
-> 由 TUI 方案设计，Node.js Client 沿用。详见 [conventions.md](conventions.md#客户端安装目录结构mynet_home)。
+```
+mynetd（常驻，纯通信） ──分派──▶ mynet（执行器）──▶ driver/gnb · OS 路由/防火墙
+        │
+        ▼
+   mynet_api（业务权威）· gateway（纯透传，不鉴权）
+```
+
+### 安装目录结构（$MYNET_HOME）
+
+> 路径 SSOT 见 [`spec/paths.md`](spec/paths.md)（存储 / 运行 / 投影 / 运行态四层）。
+> 下图是常用形状速查，冲突时以 paths 为准。
 
 ```
 $MYNET_HOME/                           # /opt/mynet 或 ~/.local/mynet
-├── bin/                               # 可执行文件（mynet, mynetd, mynet-updater）
+├── bin/                               # mynet, mynetd, mynet-updater
 ├── conf/                              # 应用层配置
-│   ├── config.json                    # 应用配置（API URL、下载源、刷新间隔）
+│   ├── config.json                    # API URL、下载源、刷新间隔
 │   ├── credential.json                # 守护进程凭证（user_id, token, machine_id）
-│   ├── mynet.conf                     # Shell KEY=VALUE 运行时配置（模板生成）
+│   ├── mynet.conf                     # Shell KEY=VALUE 运行时配置
 │   ├── command.{platform}.json        # 远程命令映射
 │   └── proxy/                         # 代理相关配置
-├── driver/                            # VPN 驱动（支持多驱动扩展）
-│   └── gnb/                           # GNB 驱动
+├── driver/                            # VPN 驱动（多驱动扩展）
+│   └── gnb/
 │       ├── bin/                       # gnb, gnb_ctl, gnb_crypto, gnb_es
-│       └── conf/
-│           └── {nodeId}/              # 每个节点独立目录
-│               ├── node.conf
-│               ├── address.conf
-│               ├── route.conf
-│               ├── ed25519/           # 公钥
-│               ├── security/          # 密钥对
-│               ├── gnb.map            # 运行时映射
-│               └── gnb.pid            # 运行时 PID
-├── scripts/                           # 跨平台服务管理脚本
-│   └── services/
-├── var/
-│   └── logs/                          # 运行时日志
-├── install.sh
-└── uninstall.sh
+│       └── conf/{nodeId}/             # 每节点独立
+│           ├── node.conf · address.conf · route.conf
+│           ├── ed25519/               # 公钥
+│           ├── security/              # 密钥对（.private 权限 0o600）
+│           ├── gnb.map                # 运行时映射（gnb 自产，只读）
+│           └── gnb.pid
+├── scripts/services/                  # 跨平台服务管理脚本
+└── var/logs/
 ```
 
 **$MYNET_HOME 路径决策**：
-- root 用户：`/opt/mynet`（Linux/OpenWrt）、`/usr/local/opt/mynet`（macOS）
+- root：`/opt/mynet`（Linux/OpenWrt）、`/usr/local/opt/mynet`（macOS）
 - 普通用户：`~/.local/mynet`（Linux）、`~/Library/Application Support/MyNet`（macOS）
-- 开发模式（$MYNET_HOME 未设置）：降级到 `~/.config/mynet/`
+- 开发模式（未设置）：降级到 `~/.config/mynet/`
 
-**两层配置设计**：
-| 层级 | 路径 | 说明 |
-|------|------|------|
-| mynet 配置层 | `$MYNET_HOME/conf/` | 应用层：凭证、菜单、远程命令、路由策略 |
-| GNB 驱动层 | `$MYNET_HOME/driver/gnb/conf/{nodeId}/` | GNB 原生配置：node.conf、密钥 |
+**两层配置**：应用层 `$MYNET_HOME/conf/` vs 驱动层 `driver/gnb/conf/{nodeId}/`。
+**编码与布局正交**：`node_keys` 存 hex；写 wg 配置时转 base64 44 字符（见 `AGENTS.md` §1.4）。
 
-### 认证流程
+### 认证（三层三套凭证）
 
 ```
-1. 用户登录
-   POST api.mynet.club/api/v2/auth/login
-   → { token, user, zone }
-
-2. Token 自动刷新
-   每次 API 调用 → 401 → 自动 POST /auth/token/refresh
-   → 新 token 写入 config.json
-
-3. 节点心跳认证（独立于用户 Token）
-   POST /api/v2/monitor/heartbeat
-   Header: X-Node-Id + X-Timestamp + X-Node-Signature (HMAC-SHA256)
-   → 签名材料: METHOD + PATH + TIMESTAMP + BODY
-   → 密钥: 节点的 shared_key（在 mynet_back 创建节点时生成）
+┌────────────┬────────────────┬──────────────────────┬─────────────────┐
+│ 层         │ 谁 ↔ 谁         │ 认证                  │ 凭证            │
+├────────────┼────────────────┼──────────────────────┼─────────────────┤
+│ 数据面     │ 节点 ↔ 节点     │ gnb / wg 自己的加密   │ 驱动密钥         │
+│ 节点面     │ 节点 ↔ back     │ X25519 DH + HMAC     │ 复用驱动密钥     │
+│ 用户面     │ 用户/桌面 ↔ back │ cookie / 登录会话     │ 无密钥           │
+└────────────┴────────────────┴──────────────────────┴─────────────────┘
 ```
+
+- 人用会话（cookie），机器用密钥。
+- **gateway 不鉴权**——纯透传 + 连接状态表；鉴权一律归 back。
+- X25519 签不了名 → 节点面走 **DH 不走签名**，一套驱动密钥通吃 gnb/wg。
+- 心跳：`POST /api/v2/monitor/heartbeat`，`X-Node-Id` + `X-Timestamp` + `X-Node-Signature`（HMAC-SHA256）。
+- 用户 Token 刷新：API 401 → `POST /auth/token/refresh`。
+
+详见 [`spec/node-keying.md`](spec/node-keying.md) · [`spec/auth.md`](spec/auth.md)。
 
 ### 配置同步协议
 
 ```
-1. 客户端请求配置包
-   GET /api/v2/nodes/{nodeId}/config-bundle
+1. GET /api/v2/nodes/{nodeId}/config-bundle
    → { node_id, files: { node.conf, address.conf, route.conf },
-       keys: { ed25519: { id: pubkey }, security: { private, public } },
-       version }
+       keys: { ed25519, security }, version }
 
-2. 客户端写入本地
-   driver/gnb/conf/{nodeId}/
-   ↓ 写入所有文件
-   ↓ 设置 security/*.private 权限 0o600
+2. 写入 driver/gnb/conf/{nodeId}/；security/*.private 权限 0o600
 
-3. 配置校验
-   checkGnbConfig(): node.conf + address.conf 存在且非空,
-   ed25519/ 至少一个 .public, security/ 有 .private
+3. 校验：node.conf + address.conf 非空，ed25519/ 至少一个 .public，security/ 有 .private
 
-4. 失败回滚
-   同步前备份 → 校验失败 → 恢复备份
+4. 失败回滚：同步前备份 → 校验失败恢复
 ```
+
+⚠️ 云端 bundle **不保证下发 zip/crypto 等对等项**——对等项要靠本地约定或
+`mynet config parity` 基线（见 `troubleshoot-connectivity.md` Q&A）。
 
 ### CTL 分发协议
 
 ```
-1. 客户端获取产品索引
-   GET ctl.mynet.club/d/apps.json
-   → { products: { gnb: { manifest_url }, tui: { ... } } }
+1. GET ctl.mynet.club/d/apps.json
+   → { products: { gnb, mynet_agent, utc, … } }
 
-2. 获取版本清单
-   GET /d/{product}/manifest.json
-   → { latest_stable, versions: {
-         v1.6.0: { artifacts: [{ os, arch, file, url }] }
-       }}
+2. GET /d/{product}/manifest.json
+   → { latest_stable, versions: { v…: { artifacts: [{ os, arch, file, url }] } } }
 
-3. 平台匹配
-   Node.js: process.platform → os, process.arch → arch
-   匹配优先级: exact → alias (darwin↔macos, amd64↔x86_64) → probe URL
+3. 平台匹配：exact → alias (darwin↔macos, amd64↔x86_64) → probe URL
 
-4. 下载安装
-   GET /d/{product}/{file}.tgz → 解压提取 binary → driver/{vpnType}/bin/
+4. GET /d/{product}/{file}.tgz → 解压到 driver/{vpnType}/bin/
 ```
 
-## 数据库架构（mynet_back）
+产物前缀统一 **`mynet_agent_*`**（不是 `agent_*`）。命名矩阵见 [`conventions.md`](conventions.md)。
 
-### 核心表
+## 数据库架构
+
+### mynet_api（业务权威）
+
 | 表 | 用途 |
 |----|------|
 | users | 用户（email, password, sanctum tokens） |
-| zones | 网络域（多租户隔离） |
-| zone_members | Zone 成员关系 |
+| zones · zone_members | 网络域（多租户）与成员 |
 | nodes | 节点（node_id, zone_id, user_id, vpn_type, status） |
-| node_keys | Ed25519 密钥对（public_key, private_key, shared_key） |
+| node_keys | 密钥对（public_key, private_key, shared_key）— 私钥出口要收口 |
 | routes | 路由规则（source_node → target_node, subnet） |
-| ip_pools | IP 地址池管理 |
-| node_heartbeats | 心跳记录（metrics, timestamp） |
+| ip_pools | IP 地址池 |
+| node_heartbeats | 心跳（metrics, timestamp） |
 
-### 数据库架构（mynet_ctl）
+### mynet_ctl（分发中心）
+
 | 表 | 用途 |
 |----|------|
 | releases | 版本发布（product, version, platform, arch, file_path） |
-| scripts | 安装/升级脚本 |
-| plugins | 插件管理 |
-| download_logs | 下载统计 |
-| api_tokens | API 访问令牌 |
-| openwrt_devices | OpenWrt 设备库（1930+ 设备） |
+| scripts · plugins | 安装/升级脚本、插件 |
+| download_logs · api_tokens | 下载统计、API 令牌 |
+| openwrt_devices | OpenWrt 设备库（1930+） |
 
-### 数据库架构（mynet_javis）
-| 表 | 用途 |
-|----|------|
-| subdomains | 用户子域名（*.myjarvis.ai） |
-| proxy_targets | 节点实时状态（IP, 端口, 质量分） |
-| quality_logs | 质量时序数据（30 天保留） |
-| plans | 套餐定义（托管版/自托管版） |
-| user_plans | 用户订阅记录 |
+### 独立产品（不在本 workspace）
+
+`mynet_javis`（myjarvis.ai）曾并列描述，现已划出 workspace——
+若仍需其表结构，请查 `projects/_retired/mynet_javis.md` 或独立仓文档。
 
 ## 安全要点
 
-- **TUN 接口**：需要 root/sudo 权限（macOS + Linux）
-- **Ed25519**：节点间通信签名，私钥权限 0o600
-- **HMAC-SHA256**：心跳认证，防重放攻击
-- **Sanctum Token**：用户认证，httpOnly cookie + Bearer token 双模式
-- **Rate Limiting**：客户端 WebUI 300 req/min，Helmet CSP 保护
-- **Javis Quality Gate**：质量分 < 40 自动降级（503），防止低质量节点影响用户
+- **TUN 接口**需要 root/sudo（macOS + Linux）
+- **驱动密钥**：节点间加密；私钥权限 0o600；`back_priv` 保护等级 **>** 节点私钥
+- **HMAC-SHA256** 心跳认证，防重放
+- **Sanctum** 用户认证；本地 token 用 HttpOnly + SameSite=Strict
+- **embed WebUI 必须校验 `Origin`/`Host`**（防 DNS rebinding）
+- **禁止按名字杀进程**（pidfile + cmdline 精确停）
+- 完整红线见 [`AGENTS.md`](AGENTS.md) §3

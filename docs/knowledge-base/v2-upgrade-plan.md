@@ -1,3 +1,9 @@
+> ⚠️ **状态：历史（2026-10-01 标注）**。
+> 本文生成于 2026-03-20，其中 M3/M4 里程碑指向的 `mynet_client` / `mynet_lua` **已退役**，
+> 产物线现由 `mynet_agent` / `mynet_openwrt` 承接。
+> URL/API 迁移结论仍可查（M1/M2/M6 的方向没错），但**时间线与产品名以本文为准已无意义**。
+> 现行规划见 [`integration-plan-v2.md`](integration-plan-v2.md) · [`dev-plan.md`](dev-plan.md) · [`long-range-plan-deep.md`](long-range-plan-deep.md)。
+
 # MyNet 生态 v2 升级总规划
 
 > 本文档描述从 download.mynet.club → ctl.mynet.club 迁移，以及各子项目统一到 v2 API 的升级方案。
@@ -12,7 +18,7 @@
 | 问题 | 描述 |
 |------|------|
 | **download.mynet.club 已废弃** | 遗留静态文件分发站，已禁止目录访问，但多个客户端仍硬编码 |
-| **API 版本不统一** | CTL 当前用 `/api/v1`，mynet_back 用 `/api/v1`，但客户端指向各不同 |
+| **API 版本不统一** | CTL 当前用 `/api/v1`，mynet_api 用 `/api/v1`，但客户端指向各不同 |
 | **API URL 混乱** | mynet_client 用 `my.mynet.club/api/v1`，tui/lua 用 `api.mynet.club/api/v1` |
 | **无 `client` 产品** | 旧产品名 `tui`/`mynet` 别名混乱，新 `client` 包尚未在分发链路中就绪 |
 | **CI 未对接 CTL** | mynet_gnb 的 GitHub Actions 仍上传到 download.mynet.club |
@@ -20,7 +26,7 @@
 ### 1.2 升级目标
 
 1. **CTL 接管所有软件分发** — `ctl.mynet.club/api/v2` 成为唯一 binary 来源
-2. **统一 API URL** — `api.mynet.club/api/v2`（mynet_back）、`ctl.mynet.club/api/v2`（CTL）
+2. **统一 API URL** — `api.mynet.club/api/v2`（mynet_api）、`ctl.mynet.club/api/v2`（CTL）
 3. **新增 `client` 产品** — 替代旧 `tui`，CTL 保留别名兼容
 4. **CI 自动上传** — GNB/UTC 构建完成后自动 POST 到 CTL release API
 5. **版本可追溯** — 所有 binary 通过 CTL API 管理，带 SHA256/changelog
@@ -47,7 +53,7 @@
 
 **v1 保留运行**（至少 6 个月），v2 为推荐版本。
 
-### 2.2 mynet_back（api.mynet.club）v1 → v2
+### 2.2 mynet_api（api.mynet.club）v1 → v2
 
 | v1 端点 | v2 端点 | 变更说明 |
 |---------|---------|---------|
@@ -80,7 +86,7 @@
 
 ```
 ┌──────────────┐
-│  mynet_back  │ ① 最先：提供 v2 路由（auth/zones/nodes）
+│  mynet_api  │ ① 最先：提供 v2 路由（auth/zones/nodes）
 └──────┬───────┘
        │ 认证 + 配置
        ▼
@@ -105,7 +111,7 @@
 
 | 阶段 | 项目 | 优先级 | 工作量 | 理由 |
 |------|------|--------|--------|------|
-| **① 基础层** | mynet_back | P0 | 小 | v2 路由是所有客户端升级的前提 |
+| **① 基础层** | mynet_api | P0 | 小 | v2 路由是所有客户端升级的前提 |
 | **② 分发层** | mynet_ctl | P0 | 已完成 | v2 路由注册 + apps/manifest 端点 |
 | **③ 构建层** | mynet_gnb, mynet_utc | P1 | 中 | CI 改为上传到 CTL（非阻塞，可并行） |
 | **④ 客户端** | mynet_tui → mynet_client | P1 | 大 | 改 config 默认 URL + updater 逻辑 |
@@ -116,7 +122,7 @@
 ### 4.3 回滚策略
 
 - CTL v1 路由保留不删除，`.json` 后缀别名保留
-- mynet_back v1 路由保留不删除
+- mynet_api v1 路由保留不删除
 - 客户端发布新版本前，先确认 v2 端点可用
 - download.mynet.club 可配一个 301 redirect 到 CTL（作为终极兜底）
 
@@ -160,7 +166,7 @@ Route::prefix('v2')->group(function () {
 
 | 里程碑 | 内容 |
 |--------|------|
-| M1 | mynet_back v2 路由上线 + mynet_ctl v2 路由注册 |
+| M1 | mynet_api v2 路由上线 + mynet_ctl v2 路由注册 |
 | M2 | mynet_gnb/utc CI 对接 CTL API |
 | M3 | mynet_client v2 发布（默认 CTL URL） |
 | M4 | mynet_lua v2 发布 |

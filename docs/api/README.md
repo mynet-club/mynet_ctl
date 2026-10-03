@@ -57,6 +57,7 @@ docs/api/
 ## 相关文档
 
 - [知识库完整规范](../knowledge-base/api-specification.md) — 1800+ 行详细规范（本目录各文件的源数据）
-- [URL 架构](../url-architecture.md) — CTL 分发 URL 设计
-- [架构文档](../architecture.md) — 系统架构总览
-- [命名规范](../conventions.md) — 产品/平台/架构命名约定
+- [URL 架构](../knowledge-base/url-architecture.md) — CTL 分发 URL 设计
+- [系统架构](../knowledge-base/architecture.md) — 系统架构总览
+- [CTL 产品规划](../ctl-product-architecture.md) — CTL 站点页面与产品规划
+- [命名规范](../knowledge-base/conventions.md) — 产品/平台/架构命名约定（SSOT）

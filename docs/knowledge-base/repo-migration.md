@@ -18,7 +18,7 @@
 | `IsAllowedWith` 含 `%` 一律拒（防 `%2f` 绕过） | `mynet_agent/internal/relaypolicy/relaypolicy.go` | 路径穿越 |
 | `IsAllowedWith` **先查 deny 再查 allow** | 同上 | 改白名单时漏删 fragment 导致失效 |
 | `coordinator` 的 snapshot/restore/journal/`apply.lock` | `mynet_agent/internal/coordinator/applier.go` | 失败回滚不完整、并发写坏 |
-| 秒精度唯一键的 upsert 规避 | `mynet_back/.../NodeMonitorService.php:135` | 同秒心跳撞 `uk_node_snapshot` |
+| 秒精度唯一键的 upsert 规避 | `mynet_api/.../NodeMonitorService.php:135` | 同秒心跳撞 `uk_node_snapshot` |
 | GNB 私钥是 `clamp(SHA512(seed))` **非** `seed‖pub` | `mynet_agent/internal/utils/gnb_ed25519.go` 注释 | 签名错（**R 对 S 错**，极隐蔽） |
 | `keypair.c` 是**就地 clamp 后落盘** | 同上 | 拿未 clamp 的 `PrivateKey` 当标量会算错签名 |
 | GNB 掩码只认 /32 /24 /16 /8 /0，其余**静默忽略** | `mynet_gnb/src/src/gnb_conf_file.c` | 配置错了不报错 |
@@ -43,7 +43,7 @@ mynet-club/                          workspace（本仓，只放文档与索引�
 ├── mynet_agent/        [新建 repo]  Go — mynetd（纯通信）+ mynet（执行器）+ mynet_gateway + mynet-updater
 ├── mynet_web/          [新建 repo]  Vue3+Quasar — 一份 WebUI（本机域 + 社区域）
 ├── mynet_desktop/      [新建 repo]  非 OpenWrt 平台适配（安装/服务/打包）
-├── mynet_back/         [新建 repo]  Laravel — 业务权威（按需 module）
+├── mynet_api/         [新建 repo]  Laravel — 业务权威（按需 module）
 ├── mynet_openwrt/      [改造 repo]  LuCI 壳 + ubus 薄桥 + ipk
 ├── mynet_ctl/          [挂载 repo]  分发中心 + 知识库中枢（docs/knowledge-base/）
 ├── mynet_gnb/          [挂载 repo]  opengnb fork + 补丁包（git 历史必须保留）
@@ -56,18 +56,28 @@ mynet-club/                          workspace（本仓，只放文档与索引�
 
 ## 1.1 GitHub 仓库与旧代码路径
 
-**org**：`https://github.com/mynet-club` · **命名**：`<项目名>-V2`（统一加 `-V2` 区分以前）
+**org**：`https://github.com/mynet-club` · **命名**：**当前服务用裸项目名，不加后缀**
+（2026-10-01 已去掉迁移期的 `-V2`；业务权威仓由 `mynet_back` 更名为 **`mynet_api`**，
+对齐 `api.mynet.club`，并与同为 Laravel 的 `mynet_ctl`（分发/知识库）区分）。
 
 | 本地目录 | GitHub repo | 旧代码路径 | 性质 |
 |---|---|---|---|
-| `mynet_agent/` | [`mynet_agent-V2`](https://github.com/mynet-club/mynet_agent-V2) | `lyt.com/mynet_agent`（自 `mynet_tui` 抽出，`detector` 亦源自 tui） | **新建** + 整理式搬运 |
-| `mynet_web/` | [`mynet_web-V2`](https://github.com/mynet-club/mynet_web-V2) | `lyt.com/mynet_gui` + `lyt.com/mynet_ui` | **新建**（合并两仓） |
-| `mynet_desktop/` | [`mynet_desktop-V2`](https://github.com/mynet-club/mynet_desktop-V2) | `lyt.com/mynet_desktop`（7 文件占位） | **新建** |
-| `mynet_back/` | [`mynet_back-V2`](https://github.com/mynet-club/mynet_back-V2) | `lyt.com/mynet_back` | **新建** + 整理式搬运（按需 module） |
-| `mynet_openwrt/` | [`mynet_openwrt-V2`](https://github.com/mynet-club/mynet_openwrt-V2) | `lyt.com/mynet_openwrt` | **改造**（历史保留） |
-| `mynet_ctl/` | [`mynet_ctl-V2`](https://github.com/mynet-club/mynet_ctl-V2) | `lyt.com/mynet_ctl` | **挂载**（历史保留；**知识库中枢在此**） |
-| `mynet_gnb/` | [`mynet_gnb-V2`](https://github.com/mynet-club/mynet_gnb-V2) | `lyt.com/mynet_gnb` | **挂载**（历史保留，rebase 上游） |
-| `mynet_utc/` | [`mynet_utc-V2`](https://github.com/mynet-club/mynet_utc-V2) | `WorkSpaceCPlus/mynet_utc` | **挂载**（历史保留） |
+| `mynet_agent/` | [`mynet_agent`](https://github.com/mynet-club/mynet_agent) | `lyt.com/mynet_agent`（自 `mynet_tui` 抽出，`detector` 亦源自 tui） | **新建** + 整理式搬运 |
+| `mynet_web/` | [`mynet_web`](https://github.com/mynet-club/mynet_web) | `lyt.com/mynet_gui` + `lyt.com/mynet_ui` | **新建**（合并两仓） |
+| `mynet_desktop/` | [`mynet_desktop`](https://github.com/mynet-club/mynet_desktop) | `lyt.com/mynet_desktop`（7 文件占位） | **新建** |
+| `mynet_api/` | [`mynet_api`](https://github.com/mynet-club/mynet_api) | `lyt.com/mynet_back` | **新建** + 整理式搬运（按需 module） |
+| `mynet_openwrt/` | [`mynet_openwrt`](https://github.com/mynet-club/mynet_openwrt) | `lyt.com/mynet_openwrt` | **改造**（历史保留） |
+| `mynet_ctl/` | [`mynet_ctl`](https://github.com/mynet-club/mynet_ctl) | `lyt.com/mynet_ctl` | **挂载**（历史保留；**知识库中枢在此**） |
+| `mynet_gnb/` | [`mynet_gnb`](https://github.com/mynet-club/mynet_gnb) | `lyt.com/mynet_gnb` | **挂载**（历史保留，rebase 上游） |
+| `mynet_utc/` | [`mynet_utc`](https://github.com/mynet-club/mynet_utc) | `WorkSpaceCPlus/mynet_utc` | **挂载**（历史保留） |
+
+**历史仓（GitHub 已 Archive，git 历史原样保留，不删）**：
+
+| GitHub repo | 原名 | 说明 |
+|---|---|---|
+| `mynet_agent-legacy` · `mynet_ctl-legacy` · `mynet_web-legacy` · `mynet_utc-legacy` | 同名无后缀 | 旧线；为腾出当前服务名而改 `*-legacy` |
+| `mynet_back-legacy` | `mynet_back` | 旧业务后端；当前业务权威已改名 `mynet_api` |
+| `mynet_tui` · `mynet_lua` · `mynet_client` · `mynet_javis` · `mynet` | 不变 | 冻结归档，无撞名，仅 Archive |
 
 **旧代码根目录**（搬运清单 §4 的相对路径以它们为基准）：
 - `/Users/arthur/Devel/WorkSpacePHP/lyt.com/` —— 21 个 `mynet_*` 目录
@@ -84,6 +94,9 @@ mynet-club/                          workspace（本仓，只放文档与索引�
 | `lyt.com/mynet_main` · `mynet_saas` | 旧 Laravel / 框架相关 |
 | `lyt.com/mynet_back_old` · `mynet_back_20250904` · `mynet_backup_20250610_155701` | back 的历史备份 |
 
+> **命名约定（此后遵守）**：当前服务 = 裸名；历史仓 = `*-legacy` + Archive。
+> 不要再引入 `-V2` 之类代际后缀；需要冻结时用 `-legacy` + Archive，不删仓。
+
 ---
 
 ## 1.2 守护机制（make 入口 + git hook 强制闸）
@@ -99,7 +112,7 @@ mynet-club/                          workspace（本仓，只放文档与索引�
 **为什么这样分**：pre-commit 跑全量测试会拖垮提交体验；
 pre-push 才是「不推坏东西」的关口（DoD 要求「测试通过」，这里强制执行）。
 
-**模板**在 [`templates/`](../templates/)，各 repo 复制一份（`Makefile` + `.githooks/`），
+**模板**在 [`templates/`](templates/)，各 repo 复制一份（`Makefile` + `.githooks/`），
 `make install-hooks` 装 hook（`git config core.hooksPath .githooks`）。
 **自包含不跨仓依赖**——各 repo 可独立 clone / build，hook 不能断。
 
@@ -126,18 +139,18 @@ pre-push 才是「不推坏东西」的关口（DoD 要求「测试通过」，�
 | **mynet_agent** | **新建 + 整理式搬运** | 最乱（死代码 3970 行、重复实现 5300 行）；执行器架构要求模块边界大改，改造 ≈ 重建 |
 | **mynet_web** | **新建**（合并 `mynet_ui` + `mynet_gui`） | 已定合并；以 Quasar 为基线 |
 | **mynet_desktop** | **新建** | 现为 7 文件占位、mynet_client 血统，等于没有 |
-| **mynet_back** | **新建 + 整理式搬运** ⚠️ **按需 module** | 31 个框架包里业务只用 3 个（见 §3）；裁掉 27 个后重建成本可控，且能一次性补 create migration |
+| **mynet_api** | **新建 + 整理式搬运** ⚠️ **按需 module** | 31 个框架包里业务只用 3 个（见 §3）；裁掉 27 个后重建成本可控，且能一次性补 create migration |
 | **mynet_openwrt** | **改造** | 12 个 model 全实装、83 路由、ipk 链路通；只需改 procd + Lua 分界 |
 | **mynet_ctl** | **挂载，不动** | 知识库（`docs/knowledge-base/`，51 文件）在这，是文档中枢 |
 | **mynet_gnb** | **挂载，不动** ⚠️ | fork 的 git 历史**必须保留**——补丁包机制（`format-patch` + `rebase.sh`）依赖它 |
 | **mynet_utc** | **挂载，不动** | 独立可选组件 |
 
-> **mynet_back 从「改造」改为「新建」**的依据见 §3——按需 module 后框架负担小到可以重建，
+> **mynet_api 从「改造」改为「新建」**的依据见 §3——按需 module 后框架负担小到可以重建，
 > 而重建能一次性解决「无 create migration」「L1/L2/L3 契约缺」两个大债。
 
 ---
 
-## 3. mynet_back 按需 module（31 → 3~4）
+## 3. mynet_api 按需 module（31 → 3~4）
 
 实测统计（`grep` 覆盖 `app/` `bootstrap/` `routes/`）：
 
@@ -221,7 +234,7 @@ pre-push 才是「不推坏东西」的关口（DoD 要求「测试通过」，�
 | `mynet/commands.go` | 子命令注册（setup/install/uninstall/update/config/detector/metrics/apply/service/driver） |
 | `shared/system_snapshot.go` | `system.json` 的读写与指纹 |
 
-### 4.2 `mynet_back`（新建 + 整理式搬运，按需 module）
+### 4.2 `mynet_api`（新建 + 整理式搬运，按需 module）
 
 **搬**：
 
@@ -298,11 +311,11 @@ pre-push 才是「不推坏东西」的关口（DoD 要求「测试通过」，�
 | 阶段 | 仓库落点 | 对应任务 ID（`dev-plan.md` §3） | 出口 |
 |---|---|---|---|
 | **S0 立骨架** | 本仓 + 8 个 repo | S0-1 · S0-2 · S0-3 | 目录骨架齐 |
-| **S1 地基** | `mynet_agent/shared/`、`mynet_back` | P0-1 … P0-6 · S1-1 · S1-2 | **M0**：两套测试全绿、无明文密码、无私钥出口 |
+| **S1 地基** | `mynet_agent/shared/`、`mynet_api` | P0-1 … P0-6 · S1-1 · S1-2 | **M0**：两套测试全绿、无明文密码、无私钥出口 |
 | **S2 执行器 mynet** | `mynet_agent/mynet/` | F-1 · F-6 · S2-1 · F-2 · F-4 · F-5 · D-7 | `mynet detector` / `metrics` / `apply` 可用 |
 | **S3 纯通信 mynetd** | `mynet_agent/mynetd/` | D-11 · D-6 · D-1 · D-2 · D-8 · S3-1 | mynetd = 纯通信层 |
 | **S4 gateway** | `mynet_agent/gateway/` | C-3 … C-8 · C-7 · C-6 | gateway 零密码学 + 用户面入口 |
-| **S5 back 业务层** | `mynet_back/app/Modules/` | B-1 … B-9 | create migration + 三个 DomainService |
+| **S5 back 业务层** | `mynet_api/app/Modules/` | B-1 … B-9 | create migration + 三个 DomainService |
 | **S6 驱动** | `mynet_agent/mynet/driver/` | A-1 … A-5 · A-7 · C-1 · C-2 | 双驱动可注册、DH 可用 |
 | **S7 验证** | 跨仓 | F-3 · A-8 | **M1**：三场景全绿 |
 | **S8 mynet_web** | `mynet_web/` | D-3 … D-10 | 一份 UI 两个功能域 |

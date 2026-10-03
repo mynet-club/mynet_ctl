@@ -8,7 +8,7 @@
 
 ## 与 MyNet 的关系
 - **独立产品**，与 mynet 组网服务弱耦合
-- 复用 mynet_back 账号体系（Sanctum Token）
+- 复用 mynet_api 账号体系（Sanctum Token）
 - 复用 mynet_client 管理 GNB 节点
 - 使用 GNB 底层穿透能力，不依赖 mynet 组网服务
 

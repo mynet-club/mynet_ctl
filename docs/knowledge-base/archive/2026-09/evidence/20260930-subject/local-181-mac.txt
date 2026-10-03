@@ -1,0 +1,34 @@
+=== SUBJECT SNAPSHOT local-181-mac 2026-09-30T04:53:00Z ===
+--- ps gnb ---
+root             75036   0.0  0.0 435325984   6704   ??  S     9:19AM   0:19.31 /var/lib/mynet/driver/gnb/bin/gnb -c /var/lib/mynet/driver/gnb/conf/3764021915150630
+arthur           41741   0.0  0.0 435308016   2528   ??  Ss   12:53PM   0:00.01 /bin/zsh -c EVID=/Users/arthur/Devel/WorkSpaceAI/mynet-club/mynet_ctl/docs/knowledge-base/evidence/20260930-subject\012mkdir -p "$EVID"\012\012snapshot() {\012  local name="$1"\012  local out="$EVID/$name.txt"\012  {\012    echo "=== SUBJECT SNAPSHOT $name $(date -u +%Y-%m-%dT%H:%M:%SZ) ==="\012    echo "--- ps gnb ---"\012    ps aux 2>/dev/null | grep -E '[g]nb' || true\012    echo "--- pgrep -af gnb ---"\012    pgrep -af gnb 2>/dev/null || true\012    echo "--- find gnb maps ---"\012    find /var/lib/mynet /opt/mynet /usr/local/opt/mynet /etc/mynet /usr/local/mynet /opt/mynet/var -name 'gnb.map' 2>/dev/null\012    echo "--- find gnb bin ---"\012    find /var/lib/mynet /opt/mynet /usr/local/opt/mynet /etc/mynet /usr/local/mynet /usr/local/bin /usr/local/opengnb -name 'gnb' -o -name 'gnb_ctl' -o -name 'gnb_es' 2>/dev/null | head -40\012    echo "--- find node.conf ---"\012    find /var/lib/mynet /opt/mynet /usr/local/opt/mynet /etc/mynet -name 'node.conf' 2>/dev/null\012  } > "$out" 2>&1\012  echo "wrote $out"\012}\012\012snapshot local-181-mac\012cat "$EVID/local-181-mac.txt"
+--- pgrep -af gnb ---
+41741
+75036
+--- find gnb maps ---
+/var/lib/mynet/driver/gnb/conf/1353179228271167/gnb.map
+/opt/mynet/driver/gnb/conf/3764021915150630/gnb.map
+/usr/local/opt/mynet/driver/gnb/conf/5361915117964660/gnb.map
+/usr/local/opt/mynet/driver/gnb/conf/3764021915150630/gnb.map
+--- find gnb bin ---
+/var/lib/mynet/driver/gnb
+/var/lib/mynet/driver/gnb/bin/gnb
+/opt/mynet/driver/gnb
+/opt/mynet/driver/gnb/bin/gnb_es
+/opt/mynet/driver/gnb/bin/gnb
+/opt/mynet/driver/gnb/bin/gnb_ctl
+/usr/local/opt/mynet/driver/gnb
+/usr/local/opt/mynet/driver/gnb/bin/gnb_es
+/usr/local/opt/mynet/driver/gnb/bin/gnb
+/usr/local/opt/mynet/driver/gnb/bin/gnb_ctl
+/usr/local/mynet/driver/gnb
+/usr/local/mynet/driver/gnb/bin/gnb_es
+/usr/local/mynet/driver/gnb/bin/gnb
+/usr/local/mynet/driver/gnb/bin/gnb_ctl
+/usr/local/bin/gnb
+/usr/local/bin/gnb_ctl
+--- find node.conf ---
+/var/lib/mynet/driver/gnb/conf/1353179228271167/node.conf
+/opt/mynet/driver/gnb/conf/3764021915150630/node.conf
+/usr/local/opt/mynet/driver/gnb/conf/5361915117964660/node.conf
+/usr/local/opt/mynet/driver/gnb/conf/3764021915150630/node.conf

@@ -33,7 +33,7 @@ luasrc/
 ```
 
 ## 数据流入
-- ← mynet_back (认证 + 配置, via curl)
+- ← mynet_api (认证 + 配置, via curl)
 - ← mynet_ctl (binary 下载)
 
 ## 特殊说明

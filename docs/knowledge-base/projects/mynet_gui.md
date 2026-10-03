@@ -36,7 +36,7 @@ src/
 ```
 
 ## 数据流入
-- ← mynet_back (REST API + WebSocket)
+- ← mynet_api (REST API + WebSocket)
 
 ## 环境变量
 ```

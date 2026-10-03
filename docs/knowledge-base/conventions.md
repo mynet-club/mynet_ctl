@@ -1,6 +1,6 @@
 # MyNet 统一规范
 
-> 最后更新：2026-03-26  
+> 最后更新：2026-10-01（产品标识 / 代码风格对齐 9 仓现状）  
 > SSOT: `mynet_ctl/app/Domain/Release/Services/ReleaseDomainService.php`  
 > API: `https://ctl.mynet.club/d/conventions.json`
 
@@ -31,14 +31,24 @@ v{major}.{minor}.{patch}[.{pre}]
 
 ## 产品标识
 
+> 2026-10-01 更新：现行产品只认下表**上半**；下半为历史 ID，仅在解析旧产物名时用。
+
+### 现行
+
 | ID | 名称 | 文件名前缀 | 技术栈 | 备注 |
 |----|------|-----------|--------|------|
-| `tui` | MyNet TUI | `mynet` (别名) | Go | Go 终端客户端（旧版） |
-| `client` | MyNet Client | `client` | Node.js | 替代 tui 的新客户端 |
+| `agent` / `mynet_agent` | MyNet Agent | **`mynet_agent`**（不是 `agent_*`） | Go | mynetd + mynet + gateway + updater |
 | `gnb` | GNB | `gnb` | C | P2P VPN 核心 |
 | `utc` | UTC | `utc` | C | UDP→TCP 隧道 |
-| `lua` | MyNet Lua | `lua` | Lua | OpenWrt LuCI 插件 |
-| `proxy` | MyNet Proxy | `proxy` | Node.js | Mihomo 代理管理 |
+
+### 历史（已退役，解析旧文件名时用）
+
+| ID | 名称 | 文件名前缀 | 承接者 |
+|----|------|-----------|--------|
+| `tui` | MyNet TUI | `mynet`（别名） | `mynet_agent` |
+| `client` | MyNet Client | `client` | `mynet_agent` |
+| `lua` | MyNet Lua | `lua` | `mynet_openwrt` + mynetd |
+| `proxy` | MyNet Proxy | `proxy` | 能力并入 agent 的 proxy 域（`mynet_proxy` CLI 已下架） |
 
 ## 平台与架构
 
@@ -117,7 +127,7 @@ v{major}.{minor}.{patch}[.{pre}]
 ## API 规范
 
 ### URL 模式
-- **mynet_back**: `{host}/api/v2/{resource}`
+- **mynet_api**: `{host}/api/v2/{resource}`
 - **mynet_ctl**: `/d/{path}` (分发) + `/api/v2/{resource}` (业务)
 - **mynet_javis**: `{host}/api/v2/{resource}`
 
@@ -254,11 +264,11 @@ $MYNET_HOME/
 /data/app/mynet.club/download/
 ├── apps.json                          # 产品索引
 ├── arch_list.txt                      # 架构映射表
-├── mynet/                             # tui 产品
+├── mynet_agent/                       # 节点代理（历史目录名可能仍写 mynet/）
 │   ├── manifest.json
-│   └── v0.9.8.10/
+│   └── v…/
 │       ├── checksums.txt
-│       └── mynet_{platform}_{arch}_{version}.tgz
+│       └── mynet_agent_{platform}_{arch}_{version}.tgz
 ├── gnb/
 │   ├── manifest.json
 │   └── v1.6.0.a/
@@ -269,31 +279,33 @@ $MYNET_HOME/
 
 ## 代码风格
 
-### PHP (Laravel) — mynet_back / mynet_ctl / mynet_javis
+### PHP (Laravel) — mynet_api / mynet_ctl
 - PSR-12 + Laravel Pint
 - DDD: `Domain/` (纯业务) → `Services/` (协调) → `Controllers/` (薄)
 - Controller 不含业务逻辑
 - 使用 `make:migration` 管理数据库
 
-### JavaScript/TypeScript — mynet_client / mynet_gui / mynet_web
+### JavaScript/TypeScript — mynet_gui / mynet_web
 - ES2020+, `'use strict'`
-- 框架: Express (server) / Vue 3 Composition API (frontend)
+- Vue 3 Composition API
 - 状态管理: Pinia
-- 构建: Vite
+- 构建: Vite / Quasar（gui）
 
-### Go — mynet_tui
-- DDD 五层架构 (cmd → tui → application → infrastructure → domain)
-- 依赖注入容器 (composition)
-- Cobra CLI 框架
+### Go — mynet_agent（mynetd / mynet / gateway / updater）
+- **mynetd 是纯通信层**，系统能力全在执行器（`AGENTS.md` §1.2）
+- `make guard` 红线：结构约束（mynetd 不依赖系统能力、gateway 不鉴权等）
+- Cobra CLI（`mynet` 子命令）
 
 ### C — mynet_gnb / mynet_utc
 - C99 + POSIX
 - GNU Make (平台专属 Makefile)
 - 无外部依赖（纯 C stdlib + 内嵌 libs）
+- **mynet_gnb/src/ 只读**；改动走 `mynet_gnb/packages/` 补丁包
 
-### Lua — mynet_lua
+### Lua — mynet_openwrt
 - Lua 5.1 / LuCI v3 MVC
 - OpenWrt 包格式 (.ipk)
+- 目标态：只留壳（菜单/视图/静态资源/rpcd ACL），业务迁 mynetd
 
 
 ## 产物命名（E-8 SSOT）

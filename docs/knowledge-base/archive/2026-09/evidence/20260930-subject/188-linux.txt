@@ -1,0 +1,39 @@
+=== SUBJECT SNAPSHOT 188-linux 2026-09-30T04:53:22Z ===
+--- ps ---
+root      954750  0.2  0.5  52488 10624 ?        Ssl  11:23   0:14 /opt/mynet/bin/gnb --systemd -c /opt/mynet/var/gnb
+admin     956323  0.0  0.1   7076  3516 ?        Ss   12:53   0:00 bash -c echo "=== SUBJECT SNAPSHOT 188-linux $(date -u +%Y-%m-%dT%H:%M:%SZ) ==="; echo "--- ps ---"; ps aux | grep -E "[g]nb"; echo "--- maps ---"; find /opt/mynet /var/lib/mynet /etc/mynet /usr/local -name "gnb.map" 2>/dev/null; echo "--- bins ---"; find /opt/mynet /var/lib/mynet /etc/mynet /usr/local /usr/bin -name "gnb" -o -name "gnb_ctl" -o -name "gnb_es" 2>/dev/null | head -40; echo "--- node.conf ---"; find /opt/mynet /var/lib/mynet /etc/mynet -name "node.conf" 2>/dev/null
+--- maps ---
+/opt/mynet/driver/gnb/conf/7676068715291109/gnb.map
+--- bins ---
+/opt/mynet/driver/gnb
+/opt/mynet/bin/gnb
+--- node.conf ---
+/opt/mynet/driver/gnb/conf/7676068715291109/node.conf
+=== 188 TRUE LIVE DIR /opt/mynet/var/gnb ===
+ls: cannot access '/opt/mynet/var/gnb/': Permission denied
+
+=== node.conf ===
+cat: /opt/mynet/var/gnb/node.conf: Permission denied
+
+=== address.conf ===
+cat: /opt/mynet/var/gnb/address.conf: Permission denied
+
+=== vs driver tree ===
+total 288
+drwxr-xr-x 4 root root   4096 Sep 30 11:23 .
+drwxr-xr-x 3 root root   4096 Sep 30 07:11 ..
+-rw-r--r-- 1 root root    148 Sep 30 11:23 address.conf
+drwxr-xr-x 2 root root   4096 Sep 30 11:23 ed25519
+-rw------- 1 root root 255444 Sep 30 12:55 gnb.map
+-rw-r--r-- 1 root root      6 Sep 30 11:23 gnb.pid
+-rw------- 1 root root    222 Sep 30 11:23 node.conf
+-rw-r--r-- 1 root root     37 Sep 30 07:29 proxy.conf
+-rw-r--r-- 1 root root    699 Sep 30 11:23 route.conf
+drwxr-xr-x 2 root root   4096 Sep 30 11:23 security
+=== which gnb_ctl ===
+total 15564
+drwxr-xr-x 2 root root    4096 Sep 30 07:30 .
+drwxr-xr-x 7 root root    4096 Sep 30 07:12 ..
+-rwxr-xr-x 1 root root  327272 Sep 30 07:30 gnb
+-rwxr-xr-x 1 root root 7831714 Sep 30 07:11 mynet
+-rwxr-xr-x 1 root root 7762082 Sep 30 06:50 mynetd

@@ -50,5 +50,5 @@ web/               Vue 3 前端
 - **Peer Keys**：启动时自动获取缺失的 ed25519 公钥
 
 ## 数据流入
-- ← mynet_back (认证 + 配置)
+- ← mynet_api (认证 + 配置)
 - ← mynet_ctl (binary 下载)

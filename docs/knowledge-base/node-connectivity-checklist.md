@@ -1,7 +1,7 @@
 # GNB 密钥实现对照 + 节点连通性检查模型
 
 > 2026-09-24 · 对照 PHP 扩展 / Go / C 三端 · 汇总过夜实测
-> 关联：`spec/node-keying.md` · `overnight-u1-report.md`
+> 关联：`spec/node-keying.md` · `archive/2026-09/overnight-u1-report.md`
 
 ---
 
@@ -24,7 +24,7 @@ void ed25519_create_keypair(pub, priv, seed) {
 
 | | **C 权威** | **PHP 扩展** | **Go（mynet/keys）** |
 |---|---|---|---|
-| **位置** | `mynet_gnb/src/libs/ed25519/` | `mynet_back/lib/gnb_ed25519/`（.so） | `mynet_agent/mynet/keys/gnb_ed25519.go` |
+| **位置** | `mynet_gnb/src/libs/ed25519/` | `mynet_api/lib/gnb_ed25519/`（.so） | `mynet_agent/mynet/keys/gnb_ed25519.go` |
 | **API** | `create_keypair` / `sign` / `verify` / `key_exchange` | `gnb_ed25519_create_keypair`<br>`gnb_ed25519_verify_keypair`<br>`gnb_ed25519_derive_public` | `GenerateGNBKeyPairFromSeed`<br>`VerifyGNBKeyPair`<br>`GNBPublicKeyFromPrivateKey`<br>`SignGNB` |
 | **私钥** | 64B `SHA512(seed)` | 同 C，输出 **128 hex** | 同 C，输出 **128 hex** |
 | **公钥** | 32B | **64 hex** | **64 hex** |
@@ -308,3 +308,33 @@ mynet service stop gnb && ls $MYNET_HOME/driver/gnb/conf/<id>/gnb.pid
 | 托盘 tray | 有（CGO） | 有 | 视构建 |
 
 交叉编译产物：`mynet{,-windows.exe}` / `mynetd{,-windows.exe}` 三端均可 `CGO_ENABLED=0` 出包。
+
+---
+
+## 8. OpenWrt 对齐核对（2026-09-27）
+
+| 能力 | 桌面 WebUI | OpenWrt LuCI | 说明 |
+|---|---|---|---|
+| mynetd 薄层 | ✅ | ✅ 同一套 agent | 心跳/命令/relay 归 mynetd |
+| UI | embed WebUI | LuCI（无 embed） | `hasWebUI=false` |
+| **Token Binding** | ✅ device_fingerprint | ✅ **已补** | 登录带指纹；`X-Device-Fingerprint` 随 API |
+| 登录 | 本机弹窗 / CLI | LuCI login 页 | 同 back `/auth/login` |
+| 对等配置 zip/crypto | `mynet config parity` | **未接 UI** | 可跑 `mynet config parity` |
+| proxy local_only | ✅ 开关 | **未接** | LuCI proxy 是 uci/本地启停 |
+| 备份 export/import | ✅ 列表恢复 | guest_export/import | 路径不同 |
+| 密钥 导入/生成/同步 | ✅ 2×2 卡片 | Keys 页有 | |
+| detector system | darwin/win/linux | **linux 分支 + openwrt 判定** | |
+| detector firewall | pf/netsh/ipt | **fw3 + uci firewall** | |
+| detector service | launchd/sc/systemd | **procd** | |
+| 启动自动 apply | ✅ | node.lua 链路 | 对齐 route_policy.sh |
+
+### 已补（本轮）
+- `util.device_fingerprint()`
+- 登录 payload 带 `device_fingerprint`
+- `api.auth_headers` 带 `X-Device-Fingerprint`
+- credential 读写 `device_fingerprint`
+
+### 待接（LuCI UI）
+1. proxy「仅本机」开关（可后补，当前走本地 uci）
+2. `config parity` 对等配置展示
+3. 备份列表按时间恢复（现为 guest export/import）

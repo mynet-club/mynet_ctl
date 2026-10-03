@@ -1,0 +1,47 @@
+** WARNING: connection is not using a post-quantum key exchange algorithm.
+** This session may be vulnerable to "store now, decrypt later" attacks.
+** The server may need to be upgraded. See https://openssh.com/pq.html
+=== SUBJECT SNAPSHOT 183-windows ===
+--- processes ---
+8980 mynetd.exe
+C:\mynet\bin\mynetd.exe
+9980 gnb.exe
+C:\mynet\driver\gnb\bin\gnb.exe -c C:\mynet\driver\gnb\conf\8107260975133902
+--- mynet home candidates ---
+EXISTS C:\mynet
+
+EXISTS C:\Program Files\mynet
+EXISTS C:\mynet-test
+--- quick find under user and mynet ---
+Name                          FullName                                                    
+----                          --------                                                    
+bin                           C:\mynet\bin                                                
+conf                          C:\mynet\conf                                               
+driver                        C:\mynet\driver                                             
+mynet-agent-windows-amd64     C:\mynet\mynet-agent-windows-amd64                          
+mynet-win-pkg                 C:\mynet\mynet-win-pkg                                      
+plugins                       C:\mynet\plugins                                            
+var                           C:\mynet\var                                                
+mode.json                     C:\mynet\mode.json                                          
+mynet-agent-windows-amd64.zip C:\mynet\mynet-agent-windows-amd64.zip                      
+mynet-setup.exe               C:\mynet\mynet-setup.exe                                    
+mynetd.env                    C:\mynet\mynetd.env                                         
+start-gnb.cmd                 C:\mynet\start-gnb.cmd                                      
+bin                           C:\Program Files\mynet\bin                                  
+driver                        C:\Program Files\mynet\driver                               
+mynetd.env                    C:\Program Files\mynet\mynetd.env                           
+uninstall.exe                 C:\Program Files\mynet\uninstall.exe                        
+bin                           C:\mynet-test\bin                                           
+conf                          C:\mynet-test\conf                                          
+var                           C:\mynet-test\var                                           
+mynetd.env                    C:\mynet-test\mynetd.env                                    
+                              C:\mynet\driver\gnb\bin\gnb.exe                             
+                              C:\mynet\driver\gnb\bin\gnb_ctl.exe                         
+                              C:\mynet\driver\gnb\conf\8107260975133902\gnb.map           
+                              C:\mynet\driver\gnb\conf\8107260975133902\node.conf         
+                              C:\mynet\mynet-agent-windows-amd64\mynet-win-pkg\gnb.exe    
+                              C:\mynet\mynet-agent-windows-amd64\mynet-win-pkg\gnb_ctl.exe
+                              C:\mynet\mynet-win-pkg\gnb.exe                              
+                              C:\mynet\mynet-win-pkg\gnb_ctl.exe                          
+
+

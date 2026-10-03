@@ -3,8 +3,8 @@
 > 用途：交给框架维护者（`github.com/dsplat/*`）的缺陷报告 + 可直接粘贴的提示词。
 > 依据 `AGENTS.md` §1.8——`vendor/dsplat/**` 只读，缺陷一律回上游修，这边 `composer update` 拉回来。
 >
-> 环境：`mynet_back` · PHP 8.5.3 · Laravel ^13.0
-> 装了的框架包：`multi-tenant-saas`（`dev-main as 2.7.0`）· `-module-infrastructure`（`dev-main`）· `-module-auth`（`dev-main`）
+> 环境：`mynet_api` · PHP 8.5.3 · Laravel ^13.0
+> 装了的框架包：`multi-tenant-saas`（`dev-main as 2.7.0`）· `-module-infrastructure`（`dev-main`）· `-module-auth`（`dev-main`）· `-module-operator`（`dev-main`，2026-10-01 为 console 加装，见 AGENTS.md §1.6 裁定例外）
 > 证据均为 `file:line`，可逐条复核。
 
 ---
@@ -167,7 +167,7 @@ route:cache 与 CI 路由审计同样不可用。
 
 ---
 
-## 我方（mynet_back）对应的待办
+## 我方（mynet_api）对应的待办
 
 上游修好之前，这两条在我方侧的表现与处置：
 
@@ -329,3 +329,27 @@ LOG_CHANNEL=json php artisan tinker --execute="Log::info('probe');"
 - **我方处置**：不在 vendor 打补丁（§1.8）；已清理日志并计划给日志加轮转与级别过滤。
 - **对应台账**：CPI-39
 
+
+---
+
+## 缺陷 6：`platform:init` 的租户 seeder 裸 `new SlugService`，未装 `domain` 包时直接致命
+
+- **位置**：`vendor/dsplat/multi-tenant-saas-module-operator/Database/Seeders/PlatformTenantSeeder.php:6,55`
+- **现象**：装了 `operator`、没装 `domain` 的宿主跑 `php artisan platform:init`：
+  ```
+  Class "MultiTenantSaas\Modules\Domain\Services\SlugService" not found
+  ```
+  不是异常，是 `\Error`（`catch (\Exception)` 拦不住），命令整条挂在建「平台超级租户」这一步。
+- **根因**：`module-operator/composer.json` 的 `require` 只有 `php` + `dsplat/multi-tenant-saas`，
+  **没声明 `multi-tenant-saas-module-domain`**，但 seeder 第 55 行直接实例化它的 `SlugService`。
+  与本文 **缺陷 1** 同一类问题（硬引用未声明的可选模块）。
+- **对照：框架自己在别处是对的**——`module-infrastructure/Services/TenantService.php:31-35` 走
+  `OptionalModule::ensure(SlugService::class, ...)` 再 `new`，缺包时给的是可读的 501/提示而非致命。
+  **同一个类、两套纪律**，seeder 这条是漏改的那条。
+- **建议上游怎么修**：`PlatformTenantSeeder.php:55` 改成复用 `TenantService::slugService()`（或同样
+  `OptionalModule::ensure` 包一层）；要么就在 `module-operator/composer.json` 里把 `domain` 声明成依赖。
+- **我方处置**：不在 vendor 打补丁（AGENTS.md §1.8）。本地演示租户改由宿主侧
+  `mynet_api/database/seeders/ConsoleDevSeeder.php` 种（显式非保留 slug，不碰 `platform:init`）。
+  代价：`platform:init` 附带的 `RoleSeeder`/`PermissionSeeder`/`SuperAdminSeeder` 这条正规装配路径
+  我方暂时用不上，RBAC 字典得自己种 —— **上游修好后应回退到 `platform:init`**。
+- **对应计划**：`dev-plan.md` 轨道 G（#65–70）本地跑通补记。

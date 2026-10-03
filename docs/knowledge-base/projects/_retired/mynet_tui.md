@@ -41,5 +41,5 @@ scripts/
 ```
 
 ## 数据流入
-- ← mynet_back (认证 + 配置)
+- ← mynet_api (认证 + 配置)
 - ← mynet_ctl (binary 下载)

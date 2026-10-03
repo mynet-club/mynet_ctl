@@ -12,7 +12,7 @@
 
 | 面 | 现状 | 目标态 |
 |---|---|---|
-| **api.mynet.club** | 旧/混杂代码 + 库（生产域名） | **正式核心平台**（V2 mynet_back，自 stage-api 晋升） |
+| **api.mynet.club** | 旧/混杂代码 + 库（生产域名） | **正式核心平台**（V2 mynet_api，自 stage-api 晋升） |
 | **stage-api.mynet.club** | staging 实例（`/data/app/mynet.club/stage-api`，库 `mynet_back_stage`） | **晋升为 api**；域名/路径/库收敛到生产 |
 | **api2.mynet.club** | 老库 `mynet`（tenant `3678250676883169`），已导入 stage | **退役**；数据只读保留 |
 | **index** | api.mynet.club 上的 gnb index | **不动**，继续在 api.mynet.club |
@@ -194,7 +194,7 @@ ls -la /usr/local/opt/mynet/driver/gnb/conf/ 2>/dev/null
 1) 备份现 api 目录 + 现 api 库（完整可回滚）
 2) 将 stage-api 代码与配置晋升：
    - 代码：rsync stage-api/ → /data/app/mynet.club/api/（排除 .env 密钥差异合并）
-   - 库：mysqldump mynet_back_stage → 生产库名（mynet_back 或沿用已核定名）
+   - 库：mysqldump mynet_back_stage → 生产库名（mynet_api 或沿用已核定名）
      ※ 禁 migration（deployment-registry.md）；只动数据与 .env
 3) .env 对齐生产：
    APP_URL=https://api.mynet.club
@@ -455,7 +455,7 @@ nginx：`gw.mynet.club` → `proxy_pass http://127.0.0.1:8096`
 | 1 | 180 整目录备份 | `/data/backup/mynet/prod-full-20260925_180455/` |
 | 2 | 旧 api → `api_pre_p3` | 可快速回滚 |
 | 3 | stage-api 树 → `api/` | 代码晋升完成 |
-| 4 | `.env` 对齐生产 | `APP_URL=https://api.mynet.club` · `DB=mynet_back` · gateway `:8096` · `REDIS_PREFIX=mynet_database_` · CORS 白名单 |
+| 4 | `.env` 对齐生产 | `APP_URL=https://api.mynet.club` · `DB=mynet_api` · gateway `:8096` · `REDIS_PREFIX=mynet_database_` · CORS 白名单 |
 | 5 | 生产 `back_face` | `/etc/mynet/back_face_{priv,pub}`，与 stage **两对分离**，0600 www-data |
 | 6 | `BackFaceKeys::resolve()` | ✅ yes |
 | 7 | `mynet-gateway.service` | `127.0.0.1:8096` → upstream `https://api.mynet.club`，enabled |

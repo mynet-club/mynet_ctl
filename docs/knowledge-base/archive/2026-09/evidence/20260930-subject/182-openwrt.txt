@@ -1,0 +1,22 @@
+** WARNING: connection is not using a post-quantum key exchange algorithm.
+** This session may be vulnerable to "store now, decrypt later" attacks.
+** The server may need to be upgraded. See https://openssh.com/pq.html
+=== SUBJECT SNAPSHOT 182-openwrt 2026-09-30T04:53:21Z ===
+--- ps ---
+23312 root     16532 S    /etc/mynet/driver/gnb/bin/gnb -c /etc/mynet/driver/gnb/conf/8283289760467957
+--- maps ---
+/etc/mynet/driver/gnb/conf/8283289760467957/gnb.map
+--- bins ---
+/etc/mynet/driver/gnb
+/etc/mynet/driver/gnb/bin/gnb
+/etc/mynet/driver/gnb/bin/gnb_ctl
+/etc/mynet/driver/gnb/bin/gnb_es
+/etc/mynet/driver/gnb/bin.bak-1.6.0/gnb_ctl
+/etc/mynet/driver/gnb/bin.bak-1.6.0/gnb_es
+/etc/mynet/driver/gnb/bin.bak-1.6.0/gnb
+/etc/mynet/driver/gnb/bin.old/gnb_ctl
+/etc/mynet/driver/gnb/bin.old/gnb_es
+/etc/mynet/driver/gnb/bin.old/gnb
+/usr/sbin/driver/gnb
+--- node.conf ---
+/etc/mynet/driver/gnb/conf/8283289760467957/node.conf
