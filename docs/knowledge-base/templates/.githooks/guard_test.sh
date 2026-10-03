@@ -69,6 +69,14 @@ echo "▸ guard.sh 功能自测（被测：${GUARD}）"
 newrepo clean
 expect "干净仓：明说未检查任何红线" 0 clean "本次未检查任何红线"
 
+# ── 1b. bare 仓：取不到工作树时必须**说出来**，不能 exit 0 装作通过 ──
+# 2026-10-04 的事故里，含生产私钥的 .tgz 就是从 bare 仓目录直接 push 的，
+# guard / pre-push 一次都没跑过，却都报了绿。
+mkdir -p "$WORK/bare/.githooks"
+cp "$GUARD" "$WORK/bare/.githooks/guard.sh"
+( cd "$WORK/bare" && git init -q --bare . )
+expect "bare 仓：明说跳过而不是假装通过" 0 bare "guard 跳过"
+
 # ── 2. 工作区模式：未跟踪文件也要查（旧版在这里 exit 0）──────
 newrepo wt_ok
 echo 'package main' > "$WORK/wt_ok/main.go"
@@ -196,7 +204,25 @@ expect "gnb 仓未跟踪的 src/ 文件 → B1 拦下" 1 mynet_gnb "B1 mynet_gnb
 newrepo gnb_other
 mkdir -p "$WORK/gnb_other/src"
 echo 'int main(void){return 0;}' > "$WORK/gnb_other/src/x.c"
-expect "非 gnb 仓的 src/ 不触发 B1" 0 gnb_other "B1 mynet_gnb/src/ 未被直改"
+# 非 gnb 仓里这条红线**什么都没查**，所以必须明说跳过 —— 打「✓ 未被直改」就是
+# 把「没跑」伪装成「通过」（同 guard.sh 开头那条教训）。
+expect "非 gnb 仓的 src/ 不触发 B1，且明说跳过" 0 gnb_other "B1 跳过"
+
+# gnb 的真身是 bare 仓 + linked worktree，编辑入口（.wt/gnb-actions）路径里
+# **不含** mynet_gnb。B1 曾按工作树路径判仓，于是在 gnb 上永远静默跳过 ——
+# 「src/ 只读」这条红线一次都没生效过。判仓必须走 --absolute-git-dir。
+mkdir -p "$WORK/gnbwt"
+newrepo gnbwt/mynet_gnb
+mkdir -p "$WORK/gnbwt/mynet_gnb/packages"
+echo x > "$WORK/gnbwt/mynet_gnb/packages/README"
+( cd "$WORK/gnbwt/mynet_gnb" && git add packages \
+  && git -c user.name=t -c user.email=t@t commit -q -m base \
+  && git worktree add -q ../wt-actions -b wt )
+mkdir -p "$WORK/gnbwt/wt-actions/.githooks"
+cp "$GUARD" "$WORK/gnbwt/wt-actions/.githooks/guard.sh"
+mkdir -p "$WORK/gnbwt/wt-actions/src"
+echo 'int main(void){return 0;}' > "$WORK/gnbwt/wt-actions/src/x.c"
+expect "gnb 的 linked worktree 里改 src/ → B1 照样拦下" 1 gnbwt/wt-actions "B1 mynet_gnb/src/"
 
 # ── 7. C2：端口漂移（8096 是 SSOT）──────────────────────────
 newrepo port
@@ -207,6 +233,29 @@ newrepo portdoc
 mkdir -p "$WORK/portdoc/docs"
 echo 'const L = "127.0.0.1:8720"' > "$WORK/portdoc/docs/old.md"
 expect "docs/ 下的端口字样不算漂移" 0 portdoc "C2 端口无漂移"
+
+# 黑名单只认「已知写错过的端口」，追不上新错值。8711 是 mynet_gateway 的历史端口，
+# mynet_desktop/nsis 曾把 mynetd 起在它上面，而面板快捷方式指 8096 → 装完点开空页面
+# （181 节点真机复现）。下面三条钉住改判据后的不变量：提到 mynetd 的行必须是 8096。
+newrepo port_mynetd
+printf 'FileWrite $0 %s\n' "'\"\$INSTDIR\\bin\\mynetd.exe\" -listen 127.0.0.1:8711'" > "$WORK/port_mynetd/i.nsi"
+expect "mynetd 起在 8711 → C2 拦下（黑名单外的新错值）" 1 port_mynetd "mynetd 本机 API 应为 8096"
+
+newrepo port_mynetd_ok
+printf 'ExecStart=/opt/mynet/bin/mynetd -listen 127.0.0.1:8096\n' > "$WORK/port_mynetd_ok/mynetd.service"
+expect "mynetd 起在 8096 → 通过" 0 port_mynetd_ok "C2 端口无漂移"
+
+# e2e / debug 脚手架故意用不冲突的临时端口（18733/18811/18096），拦了就是误报，
+# 而误报多了守护会被 --no-verify 绕过 —— 反而失效。
+newrepo port_e2e
+mkdir -p "$WORK/port_e2e/scripts/e2e"
+printf '"$BIN/mynetd" -listen "127.0.0.1:18733" > log 2>&1 &\n' > "$WORK/port_e2e/scripts/e2e/pull.sh"
+expect "e2e 脚本的临时端口不算漂移" 0 port_e2e "C2 端口无漂移"
+
+newrepo port_debug
+mkdir -p "$WORK/port_debug/debug"
+printf '/usr/sbin/mynetd -once -listen 127.0.0.1:18096\n' > "$WORK/port_debug/debug/install.sh"
+expect "debug 脚手架的临时端口不算漂移" 0 port_debug "C2 端口无漂移"
 
 # ── 汇总 ─────────────────────────────────────────────────────
 echo

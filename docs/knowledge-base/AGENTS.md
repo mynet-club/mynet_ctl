@@ -184,15 +184,22 @@ operator / platform / plugin / ticket / sms / form / knowledge / conversation �
 | 闸 1 | `.githooks/pre-commit` → `make guard` | **轻量**：安全红线 + 文件名（秒级） | 每次提交 |
 | 闸 2 | `.githooks/pre-push` → `make check` | **重量**：lint + 全量测试 | 每次推送 |
 
-- **`make guard` 三类红线**（见 `templates/.githooks/guard.sh`，已功能实测 25 用例）：
+- **`make guard` 三类红线**（见 `templates/.githooks/guard.sh`，已功能实测 31 用例）：
 
   | 类 | 红线 | 为什么是红线 |
   |---|---|---|
   | **A 安全** | A1 硬编码凭据 · A2 私钥泄露 · A3 敏感文件名（`.env`/`*.pem`/`*.key`/`id_rsa*`/`*.private`）· **A4 归档内容扫描**（`.tgz`/`.tar*`/`.zip` 入库前列内容清单，按 A3 同一套敏感名 + `credential*.json` 查） | 事后清 git 历史代价大 |
-  | **B 结构** | **B1 `mynet_gnb/src/` 只读** · **B2 mynetd 不得依赖系统能力** · **B3 relaypolicy 不得含鉴权** · **B4 业务对象不得含驱动术语** | 架构约束违反后会**静默扩散**，事后重构成本高 |
-  | **C 产物** | C1 格式化 bug 产物文件名 · C2 端口漂移（≠8096）· C3 命名漂移（≠`mynet_agent_*`） | 已发生过，静态可查 |
+  | **B 结构** | **B1 `mynet_gnb/src/` 只读**（按 `--absolute-git-dir` 判仓，bare+worktree 也算；非 gnb 仓明说「跳过」不装通过）· **B2 mynetd 不得依赖系统能力** · **B3 relaypolicy 不得含鉴权** · **B4 业务对象不得含驱动术语** | 架构约束违反后会**静默扩散**，事后重构成本高 |
+  | **C 产物** | C1 格式化 bug 产物文件名 · C2 端口漂移（**断言 SSOT**：提到 `mynetd` 的行其 loopback 端口必须 = 8096，不再只枚举已知错值；`scripts/e2e/`·`debug/`·`tests/` 的临时端口除外）· C3 命名漂移（≠`mynet_agent_*`） | 已发生过，静态可查 |
 
   B 类是**最重要的那一类**——「整理式重建」时新架构约束最容易在实现时被忘掉。
+
+  ⚠️ **判据要断言不变量，不要枚举已知错值。** C2 原本只列 `8720`/`8008` 两个历史
+  错端口，于是 `8711`（gateway 旧端口）照样漏过去：`mynet_desktop/nsis` 把 mynetd
+  起在 8711，而面板快捷方式指 8096 → 装完点开是空页面，181 节点真机复现过
+  （`archive/2026-09/reinstall-181-report-20260930.md:97`）。同一类洞还有 B1：它按
+  **工作树路径**判仓，而 gnb 的编辑入口是 `.wt/gnb-actions`（路径里不含 `mynet_gnb`），
+  于是「src/ 只读」在 gnb 上从未生效过。写红线时先问「新的错法会不会漏」。
 
   ⚠️ **A4 的由来（2026-10-04 真实事故，别再让 A2/A3 单独值班）**：`mynet_gnb` 的
   `packages/*/itest/backup-*/` 把生产节点 `10.182.236.180` 与公司整网网关 `192.168.0.2`
