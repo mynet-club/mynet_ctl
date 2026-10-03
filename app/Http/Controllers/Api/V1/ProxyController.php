@@ -66,45 +66,69 @@ class ProxyController extends Controller
 
     /**
      * GET /api/v2/proxy/iplists
-     * 返回 chinaip.txt + interip.txt 内容（供 client 一次性下载）
+     * 返回全部清单内容（供 client 一次性下载）。
+     * IP 大表 + DNS 上游 + 域名清单；单文件下载走 /plugins/mp/{name}。
      */
     public function iplists(): JsonResponse
     {
         $dir = storage_path('app/public/proxy-lists');
 
-        $chinaipFile = $dir.'/chinaip.txt';
-        $interipFile = $dir.'/interip.txt';
-
-        if (! file_exists($chinaipFile) || ! file_exists($interipFile)) {
-            return response()->json(['message' => 'IP lists not generated yet. Run: php artisan proxy:update-iplists'], 404);
+        $required = ['chinaip.txt', 'interip.txt'];
+        foreach ($required as $f) {
+            if (! file_exists($dir.'/'.$f)) {
+                return response()->json(['message' => 'IP lists not generated yet. Run: php artisan proxy:update-iplists'], 404);
+            }
         }
 
         $metaFile = $dir.'/meta.json';
         $meta = file_exists($metaFile) ? json_decode(file_get_contents($metaFile), true) : null;
 
-        return response()->json([
-            'chinaip' => file_get_contents($chinaipFile),
-            'interip' => file_get_contents($interipFile),
+        $out = [
+            'chinaip' => file_get_contents($dir.'/chinaip.txt'),
+            'interip' => file_get_contents($dir.'/interip.txt'),
             'meta' => $meta,
-        ]);
+        ];
+
+        // DNS 上游与域名清单：可缺省（按需生成），有则带上
+        foreach (['dns-domestic.txt', 'dns-clean.txt', 'proxy-domains.txt', 'direct-domains.txt'] as $f) {
+            $key = str_replace('.txt', '', $f);
+            $path = $dir.'/'.$f;
+            $out[$key] = file_exists($path) ? file_get_contents($path) : '';
+        }
+
+        return response()->json($out);
     }
 
     /**
-     * GET /plugins/mp/interip.txt
-     * GET /plugins/mp/chinaip.txt
-     * 以纯文本格式直接返回单个 IP 列表文件（供 proxy.sh refresh 的 curl -o 直接保存）
-     * 文件由 scripts/proxy-lists/update_proxy_lists.sh 每日生成
+     * GET /plugins/mp/{name} —— 纯文本清单直出（curl -o 直接保存）。
+     *
+     * IP 大表（Linux）：
+     *   interip.txt / chinaip.txt          每日 geoip 生成
+     * DNS 上游（智能/干净）：
+     *   dns-domestic.txt / dns-clean.txt   国内智能 / 不污染
+     * 域名清单（Mac/Win 导航型分流 + Linux 叠加）：
+     *   proxy-domains.txt / direct-domains.txt  翻墙域名 / 直连白名单
+     *
+     * 文件由 scripts/proxy-lists/ 维护；meta.json 含 sha256 供节点校验。
      */
     public function iplistFile(string $name): Response
     {
-        if (! in_array($name, ['interip.txt', 'chinaip.txt'], true)) {
+        $allowed = [
+            // IP 大表
+            'interip.txt', 'chinaip.txt',
+            // DNS 上游
+            'dns-domestic.txt', 'dns-clean.txt',
+            // 域名清单
+            'proxy-domains.txt', 'direct-domains.txt',
+        ];
+        if (! in_array($name, $allowed, true)) {
             abort(404);
         }
 
         $file = storage_path('app/public/proxy-lists/'.$name);
 
         if (! file_exists($file)) {
-            abort(404, 'IP list not generated yet. Run: php artisan proxy:update-iplists');
+            abort(404, 'List not generated yet. Run: php artisan proxy:update-iplists');
         }
 
         return response(file_get_contents($file), 200, [

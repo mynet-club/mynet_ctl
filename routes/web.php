@@ -6,6 +6,7 @@ use App\Http\Controllers\Admin\ReleaseAdminController;
 use App\Http\Controllers\Admin\ScriptAdminController;
 use App\Http\Controllers\Admin\TokenAdminController;
 use App\Http\Controllers\Api\V1\DetectController;
+use App\Http\Controllers\Api\V1\DocsController;
 use App\Http\Controllers\Api\V1\ManifestController;
 use App\Http\Controllers\Api\V1\PluginController;
 use App\Http\Controllers\Api\V1\ProxyController;
@@ -32,9 +33,14 @@ Route::prefix('d')->group(function () {
     Route::get('/detect/openwrt.sh', [DetectController::class, 'openwrtScript']);
     Route::get('/proxy/install.sh', [ProxyController::class, 'installScript']);
 
-    // mynet_proxy 插件 IP 列表（mp = mynet_proxy）
+    // 知识库公开文档（skill-kit 等）——必须写在 product 通配之前
+    Route::get('/docs/{name}', [DocsController::class, 'show'])
+        ->where('name', '[a-z0-9_\-]+\.(md|txt)(\.sha256)?');
+
+    // mynet_proxy 插件清单（mp = mynet_proxy）
+    // IP 大表 + DNS 上游 + 域名清单（D2）
     Route::get('/plugins/mp/{name}', [ProxyController::class, 'iplistFile'])
-        ->where('name', '(interip|chinaip)\.txt');
+        ->where('name', '(interip|chinaip|dns-domestic|dns-clean|proxy-domains|direct-domains)\.txt');
 
     // 插件下载
     Route::get('/plugins/{filename}', [PluginController::class, 'downloadByFilename'])

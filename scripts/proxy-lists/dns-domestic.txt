@@ -1,0 +1,9 @@
+# 国内智能 DNS 上游（一行一个）
+# 语义：节点在国内、解析快、能区分国内外域名
+# 消费：ProxyDNS.DomesticServers / dnsmasq server= 默认上游
+# 来源：ctl 发布 → /plugins/mp/dns-domestic.txt
+223.5.5.5
+223.6.6.6
+119.29.29.29
+180.76.76.76
+114.114.114.114
