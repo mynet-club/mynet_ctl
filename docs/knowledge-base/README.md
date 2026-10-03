@@ -59,6 +59,7 @@
 | [spec/service.md](spec/service.md) | 服务三层启停（GNB → 路由 → 防火墙） | 现行 |
 | [spec/plugins.md](spec/plugins.md) | 插件生命周期（heartbeat、updater、proxy） | 现行 |
 | [spec/debug-env.md](spec/debug-env.md) | macOS 本地调试环境（vm / vml） | 现行 |
+| [spec/node-status-gate.md](spec/node-status-gate.md) | `node_status` 谁说了算 — GET 副作用 / 心跳无条件写 1 两个议题 | **待裁决**（推荐≠已定） |
 | [spec/proxy.md](spec/proxy.md) | 代理分流（旧线） | **冻结** → 改用 `proxy-split.md` |
 | [spec/back-baggage-cleanup.md](spec/back-baggage-cleanup.md) | mynet_api 历史包袱清理 | 归档 |
 | [spec/back-primary-key-migration.md](spec/back-primary-key-migration.md) | 主键改造 — 全局 ID 直接作 PK | 归档 |

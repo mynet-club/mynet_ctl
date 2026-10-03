@@ -796,7 +796,7 @@ Response 200:
 
 #### GET /nodes/{id}/status (v2 only)
 ```
-Middleware: auth:sanctum, api.zone
+Middleware: auth:sanctum, token.binding, throttle:api
 
 Response 200:
 {
@@ -809,18 +809,38 @@ Response 200:
       "description": string
     },
     "configuration_status": {
-      "is_fully_configured": boolean,
-      "missing_items": [string],       // "has_node_ip", "has_config", "has_keys"
-      "completion_percentage": int      // 0-100
+      "is_fully_configured": boolean,   // 只由必选项决定：has_node_ip / has_keys / has_basic_info
+      "missing_items": [string],        // "has_node_ip", "has_keys", "has_basic_info"
+      "optional_items": [string],       // 恒为 ["has_config"]
+      "details": object,                // 全量四项，含可选项；has_config.optional = true
+      "passed_checks": int,
+      "failed_checks": int,
+      "total_checks": int               // 必选项计数（3），不含可选项
     },
     "can_enable": boolean,
     "status_updated": boolean,
-    "status_changed": boolean,
+    "status_changed": boolean,          // 仅记「配置判据自己改了什么」，不含请求写入
+    "status_evaluated": boolean,        // false = 本次根本没评估判据（见下）
     "available_transitions": { "int": "string" },
     "status_definitions": object,
     "next_steps": [string]
   }
 }
+
+⚠️ node_configs 是**可选**自定义配置（ifname/listen/mtu/proxy），全 fleet 73 个
+节点只有 3 个有这行。它不得计入 is_fully_configured —— 否则绝大多数节点会被判
+「配置未完成，只能禁用」，available_transitions 里没有「启用」，GUI 连按钮都不
+渲染。这与 Node::checkConfigurationStatus()（模型侧判据）必须同口径；
+2026-10-01 现网 .184 被一次「只改描述」的 PUT 打成 -1 就是这套误判的后果。
+
+⚠️ 文档漂移（本次已核，勿照抄旧稿）：
+- `completion_percentage` 代码里**不存在**。
+- 上面 Middleware 原写作 `auth:sanctum, api.zone`；`api.zone` 这个中间件在
+  mynet_api 里**根本不存在**（全仓无注册），实际是 `auth:sanctum, token.binding,
+  throttle:api`（`app/Modules/VPN/Routes/api.php` 的 nodes 分组）。已就地改正。
+- 下面提到的 v1 `status-check` / `status-info` 两个路由**没有注册**；
+  `NodeController::getStatusInfo()` 与 `::checkConfigurationStatus()` 是无路由
+  的死方法，只有 `getStatus()` 经 `GET /nodes/{id}/status` 对外。
 
 v1: 拆分为 GET /nodes/{id}/status-check 和 GET /nodes/{id}/status-info
 ```
