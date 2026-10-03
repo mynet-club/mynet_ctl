@@ -29,7 +29,7 @@
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">平台 <span class="text-red-500">*</span></label>
                     <select name="platform" required class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
-                        @foreach(['linux', 'openwrt', 'darwin', 'windows'] as $p)
+                        @foreach(['linux', 'openwrt', 'darwin', 'windows', 'freebsd', 'openbsd'] as $p)
                         <option value="{{ $p }}" {{ old('platform') === $p ? 'selected' : '' }}>{{ $p }}</option>
                         @endforeach
                     </select>

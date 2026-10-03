@@ -40,7 +40,7 @@ class ReleaseAdminController extends Controller
         $data = $request->validate([
             'product' => 'required|string|in:tui,gnb,utc,client',
             'version' => 'required|string|max:32',
-            'platform' => 'required|string|in:linux,openwrt,darwin,windows',
+            'platform' => 'required|string|in:linux,openwrt,darwin,windows,freebsd,openbsd',
             'arch' => 'required|string|max:32',
             'variant' => 'nullable|string|max:32',
             'file' => 'required|file|max:204800',

@@ -36,6 +36,7 @@ class ReleaseDomainService
         'darwin' => ['label' => 'macOS',          'ext' => 'tgz'],
         'windows' => ['label' => 'Windows',        'ext' => 'zip'],
         'freebsd' => ['label' => 'FreeBSD',        'ext' => 'tgz'],
+        'openbsd' => ['label' => 'OpenBSD',        'ext' => 'tgz'],
     ];
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -83,6 +84,7 @@ class ReleaseDomainService
         'darwin' => ['amd64', 'arm64'],
         'windows' => ['amd64', 'arm64'],
         'freebsd' => ['amd64', 'arm64'],
+        'openbsd' => ['amd64', 'arm64'],
     ];
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -109,7 +111,7 @@ class ReleaseDomainService
     //   {product}_{platform}_{arch}_{version}.{ext}
     //
     //   product  = mynet_agent / tui / gnb / utc / client / proxy / lua
-    //   platform = linux / openwrt / openwrt-sdk / darwin / windows / freebsd
+    //   platform = linux / openwrt / openwrt-sdk / darwin / windows / freebsd / openbsd
     //   arch     = amd64 / arm64 / armv7-softfp / mipsel / ...
     //   version  = v1.0.0 / v1.6.0.a（允许 . 和 - 分隔预发布标识）
     //   ext      = tgz (default) / zip (Windows) / ipk (OpenWrt Lua)
@@ -193,7 +195,7 @@ class ReleaseDomainService
         // `[a-z][a-z0-9-]*`，正则要靠回溯猜「name 到哪结束、platform 从哪开始」，
         // 可能把 `mynet_agent` 切成 name=mynet + platform=agent。
         // 枚举后切分唯一。注意 openwrt-sdk 必须排在 openwrt 之前。
-        if (! preg_match('/^([a-z0-9_]+)_(linux|openwrt-sdk|openwrt|darwin|windows|freebsd)_([a-z0-9\-]+)_(v[0-9a-z.\-]+)\.(tgz|zip|tar\.gz|ipk)$/i', $filename, $m)) {
+        if (! preg_match('/^([a-z0-9_]+)_(linux|openwrt-sdk|openwrt|darwin|windows|freebsd|openbsd)_([a-z0-9\-]+)_(v[0-9a-z.\-]+)\.(tgz|zip|tar\.gz|ipk)$/i', $filename, $m)) {
             return null;
         }
 
@@ -278,7 +280,7 @@ class ReleaseDomainService
                     'gnb_windows_amd64_v1.6.0.zip',
                 ],
                 'rules' => [
-                    'default_ext_tgz' => 'tgz 用于 linux/openwrt/darwin/freebsd',
+                    'default_ext_tgz' => 'tgz 用于 linux/openwrt/openwrt-sdk/darwin/freebsd/openbsd',
                     'windows_ext_zip' => 'zip 用于 windows',
                     'softfp_suffix' => '默认 hard-float 不加后缀，soft-float 加 -softfp',
                     'tui_alias' => 'tui 产品对外文件名前缀使用 mynet（历史兼容）',

@@ -103,7 +103,7 @@ class ReleaseFilenameTest extends TestCase
     public function test_round_trip_for_all_products_and_platforms(): void
     {
         $archs = ['linux' => 'amd64', 'darwin' => 'arm64', 'windows' => 'amd64',
-            'freebsd' => 'amd64', 'openwrt' => 'mipsel', 'openwrt-sdk' => 'mipsel'];
+            'freebsd' => 'amd64', 'openbsd' => 'amd64', 'openwrt' => 'mipsel', 'openwrt-sdk' => 'mipsel'];
 
         foreach (array_keys(ReleaseDomainService::PRODUCTS) as $product) {
             foreach ($archs as $platform => $arch) {
