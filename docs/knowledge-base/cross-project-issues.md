@@ -10,47 +10,47 @@
 
 ### 🟠 P1 — 影响安全性
 
-#### 3. mynet_back CORS 允许所有来源
-- **位置**：[mynet_back/config/cors.php](../../../mynet_back/config/cors.php)
+#### 3. mynet_api CORS 允许所有来源
+- **位置**：[mynet_api/config/cors.php](../../../mynet_api/config/cors.php)
 - **现状**：`'allowed_origins' => ['*']`
 - **风险**：生产环境跨站请求无限制
 - **修复建议**：改为白名单（见 [.credentials/_templates/domains.md](../../.credentials/_templates/domains.md#cors-配置mynet_back)）
 - **优先级**：上线生产前必修
 
 #### 4. Token 刷新机制依赖 Sanctum 设计假设
-- **背景**：mynet_back 实现的 `/api/v2/auth/refresh-token` 通过验证当前 Token 后签发新 Token
+- **背景**：mynet_api 实现的 `/api/v2/auth/refresh-token` 通过验证当前 Token 后签发新 Token
 - **潜在风险**：若 Token 已过期则无法刷新（用户必须重新登录）
-- **位置**：[mynet_back/routes/api.php](../../../mynet_back/routes/api.php) + auth controller
+- **位置**：[mynet_api/routes/api.php](../../../mynet_api/routes/api.php) + auth controller
 - **影响**：长期不活跃的客户端会被强制登出
 - **修复建议**：方案 A — 延长 Sanctum 过期时间（已在 .env.example 设为 7 天）；方案 B — 引入 refresh token（需架构变更）
 
-#### 5. mynet_back 生产 APP_KEY 与开发相同
-- **现状**：`mynet_back/.env.production` 中的 `APP_KEY` 与开发 `.env` 完全一致（`base64:cbZh...`）
+#### 5. mynet_api 生产 APP_KEY 与开发相同
+- **现状**：`mynet_api/.env.production` 中的 `APP_KEY` 与开发 `.env` 完全一致（`base64:cbZh...`）
 - **风险**：开发环境密钥泄露即可解密生产 session / 加密字段
 - **修复建议**：在生产服务器执行 `php artisan key:generate --force`；同时 `.env.production` 中 APP_KEY 改为占位符（如 `BASE64:GENERATE_ON_DEPLOY`），由部署脚本生成
-- **位置**：[mynet_back/.env.production](../../../mynet_back/.env.production)
+- **位置**：`mynet_api/.env.production`（生产机密，**不入仓**；本地如有则在该路径）
 
-#### 6. mynet_back 生产仍残留 dsplat.com 引用（部署脚本 / 文档）
+#### 6. mynet_api 生产仍残留 dsplat.com 引用（部署脚本 / 文档）
 - **范围**：`.env.production` 的 SESSION_DOMAIN / SANCTUM / VITE_REVERB_HOST 已修复（2026-05）
 - **剩余位置**（不在本轮修复范围）：
-  - `mynet_back/scripts/shell/{mynet,mynet_linux,mynet_xiaomi,gnb_setup,mynet_bash}.sh`：硬编码 `https://x.dsplat.com/gnb_conf/${NodeID}.tgz`
-  - `mynet_back/scripts/deployment/{deploy-mod-local.sh,nginx-config.conf}`：nginx 路径 / 日志名
-  - `mynet_back/docs/deployment/PRODUCTION_DEPLOYMENT_CHECKLIST.md`：5× `api.mynet.dsplat.com`
+  - `mynet_api/scripts/shell/{mynet,mynet_linux,mynet_xiaomi,gnb_setup,mynet_bash}.sh`：硬编码 `https://x.dsplat.com/gnb_conf/${NodeID}.tgz`
+  - `mynet_api/scripts/deployment/{deploy-mod-local.sh,nginx-config.conf}`：nginx 路径 / 日志名
+  - `mynet_api/docs/deployment/PRODUCTION_DEPLOYMENT_CHECKLIST.md`：5× `api.mynet.dsplat.com`
 - **保留不动**：`MAIL_FROM_ADDRESS=arthur@dsplat.com`(用户真实邮箱),`docs/deployment/mail-configuration-guide.md` 中同左
 - **修复建议**：单独 PR 处理 shell 脚本与部署文档,与 .env 修复解耦
 
 #### 7. Reverb 开发/生产共用同一 App Secret
-- **现状**：`oyzmmhlqzmar2uvanq2k` / `yabimhxofy2jud7f3lo5` 在 mynet_back 与 mynet_gui 的 `.env` 与 `.env.production` 中完全相同（且已提交到 git 历史）
+- **现状**：`oyzmmhlqzmar2uvanq2k` / `yabimhxofy2jud7f3lo5` 在 mynet_api 与 mynet_gui 的 `.env` 与 `.env.production` 中完全相同（且已提交到 git 历史）
 - **风险**：开发凭证泄露 = 生产 WebSocket 被冒充
 - **修复建议**：生产轮换 Reverb 三件套（app_id / key / secret）；并将 `.env` 移到 `.env.local` 不入仓
-- **位置**：[mynet_back/.env](../../../mynet_back/.env)、[mynet_gui/.env](../../../mynet_gui/.env)
+- **位置**：[mynet_api/.env](../../../mynet_api/.env)、[mynet_gui/.env](../../../mynet_gui/.env)
 
 #### CPI-36. `guard.sh` 的 A1 规则把「路径」和「变量引用」误判成硬编码凭据 ✅ 已修复（2026-09-24）
 - **位置**：[templates/.githooks/guard.sh](templates/.githooks/guard.sh)（即与 `mynet_agent`/`mynet_utc` 字节一致的那份）
 - **现状**：A1 的判据是「口令类关键字 → 24 字符内出现 `=` → 引号包裹的内容 ≥8 字符」，只看**引号里有多长**，不看里面装的是什么。于是这两类**根本不含凭据**的写法会被拦下：
   - 指向口令文件的环境变量，值是**路径**（形如 `DB_PASSWORD_FILE=$ROOT/db.pass`）
   - 把口令转交给客户端的写法，引号内是**变量引用**而非字面量（形如 `MYSQL_PWD=$DB_PASS`）
-- **实撞**：写 V3-5 备份链（`mynet_back/deploy/backup-drill.sh`）时连撞两次，最后逐个加 `GUARD-OK` 才提交（豁免记入 `.git/guard-exempt.log`）
+- **实撞**：写 V3-5 备份链（`mynet_api/deploy/backup-drill.sh`）时连撞两次，最后逐个加 `GUARD-OK` 才提交（豁免记入 `.git/guard-exempt.log`）
 - **连描述它的文档也会被拦**：本条目初稿把上面两个例子照原样（**带双引号**）写出来，`mynet_ctl` 的 pre-commit 立刻又被 A1 拦了一次 —— 也就是说这条规则**同时**没能区分「代码 vs 文档」，而 guard 自己的注释写着「只抓确凿模式，**避免撞注释/文档**」。为过闸，本节两个例子刻意省了引号（shell 里无空格时本来就可不加）
 - **风险**：§2.6 明写「误报过多的守护会被 `--no-verify` 绕过，反而失效」—— A1 是最该常驻的一条，它的误报代价比其他规则都高
 - **处置**：采纳建议 ①，收窄 A1D 为「**双引号内以 `$` 开头的一律不算**」（那是变量引用或命令替换，不是字面量）。建议 ②（排除 `_FILE`/`_PATH` 后缀）与 ③（跳过 `.md`）**未采纳** —— ① 已覆盖本轮全部四个误报；② 会漏掉「关键字带 `_file` 后缀、但等号右边确实是字面量口令」的写法；③ 会让**文档里的真凭据**漏网。
@@ -61,10 +61,10 @@
   改完把 `backup-drill.sh` 里那 3 处 `GUARD-OK` 豁免**删掉**，A1 仍放行 —— 这本身就是对新规则的验证，也少了 3 条审计噪音。
 - **不采纳 ③ 的代价，本轮亲身付了一次**：结案时我把变异测试用的假凭据（形如 `password=` 后接一个 13 字符字面量）**原样写进了本条目**，于是 pre-commit 又被 A1 拦下。guard 抓得对 —— 它无法区分「文档里举例」和「代码里真写了」，而这正是 ③ 想解决、我却否掉的那件事。结论不是改规则，而是**写文档时别贴完整的凭据赋值形式**（本条已改为描述式）。
 - **⚠️ 一处需要更正的旧说法**：本条目初稿（以及更早的记录）写「**三份** `guard.sh` 字节一致（`templates/` · `mynet_agent` · `mynet_utc`）」—— 实际是 **9 份**：`templates/` + 8 个仓的 `.githooks/guard.sh`。其中 8 份 SHA256 完全相同（`86897f6379f5…`），`mynet_gnb` 那份因 B1 规则不同而 SHA 不同、但 **A1 段落一致**。所以改 A1 要同步 9 份，本次已用脚本同步并逐份核对。
-- **优先级**：🟡 P2 → ✅ 已修（`mynet_back 52374e6`，9 份 guard.sh 随各仓同批提交）
+- **优先级**：🟡 P2 → ✅ 已修（`mynet_api 52374e6`，9 份 guard.sh 随各仓同批提交）
 
 #### CPI-37. `node_keys.algorithm` 与密钥实际类型不符 → 节点面**全 401**，且症状不指向真因
-- **位置**：`mynet_back/app/Modules/VPN/Domain/Services/NodeFaceAuthService.php:40-57`（`sharedSecret`）+ `node_keys.algorithm` 列
+- **位置**：`mynet_api/app/Modules/VPN/Domain/Services/NodeFaceAuthService.php:40-57`（`sharedSecret`）+ `node_keys.algorithm` 列
 - **现状**：`sharedSecret()` 按 `algorithm` 字段选分支 —— `ed25519` 会先做 `edwardsToMontgomeryBin($peer)`，`x25519` 直接用。但**没有任何机制保证这个字段与密钥的实际类型一致**。本地库实测：5 行标着 `algorithm='ed25519'` 的密钥，其 `public_key` 实际是 X25519（montgomery）形式 —— 用 `sodium_crypto_scalarmult_base(priv) == pub` 验证成立，而 ed25519 公钥不会满足这个等式。
 - **后果**：back 对一个**已经是 montgomery** 的点又做一次 edwards→montgomery 转换，得到错误的点 → `shared` 与节点侧算出的不一致 → HMAC 不匹配 → **每个节点面请求都 401**。
 - **为什么难查**：症状是「鉴权失败」，日志里没有「algorithm 标错了」这一说。V4-2 全链路验证时第一个撞上的就是它（401），排到密钥配对、排到签名体、最后才定位到这个字段。
@@ -72,7 +72,7 @@
 - **优先级**：🟠 P1（会让节点面整体不可用，且极难定位）
 
 #### CPI-38. 心跳里**缺** `vpn_interfaces` 段被判成「节点离线」，而该字段本是可选的
-- **位置**：`mynet_back/app/Modules/VPN/Controllers/Api/V1/NodeHeartbeatController.php:421-432`（`isVpnInterfaceDown`）+ `:88-108` 的调用处
+- **位置**：`mynet_api/app/Modules/VPN/Controllers/Api/V1/NodeHeartbeatController.php:421-432`（`isVpnInterfaceDown`）+ `:88-108` 的调用处
 - **现状**：`isVpnInterfaceDown()` 的第一条是 `if (empty($vpnInterface)) return true;`（注释写「如果没有 VPN 接口信息，视为网络不可用」）。调用处一旦为真就 `markNodeOffline()` 并**直接 return**，连 `node_monitor` 都不处理。
 - **矛盾点**：`vpn_interfaces` 在 `HeartbeatRequest::rules()` 里是 **`nullable|array`（可选）**。也就是说「客户端没报这个可选字段」被当成了「节点故障」—— 这两件事不是一回事。
 - **实际触发路径**（V4-2 验证时撞到）：agent 侧非 root 时 `wg show <iface> dump` 会 Permission denied，拿不到 peer；而 `ifname` 是 `required_with`，空值会 422，所以整个 `vpn_interfaces` 段不发 → back 判离线 → **指标数据全丢**。表现为「节点明明在发心跳、back 也返 200，但 Redis 里没有它」。
@@ -91,22 +91,22 @@
 - **优先级**：🟡 P2（不影响功能，但持续污染日志、削弱告警信号）
 
 #### CPI-40. 我方迁移与框架模块迁移**建同一张表** → 全新库 `migrate` 必失败（H5 的硬阻塞）
-- **位置**：`mynet_back/database/migrations/`（我方 25 张建表）↔ `vendor/dsplat/*/database/migrations/`（框架 23 张，用**裸 `CREATE TABLE`** 写，所以 grep `Schema::create` 找不到）
+- **位置**：`mynet_api/database/migrations/`（我方 25 张建表）↔ `vendor/dsplat/*/database/migrations/`（框架 23 张，用**裸 `CREATE TABLE`** 写，所以 grep `Schema::create` 找不到）
 - **撞车的 5 张**：`tenants` · `tenant_users` · `users` · `system_settings` · `tenant_settings`
 - **实测**：在隔离的临时 MySQL 8.4.8 上跑 `php artisan migrate --force`，第 6 个迁移即
   `SQLSTATE[42S01]: Base table or view already exists: 1050 Table 'tenant_settings' already exists`
   （我方 `2025_01_01_000003_create_tenant_settings_table` 先跑，框架 `2025_01_01_000008_infrastructure_module` 后撞）。
-  复现工具：`mynet_back/deploy/gen-schema.sh`（失败时会点名撞车表并给出两侧建表名的取法）。
+  复现工具：`mynet_api/deploy/gen-schema.sh`（失败时会点名撞车表并给出两侧建表名的取法）。
 - **为什么一直没暴露**：本地开发用 sqlite 且库是既有的；`phpunit` 走测试库；生产**禁止 migration**（`deployment-registry.md:63`）。只有「从零建一个 MySQL 库」这条路会撞上 —— 而 H5 恰恰就是它。所以 **B-1 的验收判据「新库可从零建」实测不成立**。
 - **修复方向（属归属决策，不在本轮替人定）**：vendor 只读（§1.8），所以只能动我方那 5 个迁移。**删之前必须逐列比对**我方定义与框架定义的差异 —— 我方可能加了业务列，直接删会静默丢字段。
-- **✅ 已修**（`mynet_back 3466a76`）：删掉 11 个重复 create 迁移 + 1 个无守卫的 ALTER
+- **✅ 已修**（`mynet_api 3466a76`）：删掉 11 个重复 create 迁移 + 1 个无守卫的 ALTER
   （`add_auth_security_fields_to_users` 加的三列框架 users 全有）；新增
   `2026_09_25_000001_add_mynet_columns_to_framework_tables` 用 `hasColumn` 守卫把
   3 个我方独有列补回（`tenants.custom_domain`、`tenant_users.role`、`users.role`）。
   实测：`deploy/gen-schema.sh` 在隔离临时 MySQL 8.4.8 上 migration 从「第 6 个即失败」
   变成 **56 条全 DONE**，导出 DDL 135352 字节 / 105 张表，18 张期望表与
   `node_keys` 的三个生命周期列全在；`make check` 仍 154 tests / 2503 assertions 全绿。
-- **优先级**：🟠 P1 → ✅ 已修（H5 的建库阻塞解除，DDL 已产出 `deploy/schema/mynet_back-schema.sql`）
+- **优先级**：🟠 P1 → ✅ 已修（H5 的建库阻塞解除，DDL 已产出 `deploy/schema/mynet_api-schema.sql`）
 
 #### CPI-41. 生产 `api.mynet.club` 上跑的 back **没有业务面**，V2 从未上线
 - **实测（2026-09-25 外网探测）**：`/api/v1/nodes`、`/api/v1/mynet/health`、`/api/v1/social/friends`、`/api/v1/monitor/node/info`、`/api/v1/services`、`/api/v1/users/onboarding` **全 404**（新旧两种路径形状都试过）；只有框架的 `/api/v1/auth/me` 返 401、`/api/v1/auth/login` 返 405（说明路由存在）。`/up` 返回标题为 `MyNetBackNew` 的页面。
@@ -116,9 +116,9 @@
 - **优先级**：🟠 P1（G4 的直接阻塞）
 
 #### CPI-42. `MYNET_GATEWAY_ENABLED` 是个**无文档的总闸**，默认 false → back 一个推送都发不出
-- **位置**：`mynet_back/config/gateway.php:17`（默认 false）→ `app/Services/Gateway/GatewayNotifier.php:83`（`if (! config('gateway.enabled')) return;`）
+- **位置**：`mynet_api/config/gateway.php:17`（默认 false）→ `app/Services/Gateway/GatewayNotifier.php:83`（`if (! config('gateway.enabled')) return;`）
 - **后果**：`command_queued` / `bundle_changed` / `route_changed` 三类事件全不发。而命令入队仍返 200，**从 API 完全看不出异常** —— 节点只能等下次心跳轮询。V1-9 勾「命令链已通」时未记这个前提。
-- **已做**：`.env.example` 补全 5 个键并写清后果（`mynet_back c28b482`）；`manage-prod.sh` 新增远端守卫 4，部署时检查是否显式设置并打印后果。
+- **已做**：`.env.example` 补全 5 个键并写清后果（`mynet_api c28b482`）；`manage-prod.sh` 新增远端守卫 4，部署时检查是否显式设置并打印后果。
 - **仍未做**：生产 `.env` 未设（要等 gateway 真部署，见 CPI-41）。
 - **优先级**：🟠 P1
 
@@ -151,7 +151,7 @@
 - **优先级**：🟡 P2 → ⚠️ 部分已修
 
 #### CPI-47. **17 张表只在 `tests/Schema` 里、迁移没有** → 生产库建不出来，相关端点会 500
-- **位置**：`mynet_back/tests/Schema/{CoreModule,MonitorModule,SocialModule,VpnModule}.php` ↔ `database/migrations/`
+- **位置**：`mynet_api/tests/Schema/{CoreModule,MonitorModule,SocialModule,VpnModule}.php` ↔ `database/migrations/`
 - **实测**（`deploy/gen-schema.sh` 第 6 步，本轮新增的检查）：测试 schema 建了而生产 DDL 里没有的表 **17 张** ——
   `friendships` `friend_requests` `invitations` `social_connections` `node_monitor_snapshots`
   `monitor_rt_cmds` `node_configs` `node_devices` `node_ips` `node_access_rules`
@@ -191,12 +191,12 @@
   `if ($connection->getDriverName() === 'mysql')` 里（或改用 Schema Builder）；
   ② 我方短期：给本机开发库也走 MySQL（docker 或 brew services），
   别再用 sqlite —— 否则「本机能跑」永远不代表生产能跑；
-  ③ 或提供 `scripts/setup-local-db.sh`，从 `deploy/schema/mynet_back-schema.sql`
+  ③ 或提供 `scripts/setup-local-db.sh`，从 `deploy/schema/mynet_api-schema.sql`
   建一个本机 MySQL 库，与生产同一份 DDL。
 - **优先级**：🟠 P1（它让「本机验证」这个最便宜的反馈回路整体失效）
 
 #### CPI-49. `deploy/nginx.conf` 缺 `listen [::]:443` → IPv6 请求被别的站点兜走
-- **位置**：`mynet_back/deploy/nginx.conf`（api 段与 gw 段）· 派生物 `deploy/nginx-staging.conf`
+- **位置**：`mynet_api/deploy/nginx.conf`（api 段与 gw 段）· 派生物 `deploy/nginx-staging.conf`
 - **实测**：把标记文件放进 `stage-api/public/`，`curl -4` 取回标记本身（HTTP 200），
   `curl -6` 取回的却是**另一个站的 HTML 404 页**。线上生产的 `api.mynet.club.conf`
   有 `listen [::]:443 ssl http2;`，仓里这份没有 —— 于是 IPv6 上没有匹配的 server block，
@@ -205,12 +205,12 @@
   实际路由一直是好的（CLI 下 500 条路由、含 44 条 nodes/monitor），
   而 HTTP 探测全在打另一个应用。**排障时先用 `-4`/`-6` 分别验一遍**，
   或用「放一个唯一标记文件再取」的办法确认请求真的落在目标 root 上。
-- **✅ 已修**（`mynet_back 8c3927f`）：补 3 处 `listen [::]:443 ssl http2;` 并重新派生 staging 配置。
+- **✅ 已修**（`mynet_api 8c3927f`）：补 3 处 `listen [::]:443 ssl http2;` 并重新派生 staging 配置。
   ⚠️ `zero_to_one.sh` 里的 `curl -4` 是**绕过不是修复**，nginx 侧修好后应去掉再验一遍。
 - **优先级**：🟠 P1 → ✅ 已修（待去掉 -4 复验）
 
 #### CPI-50. 生产环境把**任何**异常压成 500，「未登录」也返 500 且不留日志
-- **位置**：`mynet_back/bootstrap/app.php` 的 `withExceptions` → `renderable(function (Throwable $e) …)`
+- **位置**：`mynet_api/bootstrap/app.php` 的 `withExceptions` → `renderable(function (Throwable $e) …)`
 - **原文**：`if (app()->environment('production') && (request()->is('api/*') || request()->expectsJson())) return json('服务器内部错误', 500);`
   —— **无条件**兜住任何 Throwable，包括 `AuthenticationException`。
 - **后果**：① 未登录访问返 500 而不是 401，监控全是假告警（与 CPI-32 同类，
@@ -219,7 +219,7 @@
   这种最难查的状态。
 - **为什么长期没被发现**：本机 `APP_ENV=local` 时条件不成立、走正常渲染返 401 ——
   **只在生产/staging 现形**，本地开发、154 个测试、pint 全绿都发现不了。
-- **✅ 已修**（`mynet_back 8c3927f`）：只对没有明确 HTTP 语义的异常兜底，
+- **✅ 已修**（`mynet_api 8c3927f`）：只对没有明确 HTTP 语义的异常兜底，
   `HttpExceptionInterface` / `AuthenticationException` / `AuthorizationException` /
   `ValidationException` 一律交回框架渲染。实测 staging：nodes / auth/me /
   social/friends 从 500 → **401**，真不存在的路由仍 **404**，`/up` 仍 200。
@@ -231,11 +231,11 @@
 - **优先级**：🟠 P1 → ✅ 已修
 
 #### CPI-51. `deploy/.rsyncignore` 用了 gitignore 的 `!` 取反语法，rsync 不认
-- **位置**：`mynet_back/deploy/.rsyncignore`（原第 15-17 行：`.env` / `.env.*` / `!.env.example`）
+- **位置**：`mynet_api/deploy/.rsyncignore`（原第 15-17 行：`.env` / `.env.*` / `!.env.example`）
 - **后果**：rsync 的排除文件里 `!` **不是取反**（会被当成字面量的一部分），
   所以 `.env.example` 一直被 `.env.*` 排掉，那条取反从未生效 ——
   staging 部署时 `cp .env.example .env` 直接失败。
-- **✅ 已修**（`mynet_back 8c3927f`）：改用 rsync 自己的 `+ 包含 / - 排除` 语法
+- **✅ 已修**（`mynet_api 8c3927f`）：改用 rsync 自己的 `+ 包含 / - 排除` 语法
   （**第一条匹配的规则生效**，所以包含必须写在排除前面）。
 - **教训**：`.gitignore` / `.rsyncignore` / `.dockerignore` 三者语法**互不通用**，
   抄写法之前先确认是哪个工具的。
@@ -255,7 +255,7 @@
 
 | 项 | 内容 |
 |---|---|
-| **位置** | `mynet_back/app/Modules/VPN/Models/NodeIP.php`；`Domain/Services/RouteDomainService.php`；`app/Modules/Monitor/Services/MonitorHistoryService.php` |
+| **位置** | `mynet_api/app/Modules/VPN/Models/NodeIP.php`；`Domain/Services/RouteDomainService.php`；`app/Modules/Monitor/Services/MonitorHistoryService.php` |
 | **现象** | 三套分类并存（模型 1/2/3、旧库注释 0/1、路由投影 node_ip/vpn_ip/lan_ip/wan_ip/endpoint_ip）；两处 `match` 引用不存在的 `IP_TYPE_WAN`/`IP_TYPE_ENDPOINT` → 遇 `ip_type=3` 即 `Error: Undefined constant` |
 | **处置** | ① 模型冻结 1=vpn 2=lan 3=public，`IP_TYPE_WAN=IP_TYPE_PUBLIC`；endpoint 不是存储类型（learned 只进 Status）；② 两处 `match` 改用真实常量；③ 新增 `NetworkSemanticsProjector` + 六类语义 VO（interface / advertised / WAN / peer / relay / key algorithm），出口判据「不再从混合 route 列表猜语义」达成；④ 测试 `tests/NetworkSemanticsProjectorTest.php` 6 例 |
 
@@ -274,13 +274,13 @@
 
 | ID | 位置 | 现象 → 处置 |
 |---|---|---|
-| **CPI-23** | `mynet_back/.env`（缺失） | 仓库无 `.env` → `APP_KEY` 空 → **全站每个请求 500**（`MissingAppKeyException`，`EncryptionServiceProvider.php:83`），连 `/` 都不通。`phpunit` 走 `phpunit.xml` 的 env，**73/73 全绿也发现不了**。→ 建本地 dev `.env`（sqlite + file/sync）+ `key:generate`；`.env` 已被 `.gitignore:16` 挡住 |
-| **CPI-24** | `mynet_back/bootstrap/app.php` | 未覆盖框架默认 `redirectGuestsTo(fn () => route('login'))`（`ApplicationBuilder.php:291`）。back 是纯 API 后端、无 `login` 命名路由，而 `Authenticate.php:104` 仅在请求**未**声明 `expectsJson` 时才调 `redirectTo` → **不带 `Accept: application/json` 的未鉴权请求抛 `RouteNotFoundException` → 500 而非 401**。→ 加 `$middleware->redirectGuestsTo(null)` |
-| **CPI-25** | `mynet_back/app/Modules/VPN/Models/Node.php` | 只有 `scopeOnline()`/`scopeEnabled()` 两个**查询作用域**，无同名实例方法；`SocialDomainService` 三处（`:547`/`:700`/`:840`）按实例方法调用 → `BadMethodCallException` → `/social/friends/{id}/nodes` 与 `/social/friends/all/nodes` **双双 500**。GUI 捕获后回退空数组，表现为**连接向导「可用设备」恒 0、下一步永远禁用**——故障在后端、症状在前端。→ 补 `isOnline()`/`isEnabled()`，语义与 scope 对齐 |
+| **CPI-23** | `mynet_api/.env`（缺失） | 仓库无 `.env` → `APP_KEY` 空 → **全站每个请求 500**（`MissingAppKeyException`，`EncryptionServiceProvider.php:83`），连 `/` 都不通。`phpunit` 走 `phpunit.xml` 的 env，**73/73 全绿也发现不了**。→ 建本地 dev `.env`（sqlite + file/sync）+ `key:generate`；`.env` 已被 `.gitignore:16` 挡住 |
+| **CPI-24** | `mynet_api/bootstrap/app.php` | 未覆盖框架默认 `redirectGuestsTo(fn () => route('login'))`（`ApplicationBuilder.php:291`）。back 是纯 API 后端、无 `login` 命名路由，而 `Authenticate.php:104` 仅在请求**未**声明 `expectsJson` 时才调 `redirectTo` → **不带 `Accept: application/json` 的未鉴权请求抛 `RouteNotFoundException` → 500 而非 401**。→ 加 `$middleware->redirectGuestsTo(null)` |
+| **CPI-25** | `mynet_api/app/Modules/VPN/Models/Node.php` | 只有 `scopeOnline()`/`scopeEnabled()` 两个**查询作用域**，无同名实例方法；`SocialDomainService` 三处（`:547`/`:700`/`:840`）按实例方法调用 → `BadMethodCallException` → `/social/friends/{id}/nodes` 与 `/social/friends/all/nodes` **双双 500**。GUI 捕获后回退空数组，表现为**连接向导「可用设备」恒 0、下一步永远禁用**——故障在后端、症状在前端。→ 补 `isOnline()`/`isEnabled()`，语义与 scope 对齐 |
 | **CPI-26** | `SocialDomainService.php:397` | `'nodes_count' => 0, // TODO: 计算好友的节点数量` —— 硬编码 0，与 `getAllFriendsNodes():857` 的真算法口径不一致，好友列表永远谎报 0 节点。→ 改为批量查询，口径与 `:776-777` 一致（只计 ENABLED/ONLINE） |
-| **CPI-27** | `mynet_back/config/cors.php` | 默认值 `'localhost,127.0.0.1'` **缺 scheme+port**，而浏览器 `Origin` 头永远是完整的 `http://localhost:5173`，精确匹配永不相等 → 预检返 204 但**无 `Access-Control-Allow-Origin`**，浏览器全线拦。→ 本地 `.env` 配 `CORS_ALLOWED_ORIGINS`；**生产白名单仍待办**（与本文件 P1 第 3 条同源，那条记录的 `['*']` 已过时） |
-| **CPI-28** | `mynet_back/phpunit.xml` | `Default` suite（= `make test` = DoD 门禁 = pre-push）**不含** `app/Modules/VPN/tests/Feature`，43 个 HTTP 层测试长期游离在门禁外。「TenantServiceController 500」被误记成控制器缺陷正是因此无人把守。→ Feature 并入 `Default`，`make check` 从 73/2253 变为 **126/2398** |
-| **CPI-29** | `mynet_back/tests/TestCase.php` | Orchestra Testbench **不加载 `bootstrap/app.php`** → 测试态与生产态静默分叉（`TestCase.php:65` 原有注释已承认，`long-range-plan.md:129` 也写过「e2e 用真实 bootstrap，不走 Testbench」）。→ 在 TestCase 里镜像 `redirectGuestsTo(null)`；**必须走框架的 `(new Middleware)->redirectGuestsTo(null)`**，因为它一次设三个静态回调（`Middleware.php:571-575`），异常渲染路径读的是 `AuthenticationException` 那个 |
+| **CPI-27** | `mynet_api/config/cors.php` | 默认值 `'localhost,127.0.0.1'` **缺 scheme+port**，而浏览器 `Origin` 头永远是完整的 `http://localhost:5173`，精确匹配永不相等 → 预检返 204 但**无 `Access-Control-Allow-Origin`**，浏览器全线拦。→ 本地 `.env` 配 `CORS_ALLOWED_ORIGINS`；**生产白名单仍待办**（与本文件 P1 第 3 条同源，那条记录的 `['*']` 已过时） |
+| **CPI-28** | `mynet_api/phpunit.xml` | `Default` suite（= `make test` = DoD 门禁 = pre-push）**不含** `app/Modules/VPN/tests/Feature`，43 个 HTTP 层测试长期游离在门禁外。「TenantServiceController 500」被误记成控制器缺陷正是因此无人把守。→ Feature 并入 `Default`，`make check` 从 73/2253 变为 **126/2398** |
+| **CPI-29** | `mynet_api/tests/TestCase.php` | Orchestra Testbench **不加载 `bootstrap/app.php`** → 测试态与生产态静默分叉（`TestCase.php:65` 原有注释已承认，`long-range-plan.md:129` 也写过「e2e 用真实 bootstrap，不走 Testbench」）。→ 在 TestCase 里镜像 `redirectGuestsTo(null)`；**必须走框架的 `(new Middleware)->redirectGuestsTo(null)`**，因为它一次设三个静态回调（`Middleware.php:571-575`），异常渲染路径读的是 `AuthenticationException` 那个 |
 
 #### 待处置（本批）
 
@@ -314,7 +314,7 @@
 
 | 项 | 内容 |
 |---|---|
-| **位置** | `mynet_back/app/Modules/VPN/Controllers/Api/V1/UserController.php:411`（及 `:441` 的 save） |
+| **位置** | `mynet_api/app/Modules/VPN/Controllers/Api/V1/UserController.php:411`（及 `:441` 的 save） |
 | **现象** | 调 `App\Services\UserService::getOnboardingState()` / `saveOnboardingState()`，而该 service 只有 `listUsers`/`getUser`/`updateUser` 三个方法；且 `user_onboarding`/`onboarding`/`user_settings` 三张表都不存在 |
 | **易误判点** | 框架确有 onboarding，但那是 `TenantOnboardingService`（infrastructure 模块）——**租户开通引导**，Operator 驱动，步骤为 基础信息→域名→套餐→支付→创建 Tenant。与此处的**用户新手引导**（`completed`/`currentStage`/`selectedPath`/`stages`/`preferences`）是两个概念，**不可混用、不应上报框架** |
 | **影响** | 每页控制台一条 500。GUI 已优雅降级（`stores/onboarding.ts:301` 捕获后回落 localStorage，实测 `State loaded: {source: localStorage, progress: 0}`），不挡功能 |
@@ -325,17 +325,17 @@
 
 | 项 | 内容 |
 |---|---|
-| **位置** | `mynet_back/app/Modules/VPN/Domain/Services/RouteRequestDomainService.php:103` 经 `BaseApiController::serverErrorResponse` |
+| **位置** | `mynet_api/app/Modules/VPN/Domain/Services/RouteRequestDomainService.php:103` 经 `BaseApiController::serverErrorResponse` |
 | **证据** | 实测重复提交连接申请：`POST /api/v1/route/send-request` → **HTTP 500**，body `errors.exception = "该连接已经建立，无需重复申请"` |
 | **影响** | 业务语义的正常拒绝被计入 5xx。上线后**监控与告警全是假阳性**，真实故障会被淹没；客户端也无法据状态码区分「重试无用」与「服务端坏了」 |
 | **修复建议** | 给 `DomainException` 分类（冲突/校验/不存在/无权），在 `mapDomainExceptionToHttpResponse` 里映射到 409/422/404/403；`serverErrorResponse` 只留给真正未预期的异常。需配套 Feature 测试锁状态码 |
 | **优先级** | 🟠 P1 —— 上线前必修（可观测性前提） |
 
-#### CPI-33. `mynet_back/storage/` 子目录既未跟踪也未忽略 → 新克隆即坏
+#### CPI-33. `mynet_api/storage/` 子目录既未跟踪也未忽略 → 新克隆即坏
 
 | 项 | 内容 |
 |---|---|
-| **位置** | `mynet_back/.gitignore:28,31` 只挡了 `storage/logs/` 与 `storage/framework/views/*.php` |
+| **位置** | `mynet_api/.gitignore:28,31` 只挡了 `storage/logs/` 与 `storage/framework/views/*.php` |
 | **现象** | `git status` 显示 `?? storage/`；`storage/app`、`storage/framework/{cache,sessions,testing,views}` 均无 Laravel 骨架标配的 `*` + `!.gitignore` 存根 |
 | **影响** | 新克隆缺 `storage/framework/sessions` 等目录。`SESSION_DRIVER=file` 时 `FileSessionHandler` **不会自动建目录** → 运行期报错。与 CPI-23 同属「新克隆即坏」一族 |
 | **修复建议** | 按 Laravel 骨架补 5 个 `.gitignore` 存根（内容 `*` + `!.gitignore`），使目录结构入库而内容不入库 |
@@ -364,7 +364,7 @@
 > 这正是 AGENTS.md §7.1 D2/D4 说的：测试要打真的，勾选要附实测输出。
 
 #### CPI-52. IP 池分配子系统整体未迁移（V2 迁移遗漏）
-- **位置**：`mynet_back/app/Modules/VPN/Models/IPPool.php`（迁移后是 29 行裸 Eloquent 类，**零方法**）
+- **位置**：`mynet_api/app/Modules/VPN/Models/IPPool.php`（迁移后是 29 行裸 Eloquent 类，**零方法**）
 - **现象**：`POST /api/v1/ippools` → 500 `Call to undefined method IPPool::getIPAddressGroup()`
   （`IpPoolDomainService.php:354` ← `createIPGroup()` ← `:231 allocateToUser()`）
 - **根因**：调用方搬过来了、**被调方没搬**。旧仓 `mynet_main/app/Models/IPPool.php` 有 13 个方法约 500 行。
@@ -380,7 +380,7 @@
   2. **序号唯一性范围变了**：旧仓「Zone 内唯一，不同 Zone 可重复」，
      新表 `ip_group_sequence_number` 是**全局 UNIQUE** → 按租户扫会每次撞唯一键。
   3. 旧仓把最多 50 次重试圈在**嵌套事务**里，只会长时持锁；UNIQUE 约束本身就给了原子认领保证。
-- **✅ 已修**（`mynet_back aef8834`）：迁移 `getIPAddressGroup` + `tryCreateIPGroup` +
+- **✅ 已修**（`mynet_api aef8834`）：迁移 `getIPAddressGroup` + `tryCreateIPGroup` +
   `findFirstAvailableSequence` + `calculateIPRangeFromSequence`。6 测试 / 23 断言，4 个变异全验证会红。
 - **未迁移**：`prefer_continuous`（旧仓 249-540 共 292 行连续空隙启发式）。
   **不留「调不存在的方法」那种定时炸弹**：显式返回空 ips + 记 warning，
@@ -439,7 +439,7 @@
   **隧道照样能建**。这是授权绕过，不是显示问题。
 - **不一致本身就是线索**：projector 取 NodeIP 那处手工补了 `->whereNull('deleted_at')`，
   但 publisher 取**对端** NodeIP 那处没补，Route 与 Node 两处也都没补 —— 逐个手工补、补漏了。
-- **✅ 已修**（`mynet_back cdf9130`）：6 处统一改成 `withoutGlobalScopes([TenantScope::class])`，
+- **✅ 已修**（`mynet_api cdf9130`）：6 处统一改成 `withoutGlobalScopes([TenantScope::class])`，
   只摘租户作用域，让 SoftDeletingScope 恢复生效。
 - **教训**：`withoutGlobalScopes()` **永远应该带参数**。无参形式是「我不知道有哪些作用域，
   全都关掉」—— 而 SoftDeletingScope 正是最不该被顺手关掉的那个。
@@ -452,7 +452,7 @@
   `ifname[15]='\0'`），Linux 的 `IFNAMSIZ` 同样是 16。
 - **后果**：接口被**静默**建成 `gnb_tun_2132596` 这种谁也没预期的名字，
   之后所有按接口名做的操作（加地址、加路由、查状态）全对不上，**且不报错**。
-- **✅ 已修**（`mynet_back cdf9130`）：改为常量 `GNB_IFNAME = 'gnb_tun'`
+- **✅ 已修**（`mynet_api cdf9130`）：改为常量 `GNB_IFNAME = 'gnb_tun'`
   （正是 gnb 自己在 Linux 上的默认名，`gnb_argv.c:224`）。agent 侧另加一道
   `checkGnbIfname()` 显式拒绝 >15 字符，不让它静默截断。
 - **教训**：跨语言/跨进程的定长缓冲区，**生产端必须知道消费端的上限**。
@@ -466,7 +466,7 @@
   但**只修在 `GnbIdentity::toArray()` 里**。publisher 是另一条生产路径，一直没修。
 - **为什么没被发现**：agent 侧加了解码兜底（`bundle_envelope.go` 的
   `GnbIdentity.UnmarshalJSON` 容忍 `[]`）—— **正好把 back 侧的缺陷掩盖了**。
-- **✅ 已修**（`mynet_back cdf9130`）：抽成 `GnbIdentity::peerMapForJson()` 静态方法，
+- **✅ 已修**（`mynet_api cdf9130`）：抽成 `GnbIdentity::peerMapForJson()` 静态方法，
   两条生产路径共用，消除「同一条规则两处实现」这个它能活下来的根因。
 - **教训**：一端加了容错，另一端就会失去暴露缺陷的机会。
   容错要加，但**生产端不该靠对端兜** —— 契约测试必须钉生产端的输出形状。
@@ -536,7 +536,7 @@
 - **优先级**：🟠 P1 → ✅ 已修
 
 #### CPI-60. `RouteController::getRequests()` 是 TODO 桩，导致验收脚本假绿
-- **位置**：`mynet_back/app/Modules/VPN/Controllers/Api/V1/RouteController.php`
+- **位置**：`mynet_api/app/Modules/VPN/Controllers/Api/V1/RouteController.php`
 - **现状（当时）**：方法体是 `// TODO: 实现从数据库获取申请数据` + 硬编码返回
   `['pending' => [], 'sent' => []]`，**从不查库**，HTTP 200。
 - **后果 1（产品）—— ⚠️ 此处修正我先前的高估**：我最初写「GUI 里永远看不到待批准的
@@ -612,7 +612,7 @@
   —— tun 地址是 /32，Linux 只建 local 路由、不建 link 路由；gnb 自己也**不写内核路由表**。
 - **两份 routes 是两回事**：`gnb.routes` 填了（喂 gnb 的 route.conf，管 overlay 内部转发），
   `network.routes` 是空的（喂 agent 的 `refresh-routes` → `apply`，管**内核路由表**）。
-- **✅ 已修**（`mynet_back fa1139a`）：gnb 分支按 `$peerTun` 生成 /32 主机路由
+- **✅ 已修**（`mynet_api fa1139a`）：gnb 分支按 `$peerTun` 生成 /32 主机路由
   （`dev=gnb_tun`，不带 `via` —— tun 是点对点接口，带网关 `ip route` 会拒）。
   **只加对端的 /32，绝不动对端整个 /24** —— 这是
   `node-connectivity-checklist.md` 里「路由劫持」那条教训。
@@ -657,7 +657,7 @@
 - **优先级**：🟡 P2 → ✅ 已修
 
 #### CPI-68. 登录响应里有**三个装饰品**：refresh_token 与两个 expires_in 都是假的
-- **位置**：`mynet_back` 的框架 auth 模块
+- **位置**：`mynet_api` 的框架 auth 模块
   （`vendor/dsplat/.../Concerns/BuildsUserTokenResponse.php:44`、
   `vendor/dsplat/.../Http/Controllers/UserAuthController.php:139`）
 - **现状（当时）**：
@@ -672,7 +672,7 @@
 - **后果**：集成方照着响应做就会走到死路 —— LuCI 就在调不存在的 `/auth/refresh-token`。
   且因为三个值都不经服务器校验，**只看响应形状的话改前改后一模一样**，
   这正是它能骗这么久的原因。
-- **✅ 已修**（`mynet_back f60cf1c` + `mynet_agent fa7497a/b40d472`）：
+- **✅ 已修**（`mynet_api f60cf1c` + `mynet_agent fa7497a/b40d472`）：
   1. **建在已有的 `user_sessions` 上**，不另起表 —— 框架登录时就写它
      （`SessionService::recordSession`：token_id/session_id/device_fingerprint/
      is_anomalous），另起表会造出两个「会话」，`/mfa/sessions` 就对不上。
@@ -826,8 +826,8 @@
 
 ### 🟡 P2 — 文档 / 规范
 
-#### 5. mynet_back 文档分散
-- **现状**：mynet_back 顶层散落临时 .md（如 `BACKEND_FIX_NEEDED.md`、多个 deploy shell 脚本注释长篇）
+#### 5. mynet_api 文档分散
+- **现状**：mynet_api 顶层散落临时 .md（如 `BACKEND_FIX_NEEDED.md`、多个 deploy shell 脚本注释长篇）
 - **修复建议**：仿 mynet_gui 归档方式，集中到 `docs/_archive/`
 - **优先级**：低（不影响功能）
 
@@ -866,8 +866,8 @@
 
 #### CPI-17. 保存节点配置整条路径走不通（`updateOrCreateConfig` 从未定义）（已修）
 - **ID**：CPI-17
-- **位置**：[NodeConfigDomainService.php:123](../../../mynet_back-integration/app/Modules/VPN/Domain/Services/NodeConfigDomainService.php) 调用
-  `NodeConfig::updateOrCreateConfig()`，而 [NodeConfig.php](../../../mynet_back-integration/app/Modules/VPN/Models/NodeConfig.php) 只有 `findByNodeId`
+- **位置**：[NodeConfigDomainService.php:123](../../../mynet_api/app/Modules/VPN/Domain/Services/NodeConfigDomainService.php) 调用
+  `NodeConfig::updateOrCreateConfig()`，而 [NodeConfig.php](../../../mynet_api/app/Modules/VPN/Models/NodeConfig.php) 只有 `findByNodeId`
 - **实测**：`BadMethodCallException: Call to undefined method App\Modules\VPN\Models\NodeConfig::updateOrCreateConfig()`
   → `POST/PUT /api/v1/nodes/{id}/config` 这条保存路径根本走不通
 - **与 CPI-2/4/13 同一类**：声明了却做不到（这次是"调用了却没人实现"）
@@ -949,12 +949,12 @@
 |---------|------|------------|
 | 2026-05 | mynet_gui 根目录文档归档 | 本次审计 |
 | 2026-05 | mynet_client openwrt 注释清理 | 本次审计 |
-| 2026-05 | mynet_back 缺 .env.example | 本次审计（新增） |
+| 2026-05 | mynet_api 缺 .env.example | 本次审计（新增） |
 | 2026-05 | ctl 凭证集中目录建立 | 本次审计（新增 `.credentials/`） |
 | 2026-05 | mynet_lua `/api/v1` → `/api/v2`（config.json + deploy.md） | 本次治理 |
 | 2026-05 | mynet_lua 下载 URL `download.mynet.club` → `ctl.mynet.club/d` | 本次治理 |
-| 2026-05 | mynet_back `.env.production` SESSION_DOMAIN/SANCTUM 域名 dsplat → mynet.club | 本次治理 |
-| 2026-05 | mynet_back `.env.production` VITE_REVERB_HOST 一致性修正 | 本次治理 |
+| 2026-05 | mynet_api `.env.production` SESSION_DOMAIN/SANCTUM 域名 dsplat → mynet.club | 本次治理 |
+| 2026-05 | mynet_api `.env.production` VITE_REVERB_HOST 一致性修正 | 本次治理 |
 | 2026-09-22 | back: monitor 路由被模块级 `auth:sanctum` 覆盖 → 节点无 token 全 401（含心跳） | `836adc52` |
 | 2026-09-22 | back: 请求体 gzip 从未被解压 → 真实心跳（必然 >1KB）验证阶段 422 | `836adc52` |
 | 2026-09-22 | back: `Services/NodeMonitorDomainService` 空壳遮蔽 `Domain/Services/` 真实现 → 带 node_monitor 的心跳必 500 | `836adc52` |

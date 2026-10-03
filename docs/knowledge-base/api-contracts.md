@@ -5,7 +5,7 @@
 
 ---
 
-## 一、mynet_back — config-bundle API
+## 一、mynet_api — config-bundle API
 
 ### `GET /api/v2/nodes/{nodeId}/config-bundle`
 
@@ -61,7 +61,7 @@ keys.security.private        → driver/gnb/conf/{nodeId}/security/{nodeId}.priv
 keys.security.public         → driver/gnb/conf/{nodeId}/security/{nodeId}.public
 ```
 
-**实现要点**（mynet_back 内部）：
+**实现要点**（mynet_api 内部）：
 
 1. 复用 `GnbConfigGeneratorDomainService::generateNodeConfig()` → `node.conf`
 2. 复用 `GnbConfigGeneratorDomainService::generateIndexServicesConfig()` → `address.conf`
@@ -71,7 +71,7 @@ keys.security.public         → driver/gnb/conf/{nodeId}/security/{nodeId}.publ
 
 ---
 
-## 二、mynet_back — 心跳 action 类型响应
+## 二、mynet_api — 心跳 action 类型响应
 
 ### 现有行为
 
@@ -269,7 +269,7 @@ keys.security.public         → driver/gnb/conf/{nodeId}/security/{nodeId}.publ
 
 ## 五、URL 端点汇总
 
-### mynet_back 新增
+### mynet_api 新增
 
 | Method | Path | 认证 | 说明 |
 |--------|------|------|------|

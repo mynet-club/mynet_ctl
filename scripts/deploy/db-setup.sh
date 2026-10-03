@@ -33,7 +33,7 @@ LOCAL_DB_USER="mynet"
 # 关键字表只有 password|passwd|pwd，匹配不到裸 `PASS=`（模板已补 `pass`，
 # 并加了正反两条用例：明文口令要拦、pass=0 / BYPASS="enabled" 不得误报）。
 # 🔴 那个值已进 git 历史，**需要轮换**，不是从文件里删掉就算完。
-# 取法与 mynet_back/deploy/backup.sh 一致（V3-5）：FILE 优先，其次 env，都没有就报错退出。
+# 取法与 mynet_api/deploy/backup.sh 一致（V3-5）：FILE 优先，其次 env，都没有就报错退出。
 if [ -n "${LOCAL_DB_PASSWORD_FILE:-}" ]; then
     [ -f "$LOCAL_DB_PASSWORD_FILE" ] || { echo "✗ LOCAL_DB_PASSWORD_FILE 不存在：${LOCAL_DB_PASSWORD_FILE}" >&2; exit 1; }
     LOCAL_DB_PASS="$(cat "$LOCAL_DB_PASSWORD_FILE")"
@@ -148,7 +148,7 @@ dump_local_data() {
     # 使用 --no-create-info 只导出数据，因为结构由 migration 管理
     #
     # ⚠️ 口令走 --defaults-extra-file，**不上命令行**：原来的 `-p"$LOCAL_DB_PASS"`
-    # 会让口令出现在 `ps` 里，同机任何用户都看得到（与 mynet_back/deploy/backup.sh
+    # 会让口令出现在 `ps` 里，同机任何用户都看得到（与 mynet_api/deploy/backup.sh
     # 修掉的是同一个问题，见 V3-5）。
     local CNF DUMP_ERR
     CNF="$(mktemp)"

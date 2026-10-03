@@ -50,7 +50,7 @@ flowchart TB
     UI["mynet_ui<br/>静态 WebUI dist"]
   end
   subgraph L1["L1 平台服务"]
-    BACK["mynet_back · api.mynet.club<br/>业务权威：Zone/节点/路由/密钥/心跳"]
+    BACK["mynet_api · api.mynet.club<br/>业务权威：Zone/节点/路由/密钥/心跳"]
     CTL["mynet_ctl · ctl.mynet.club<br/>分发与控制：binary/脚本/manifest/检测"]
   end
   subgraph L0["L0 数据面 · 冻结"]
@@ -94,7 +94,7 @@ flowchart TB
 
 ### 2.1 纳入整合（目标线 + 服务层）
 
-`mynet_agent` · `mynet_ui` · `mynet_desktop` · `mynet_openwrt` · `mynet_back` · `mynet_ctl` · `mynet_gui` · `mynet_web`
+`mynet_agent` · `mynet_ui` · `mynet_desktop` · `mynet_openwrt` · `mynet_api` · `mynet_ctl` · `mynet_gui` · `mynet_web`
 
 ### 2.2 冻结归档（保留但不再投入改造）
 

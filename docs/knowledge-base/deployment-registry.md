@@ -16,7 +16,7 @@
 | 项目 | 类型 | 生产域名 | 部署路径 | 部署命令 |
 |------|------|---------|---------|---------|
 | **mynet_ctl** | Laravel 12 | ctl.mynet.club | `/data/app/mynet.club/ctl` | `cd mynet_ctl && bash scripts/deploy/deploy.sh` |
-| **mynet_back** | Laravel 12 | api.mynet.club（API）<br>**console.mynet.club**（租户管理） | `/data/app/mynet.club/api` | `cd mynet_back && ./manage-prod.sh deploy` |
+| **mynet_api** | Laravel 12 | api.mynet.club（API）<br>**console.mynet.club**（租户管理） | `/data/app/mynet.club/api` | `cd mynet_api && ./manage-prod.sh deploy` |
 | **mynet_gui** | Vue 3 / Quasar | my.mynet.club | `/data/app/mynet.club/my/public` | `cd mynet_gui && bash deployment.sh` |
 | **mynet_web** | 静态站点 | www.mynet.club | ⚠️ **未建立**（无部署路径记录） | ⚠️ **无部署脚本** |
 
@@ -26,7 +26,7 @@
 
 > **子域命名（H4 裁定，2026-09-24）**：`console.mynet.club` = back 的**租户管理**面；
 > `admin.mynet.club` 让给框架的 platform/operator SPA（**不是** back 的管理面）；
-> `adm` 弃用。本文档、`ecosystem.md`、`brand-guide.md`、`projects/mynet_back.md`
+> `adm` 弃用。本文档、`ecosystem.md`、`brand-guide.md`、`projects/mynet_api.md`
 > 已于 V3-7 同步。
 
 ### 1.2 分发到节点（不经服务器部署）
@@ -61,8 +61,8 @@
 | 子域 | 项目 | 环境 |
 |------|------|------|
 | ctl.mynet.club | mynet_ctl | prod |
-| api.mynet.club | mynet_back（API） | prod |
-| console.mynet.club | mynet_back（租户管理） | prod |
+| api.mynet.club | mynet_api（API） | prod |
+| console.mynet.club | mynet_api（租户管理） | prod |
 | my.mynet.club | mynet_gui | prod |
 | www.mynet.club | mynet_web | prod |
 | gw.mynet.club | mynet_gateway（节点面入口） | prod |
@@ -76,9 +76,9 @@
 
 | 用途 | 路径 | 说明 |
 |------|------|------|
-| CTL 部署 | [mynet_ctl/scripts/deploy/deploy.sh](../../scripts/deploy/deploy.sh) | rsync + 远程 composer + **migrate** + 缓存。ctl 自己允许 migrate（「禁止 migration」只约束 mynet_back） |
-| Back 部署 | [mynet_back/manage-prod.sh](../../../mynet_back/manage-prod.sh) | 远端守卫 → 备份 → rsync → composer → 权限 → 重载 FPM → 健康检查。**不跑 migrate** |
-| Back 备份 / 恢复 | [mynet_back/deploy/](../../../mynet_back/deploy/) | `backup.sh` / `restore.sh` / `backup-drill.sh` / `install-cron.sh`（V3-5） |
+| CTL 部署 | [mynet_ctl/scripts/deploy/deploy.sh](../../scripts/deploy/deploy.sh) | rsync + 远程 composer + **migrate** + 缓存。ctl 自己允许 migrate（「禁止 migration」只约束 mynet_api） |
+| Back 部署 | [mynet_api/manage-prod.sh](../../../mynet_api/manage-prod.sh) | 远端守卫 → 备份 → rsync → composer → 权限 → 重载 FPM → 健康检查。**不跑 migrate** |
+| Back 备份 / 恢复 | [mynet_api/deploy/](../../../mynet_api/deploy/) | `backup.sh` / `restore.sh` / `backup-drill.sh` / `install-cron.sh`（V3-5） |
 | GUI 部署 | [mynet_gui/deployment.sh](../../../mynet_gui/deployment.sh) | 本地 build + rsync `dist/` |
 | 客户端打包 | [mynet_agent/Makefile](../../../mynet_agent/Makefile) 的 `dist` 目标 | 5 平台 × 3 二进制 + checksums |
 | OpenWrt 打包 | [mynet_openwrt/Makefile](../../../mynet_openwrt/Makefile) | ipk |
@@ -86,7 +86,7 @@
 
 **已删除的入口**（曾在本文件里，但盘上已无对应物）：
 
-- `mynet_back/scripts/deployment/deploy-unified.sh` —— `mynet_back/scripts/` 整个目录已不存在，`manage-prod.sh` 取代它
+- `mynet_api/scripts/deployment/deploy-unified.sh` —— `mynet_api/scripts/` 整个目录已不存在，`manage-prod.sh` 取代它
 - `mynet_client/pack.sh`、`mynet_lua/Makefile`、`mynet_lua/debug/sync.sh` —— 两个仓已退役（见 §1.3）
 
 ---
@@ -111,10 +111,10 @@
 - [ ] 本地代码已提交并推送
 - [ ] `composer install --no-dev --optimize-autoloader`（Laravel）
 - [ ] `npm run build`（前端）
-- [ ] 数据库变更评估（mynet_back **禁止 migration**，需 DBA 走 `database/sql/`）
+- [ ] 数据库变更评估（mynet_api **禁止 migration**，需 DBA 走 `database/sql/`）
 - [ ] 凭证（`.env`）已同步到生产
 - [ ] `back_priv` 文件权限 **0600**（`manage-prod.sh` 的远端守卫会拦；H7 裁定见 `spec/node-keying.md` §4.6）
-- [ ] 队列服务（mynet_back）会自动 restart
+- [ ] 队列服务（mynet_api）会自动 restart
 - [ ] 部署后健康检查（关键 URL 200 OK）
 
 ---
@@ -126,7 +126,7 @@
 | Laravel（ctl / back） | `manage-prod.sh rollback`，或 `git reset --hard <prev_commit>` 后重跑部署脚本 |
 | GUI | rsync 备份的旧 `dist/` 目录回原位置 |
 | 客户端 / OpenWrt | 用户保持旧版本；CTL 不强制更新 |
-| 数据库 | **无自动回滚**。备份见 `mynet_back/deploy/backup.sh`（V3-5），恢复用 `restore.sh`——但那是「恢复到某个时点」，不是回滚一次迁移 |
+| 数据库 | **无自动回滚**。备份见 `mynet_api/deploy/backup.sh`（V3-5），恢复用 `restore.sh`——但那是「恢复到某个时点」，不是回滚一次迁移 |
 
 ---
 
@@ -138,7 +138,7 @@
 | 项 | 现状 |
 |----|------|
 | 服务可用性 | ⚠️ **未建立**。`manage-prod.sh` 只在部署结束时做一次健康检查，没有常驻监控 |
-| 错误日志 | 有：Laravel log（[mynet_back/config/logging.php](../../../mynet_back/config/logging.php) 存在）。**Slack webhook 未接** |
+| 错误日志 | 有：Laravel log（[mynet_api/config/logging.php](../../../mynet_api/config/logging.php) 存在）。**Slack webhook 未接** |
 | 队列堆积 | ⚠️ **未建立**。本文件旧版写的 `scripts/service/queue-monitor-daemon.sh` **在盘上不存在** |
 | 心跳异常 | ⚠️ **无告警**。back 侧有 `monitor/heartbeat` → Redis（全节点 zset + 离线扫描）这条链，但没有任何提醒出口；节点侧指标采集本身也不完整（`long-range-plan-deep.md` §1「可观测性」） |
 
@@ -153,7 +153,7 @@
 | 应用目录 | `/data/app/mynet.club/api2` 不存在（早已移除）；`api_pre_p3` 为晋升前 api 快照 |
 | 老库 `mynet` | **数据保留**，159 表；未 DROP |
 | 备份 | `/data/backup/mynet/api2-retire-20260926_010200/mynet.sql.enc`（AES-256-CBC，口令 `/etc/mynet/backup.pass`） |
-| 承接者 | `api.mynet.club`（`/data/app/mynet.club/api`，库 `mynet_back`） |
+| 承接者 | `api.mynet.club`（`/data/app/mynet.club/api`，库 `mynet_api`） |
 | nginx | 旧站点已移除，仅保留 `api2.mynet.club.retired` 410 块 |
 
 ⚠️ MariaDB 不支持 `ALTER DATABASE … READ ONLY`；冻结方式 = nginx 410 + 无应用/无 cron 写入 + 全量备份。

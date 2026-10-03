@@ -1,6 +1,6 @@
-# SPEC: mynet_back 历史包袱清理
+# SPEC: mynet_api 历史包袱清理
 
-> 更新：2026-09-21 | 适用：`mynet_back`
+> 更新：2026-09-21 | 适用：`mynet_api`
 > 状态：**包袱清理系列 + 四项待决项 + 两项新发现（RBAC 拆除 / 迁移归属）均已完成**
 > 依据：本文件全部结论均来自实测（`ClassLoader::findFile` / `information_schema` / PHP fatal），非推断
 >

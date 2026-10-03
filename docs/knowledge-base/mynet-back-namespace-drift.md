@@ -1,14 +1,14 @@
-# mynet_back 命名空间漂移映射清单（T31a）
+# mynet_api 命名空间漂移映射清单（T31a）
 
 > 生成：2026-09-21 · 状态：**决策材料，本批未动任何代码**
-> 背景：T31 —— mynet_back 在当前提交下**应用跑不起来**，模块路由（含 VPN 全部 `/api/v1/*`）不注册
+> 背景：T31 —— mynet_api 在当前提交下**应用跑不起来**，模块路由（含 VPN 全部 `/api/v1/*`）不注册
 > 相关：`integration-plan-v2.md` §3 W4（back 业务上移 / 改产 VPNBundle）
 
 ---
 
 ## 0. 结论摘要
 
-扫描 `mynet_back/app/` 内全部 `use App\...` 语句（**后经独立抽查修正，见 §8**）：
+扫描 `mynet_api/app/` 内全部 `use App\...` 语句（**后经独立抽查修正，见 §8**）：
 
 | 类别 | 数量 | 出现次数 | 问题本质 | 修复动作 |
 |------|------|---------|---------|---------|
@@ -312,7 +312,7 @@
 
 ### 9.1 参考项目的做法（520 个文件，路径↔namespace **0 错位**）
 
-| 维度 | 参考项目（scrm-platform） | mynet_back（现状） |
+| 维度 | 参考项目（scrm-platform） | mynet_api（现状） |
 |---|---|---|
 | **composer psr-4** | 仅 `App\ => app/`（+ Database 映射） | `App\ => app/` **+ `Modules\ => app/Modules/`**（双根） |
 | **模块类 namespace** | `App\Modules\X\...`（443 个文件，全部如此） | 混杂：多数 `Modules\VPN\...`，少数错写 `App\Models` |

@@ -79,7 +79,7 @@ preStop()        // GNB 停止前（如：清理 policy routing）
 
 ## 内置插件：heartbeat
 
-**功能：** 定期向 mynet_back 上报节点健康状态，接收并执行远程指令。
+**功能：** 定期向 mynet_api 上报节点健康状态，接收并执行远程指令。
 
 ### heartbeat.start()
 

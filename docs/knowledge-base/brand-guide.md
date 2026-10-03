@@ -149,7 +149,7 @@ font-family: 'JetBrains Mono', 'Fira Code', Consolas,
 |------|--------|---------|------|
 | my.mynet.club | 用户控制台 | User Console | mynet_gui |
 | ctl.mynet.club | 软件分发中心 | Distribution Center | mynet_ctl |
-| console.mynet.club | 租户管理 | Tenant Console | mynet_back |
+| console.mynet.club | 租户管理 | Tenant Console | mynet_api |
 | www.mynet.club | 官网 | Website | mynet_web |
 | myjarvis.ai | Jarvis AI | Jarvis AI | mynet_javis |
 

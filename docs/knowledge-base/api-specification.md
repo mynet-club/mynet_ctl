@@ -9,7 +9,7 @@
 ## 目录
 
 1. [分工总览](#分工总览)
-2. [mynet_back API 完整规范](#一mynet_back-api-完整规范)
+2. [mynet_api API 完整规范](#一mynet_api-api-完整规范)
    - [认证端点](#11-认证端点-authcontroller)
    - [用户端点](#12-用户端点-usercontroller)
    - [节点端点](#13-节点端点-nodecontroller)
@@ -43,7 +43,7 @@
 ├─────────────────────────────────────────────────────────────────┤
 │  平台层 — 后端服务                                                │
 │  ┌──────────────┐  ┌──────────────┐                             │
-│  │  mynet_back  │  │  mynet_ctl   │                             │
+│  │  mynet_api  │  │  mynet_ctl   │                             │
 │  │api.mynet.club│  │ctl.mynet.club│                             │
 │  │ API v2       │  │ 配置中心      │                             │
 │  │              │  │              │                             │
@@ -58,7 +58,7 @@
 
 | 服务 | 域名 | API 前缀 | API 版本 | 职责 |
 |------|------|----------|----------|------|
-| **mynet_back** | api.mynet.club | `/api/v2/` | v2.x.y | 业务服务：认证、Zone、节点、路由、心跳 |
+| **mynet_api** | api.mynet.club | `/api/v2/` | v2.x.y | 业务服务：认证、Zone、节点、路由、心跳 |
 | **mynet_ctl** | ctl.mynet.club | `/api/v2/`* | v1.x.y | 配置中心：分发、下载、检测、Setup 代理 |
 
 > *CTL 当前路由前缀为 `/api/v2/`（历史原因），API 概念版本为 v1。
@@ -96,7 +96,7 @@
 
 ---
 
-## 一、mynet_back API 完整规范
+## 一、mynet_api API 完整规范
 
 ### 认证方式
 
@@ -1502,7 +1502,7 @@ Response 200:
 | GET | `/api/v2/proxy/iplists` | 无 | IP 列表下载 |
 | GET | `/api/v2/proxy/iplists/meta` | 无 | IP 列表元数据 |
 
-#### Setup (代理 mynet_back)
+#### Setup (代理 mynet_api)
 | Method | Path | 认证 | 参数 | 说明 |
 |--------|------|------|------|------|
 | GET | `/api/v2/setup/platforms` | 无 | — | 平台矩阵 |
@@ -1522,7 +1522,7 @@ Response 200:
 
 ## 三、中间件矩阵
 
-### mynet_back 中间件
+### mynet_api 中间件
 
 | 中间件 | 标识 | 作用 | 适用端点 |
 |--------|------|------|----------|
@@ -1648,7 +1648,7 @@ Response 200:
 
 ## 五、API 调用矩阵
 
-### 5.1 mynet_back API 使用总览
+### 5.1 mynet_api API 使用总览
 
 | # | Method | Path | 中间件 | GUI | client | lua | CTL代理 |
 |---|--------|------|--------|-----|--------|-----|---------|
@@ -1744,8 +1744,8 @@ Response 200:
 | # | 项目 | 问题 | 位置 | 影响 |
 |---|------|------|------|------|
 | B1 | **mynet_lua** | `validator.lua` auto_repair 创建默认配置时写死 `/api/v1`，应为 `/api/v2` | `validator.lua:163,172` | 新用户默认配置指向 v1 API |
-| B2 | **mynet_back** | config-bundle 缺少严格 `zone_id` 鉴权（用户可越 Zone 访问） | `NodeConfigController` | 安全漏洞 |
-| B3 | **mynet_back** | router-keys 获取失败时静默继续，配置包缺少 peer 公钥 | `ConfigBundleService` | 节点间无法连接 |
+| B2 | **mynet_api** | config-bundle 缺少严格 `zone_id` 鉴权（用户可越 Zone 访问） | `NodeConfigController` | 安全漏洞 |
+| B3 | **mynet_api** | router-keys 获取失败时静默继续，配置包缺少 peer 公钥 | `ConfigBundleService` | 节点间无法连接 |
 
 ### 🟠 不匹配（需要对齐）
 

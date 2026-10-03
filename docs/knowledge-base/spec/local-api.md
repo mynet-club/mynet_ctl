@@ -161,7 +161,7 @@ GUI ── local token ──> mynetd 本机 API
 
 ---
 
-## 5. 管理端命令（mynet_back → mynetd）
+## 5. 管理端命令（mynet_api → mynetd）
 
 心跳响应中的 `commands[]`：
 
@@ -180,7 +180,7 @@ callback：`PATCH .../commands/{id}/result`（以 back 为准）。
 ## 6. 非目标
 
 - 不做 uhttpd / nginx 反代（OpenWrt 走 LuCI 同源 ubus）
-- 不在客户端注入 gnb 全量路由 / 管理 f 节点
+- 不在客户端注入 gnb 全量路由；出口=指定下一跳（等同 route.conf）
 - 不交付 TUI
 - 壳（ui / LuCI）不直接访问 `back` / `ctl`
 

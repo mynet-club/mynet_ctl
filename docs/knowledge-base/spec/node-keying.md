@@ -1,7 +1,7 @@
 # SPEC: 节点密钥与鉴权（node-keying）
 
 > 更新：2026-09-21
-> 适用：`mynet_gnb`（数据面，**只读参考，不改动**）、`mynet_agent`（`mynetd` 实现）、`mynet_back`（校验端）、`mynet_gateway`
+> 适用：`mynet_gnb`（数据面，**只读参考，不改动**）、`mynet_agent`（`mynetd` 实现）、`mynet_api`（校验端）、`mynet_gateway`
 > 依据：`mynet_gnb/src/libs/ed25519/*`、`mynet_gnb/src/src/gnb_node.c`、`mynet_agent-integration/internal/utils/gnb_ed25519.go`、`mynet_agent-integration/internal/daemon/monitor/monitor.go`、`mynet_tui/internal/{utils,tui}/gnb_ed25519.go`、`spec/plugins.md`
 > 状态：**现状契约**（依据源码实测；gateway 鉴权方案见 §5，属设计稿）
 
@@ -276,9 +276,9 @@ env 会出现在 `docker inspect`、编排文件、`/proc/<pid>/environ` 里，
 | 入 git | **绝不**。`.gitignore` + guard A2/A3 双拦 |
 
 「权限过宽即拒绝」是把约定变成机制——否则某次部署 `umask` 不对，密钥静默变成
-0644，没人会发现。实现：`mynet_back/app/Modules/VPN/Domain/Services/BackFaceKeys.php`。
+0644，没人会发现。实现：`mynet_api/app/Modules/VPN/Domain/Services/BackFaceKeys.php`。
 部署侧另有一道守卫：`manage-prod.sh` 在 rsync 之前会检查**生产机上**该文件的权限
-（`mynet_back/deploy/README.md` §2）—— 两道闸，一道在读密钥时、一道在部署时。
+（`mynet_api/deploy/README.md` §2）—— 两道闸，一道在读密钥时、一道在部署时。
 
 #### ⚠️ 不回退：文件在但权限不合规 → 硬停
 

@@ -1,6 +1,6 @@
 # multi-tenant-saas 框架缺陷报告（下游使用方提交）
 
-> 提交方：mynet.club 项目（`mynet-club/mynet_back-V2`），框架的下游使用方。
+> 提交方：mynet.club 项目（`mynet-club/mynet_api`），框架的下游使用方。
 > 提交日期：2026-09-25
 > 诉求：以下 5 条都在**只安装 core + auth + infrastructure 三个包**时必现。
 > 我方已在本地做了临时兜底（每条都注明了），但兜底不是修法 —— 希望上游评审后从根上解决。

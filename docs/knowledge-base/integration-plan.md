@@ -19,7 +19,7 @@
 
 | 项目 | 技术栈 | 完成度 | 生产就绪 | 核心价值 |
 |------|--------|--------|----------|----------|
-| **mynet_back** | Laravel 12 | 70-75% | ✅ Alpha/Beta | 全局 API + 多租户 Zone + 节点配置 |
+| **mynet_api** | Laravel 12 | 70-75% | ✅ Alpha/Beta | 全局 API + 多租户 Zone + 节点配置 |
 | **mynet_gui** | Vue3 + Quasar + TS | 85% | ✅ 可上线 | 用户中心 + 社交 + 设备管理 |
 | **mynet_ctl** | Laravel 12 | 80% | ✅ 可上线 | 软件分发 + 配置部署 |
 | **mynet_tui** | Go | 85-90% | ✅ 生产环境 | CLI/TUI 客户端（最成熟） |
@@ -39,7 +39,7 @@
          ████████████████████████       mynet_gui (85%)
          ██████████████████████         mynet_ctl (80%)
          ████████████████████           mynet_lua (78%)
-         █████████████████              mynet_back (73%)
+         █████████████████              mynet_api (73%)
 开发中   █████████████                  mynet_client (65%)
          ████████████                   mynet_web (60%)
 ```
@@ -57,7 +57,7 @@
 └─────┬──────┴─────┬──────┴──────┬───────┴──────────┬──────────────┘
       │            │             │                   │
       │      ┌─────▼─────────────▼───────────────────▼──────┐
-      │      │              mynet_back                       │
+      │      │              mynet_api                       │
       │      │    api.mynet.club / admin.mynet.club          │
       │      │    用户 · Zone · 节点 · 路由 · 配置 · 社交     │
       │      └──┬───────────────────────────────────────┬────┘
@@ -157,7 +157,7 @@
 
 ## 四、各子项目行动计划
 
-### 4.1 mynet_back（后端核心）— 优先级：🔴 最高
+### 4.1 mynet_api（后端核心）— 优先级：🔴 最高
 
 **当前状态**：70-75% 完成，API 主体功能齐全但缺乏文档、测试和一些边缘功能。
 
@@ -1055,7 +1055,7 @@ CTL 维护常用场景的预配置模板，减少用户决策：
 
 基于以上 6 项决策，更新各项目行动清单：
 
-### 11.1 mynet_back — 补充项
+### 11.1 mynet_api — 补充项
 
 | 编号 | 任务 | 关联 ADR |
 |------|------|---------|
@@ -1286,7 +1286,7 @@ API 调用时:
 
 ### 15.1 现状问题
 
-对 mynet_back 110+ 端点做了全面审计，发现：
+对 mynet_api 110+ 端点做了全面审计，发现：
 
 | 问题 | 详情 |
 |------|------|
@@ -1430,7 +1430,7 @@ Phase 3: v1 Deprecation
 
 ## 十六、代码疏剪清单
 
-### 16.1 mynet_back — 确认可删除
+### 16.1 mynet_api — 确认可删除
 
 | 文件/位置 | 内容 | 置信度 | 操作 |
 |-----------|------|--------|------|
@@ -1490,7 +1490,7 @@ Phase 3: v1 Deprecation
 
 ### 17.2 数据库方案
 
-**生产数据库 (mynet_back)**: 有两份备份可用
+**生产数据库 (mynet_api)**: 有两份备份可用
 
 | 备份文件 | 日期 | 表数 |
 |----------|------|------|
@@ -1501,8 +1501,8 @@ Phase 3: v1 Deprecation
 
 | 域名 | 指向 | 端口 | 项目 |
 |------|------|------|------|
-| `api.mynet.local` | 127.0.0.1 | 8001 | mynet_back |
-| `admin.mynet.local` | 127.0.0.1 | 8001 | mynet_back |
+| `api.mynet.local` | 127.0.0.1 | 8001 | mynet_api |
+| `admin.mynet.local` | 127.0.0.1 | 8001 | mynet_api |
 | `ctl.mynet.local` | 127.0.0.1 | 8002 | mynet_ctl |
 | `my.mynet.local` | 127.0.0.1 | 9000 | mynet_gui (Vite) |
 | `www.mynet.local` | 127.0.0.1 | 9001 | mynet_web (Vite) |
@@ -1526,13 +1526,13 @@ brew services start redis
 
 echo "=== Step 3: 创建数据库 ==="
 mysql -u root <<'SQL'
-CREATE DATABASE IF NOT EXISTS mynet_back CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE IF NOT EXISTS mynet_api CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE DATABASE IF NOT EXISTS mynet_ctl CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE DATABASE IF NOT EXISTS mynet_javis CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- 创建开发用户
 CREATE USER IF NOT EXISTS 'mynet_dev'@'localhost' IDENTIFIED BY 'mynet_dev_2026';
-GRANT ALL ON mynet_back.* TO 'mynet_dev'@'localhost';
+GRANT ALL ON mynet_api.* TO 'mynet_dev'@'localhost';
 GRANT ALL ON mynet_ctl.* TO 'mynet_dev'@'localhost';
 GRANT ALL ON mynet_javis.* TO 'mynet_dev'@'localhost';
 FLUSH PRIVILEGES;
@@ -1540,16 +1540,16 @@ SQL
 
 echo "=== Step 4: 导入生产数据结构（仅 schema，不含数据）==="
 # 从最新备份提取 schema-only
-gzcat "$BASE/mynet_back/database_backup_20251029_095515.sql.gz" \
+gzcat "$BASE/mynet_api/database_backup_20251029_095515.sql.gz" \
   | sed -n '/^CREATE TABLE/,/^).*;/p' \
-  | mysql -u mynet_dev -pmynet_dev_2026 mynet_back
+  | mysql -u mynet_dev -pmynet_dev_2026 mynet_api
 
 # 或：导入完整备份（含数据，适合调试）
-# gzcat "$BASE/mynet_back/database_backup_20251029_095515.sql.gz" \
-#   | mysql -u mynet_dev -pmynet_dev_2026 mynet_back
+# gzcat "$BASE/mynet_api/database_backup_20251029_095515.sql.gz" \
+#   | mysql -u mynet_dev -pmynet_dev_2026 mynet_api
 
-echo "=== Step 5: 配置 mynet_back ==="
-cat > "$BASE/mynet_back/.env" <<'ENV'
+echo "=== Step 5: 配置 mynet_api ==="
+cat > "$BASE/mynet_api/.env" <<'ENV'
 APP_NAME=MyNet
 APP_ENV=local
 APP_DEBUG=true
@@ -1558,7 +1558,7 @@ APP_URL=http://api.mynet.local:8001
 DB_CONNECTION=mysql
 DB_HOST=127.0.0.1
 DB_PORT=3306
-DB_DATABASE=mynet_back
+DB_DATABASE=mynet_api
 DB_USERNAME=mynet_dev
 DB_PASSWORD=mynet_dev_2026
 
@@ -1601,13 +1601,13 @@ sudo tee -a /etc/hosts <<'HOSTS'
 HOSTS
 
 echo "=== Step 9: 种子数据 ==="
-cd "$BASE/mynet_back"
+cd "$BASE/mynet_api"
 php artisan db:seed --class=AdminUserSeeder
 php artisan db:seed --class=DefaultZoneSeeder
 
 echo "=== 完成！==="
 echo "启动各项目："
-echo "  back: cd $BASE/mynet_back && php artisan serve --port=8001"
+echo "  back: cd $BASE/mynet_api && php artisan serve --port=8001"
 echo "  ctl:  cd $BASE/mynet_ctl && php artisan serve --port=8002"
 echo "  gui:  cd $BASE/mynet_gui && npm run dev"
 echo "  web:  cd $BASE/mynet_web && npm run dev"
@@ -1636,8 +1636,8 @@ echo "  web:  cd $BASE/mynet_web && npm run dev"
 ### 17.6 多项目联调启动
 
 ```bash
-# Terminal 1: mynet_back API
-cd /Users/yue/Devel/WorkSpacePHP/mynet.club/mynet_back
+# Terminal 1: mynet_api API
+cd /Users/yue/Devel/WorkSpacePHP/mynet.club/mynet_api
 php artisan serve --port=8001
 
 # Terminal 2: mynet_ctl

@@ -1,4 +1,4 @@
-# mynet_back 项目修复任务指导
+# mynet_api 项目修复任务指导
 
 > **来源**：mynet_ctl API 全链路审计（2026-04-19）  
 > **目标项目**：`/Users/arthur/Devel/WorkSpacePHP/lyt.com/mynet_back/`  

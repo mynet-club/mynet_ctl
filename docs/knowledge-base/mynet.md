@@ -500,11 +500,11 @@ config.json 中 `downloads.apps_index_url` 配置了起始 URL（历史遗留指
 
 ---
 
-## 8. 与 mynet_back 的交互
+## 8. 与 mynet_api 的交互
 
-客户端通过以下 mynet_back API 获取配置（Bearer token 认证，X-Zone-ID 头）：
+客户端通过以下 mynet_api API 获取配置（Bearer token 认证，X-Zone-ID 头）：
 
-| 请求 | mynet_back 端点 | 用途 |
+| 请求 | mynet_api 端点 | 用途 |
 |------|-----------------|------|
 | 登录 | `POST /api/v1/auth/login` | 获取 auth_token + refresh_token |
 | 登出 | `POST /api/v1/auth/logout` | 注销 |

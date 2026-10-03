@@ -20,7 +20,7 @@
 |---|---|---|---|
 | 1 | `long-range-plan.md:63` **R4-3 ☑**「`mynet update` 升级一轮：旧版→新版→健康检查」 | `Fetch`/`Install` 是**返回 error 的桩**，无 HTTP 拉取、无下载、无校验、无替换、无备份、无回滚。**真升级一轮从未跑过** | `mynet_agent/mynet/upgrade/service.go:47-52`（`"upgrade: Fetch 未注入（接 ctl apps 索引）"` / `"upgrade: Install 未注入"`）；`Artifact.Checksum:30` 定义了但**无人读取**；`upgrade_roundtrip_test.go:9-18` 注入的是假 Fetch/Install |
 | 2 | `long-range-plan.md:61-62` **R4-1/R4-2 ☑**「make dist 三平台产物 + ctl apps 索引」 | ctl 侧**根本没接通**：`PRODUCTS` 白名单里没有 `agent`，`validateProduct()` 会直接拒收 agent 产物 | `mynet_ctl/app/Domain/Release/Services/ReleaseDomainService.php:19-26`（只有 `tui/gnb/utc/client/proxy/lua`）、`:122-125` |
-| 3 | `long-range-plan-t.md:63` **T3-3 ☑**「备份/恢复：DB + 密钥（back_priv 高保护）」 | `backup.sh` **无加密**（明文 tar.gz，而计划原文要求「备份加密」）、**无恢复脚本、无恢复演练**、cron 只是 README 注释、DB 密码走命令行（进 `ps`） | `mynet_back/deploy/backup.sh:10-14,17-20,23-24`；`deploy/README.md:34`；`long-range-plan-t.md:164` 的要求原文 |
+| 3 | `long-range-plan-t.md:63` **T3-3 ☑**「备份/恢复：DB + 密钥（back_priv 高保护）」 | `backup.sh` **无加密**（明文 tar.gz，而计划原文要求「备份加密」）、**无恢复脚本、无恢复演练**、cron 只是 README 注释、DB 密码走命令行（进 `ps`） | `mynet_api/deploy/backup.sh:10-14,17-20,23-24`；`deploy/README.md:34`；`long-range-plan-t.md:164` 的要求原文 |
 | 4 | `dev-plan.md:330` **C-6 ☑**「presence Redis pub/sub + 降级」 | Redis presence **全是死代码**：`SetPresence` 无调用方、`Notify` 从不调 `presence.Publish`、`NewRedisPresence` 仅被测试调用 → 实际恒为内存 presence。且 `presence_multi_test.go:6` 断言的恰恰是两实例**互不共享** | `gateway/server.go:44,48,112-130`；`presence_redis.go:22`；`presence_test.go:47,61` |
 | 5 | `dev-plan.md:316` **F-4 ☑**「linux/darwin/windows/openwrt」 | **Windows 是纸面**：dist 矩阵不构建 windows、路由探测硬编码 stub、无 `firewall_win.go`/`service_win.go`、install/uninstall 无 windows 分支 | `mynet_agent/Makefile:43`（矩阵仅 darwin arm64/amd64 + linux amd64/arm64/mipsle）；`detector/routing_win.go:46`（`NetworkInterface{Name:"stub"}`）、`:45`（netstat 输出被丢弃）；`mynet/cmd_install.go:55-64` |
 
@@ -46,7 +46,7 @@
 | 能力域 | 真实状态 | 关键证据 |
 |---|---|---|
 | **数据面隧道** | ✅ **真通**。gnb + wg + 跨驱动桥三场景 e2e PASS，三节点拓扑（2×LAN + 1×QEMU OpenWrt） | `scripts/e2e/g3_tunnel.sh`、`u1_mesh.sh` 6/6 |
-| **社区业务面（back）** | ✅ **真通**。注册/登录/节点/密钥/好友/连接申请/服务 CRUD 实测 200/201/422/410 各就各位；`make check` **154 tests / 2503 assertions**（2026-09-24 清理时实测；基线为 126/2398，差额来自 CPI-28 把 Feature 套件并入门禁） | 本文同日 T2-6 实测；`long-range-plan-t.md` §3 T2-6 证据表；`mynet_back` 的 `make check` 输出 |
+| **社区业务面（back）** | ✅ **真通**。注册/登录/节点/密钥/好友/连接申请/服务 CRUD 实测 200/201/422/410 各就各位；`make check` **154 tests / 2503 assertions**（2026-09-24 清理时实测；基线为 126/2398，差额来自 CPI-28 把 Feature 套件并入门禁） | 本文同日 T2-6 实测；`long-range-plan-t.md` §3 T2-6 证据表；`mynet_api` 的 `make check` 输出 |
 | **用户前端（mynet_gui）** | ✅ **四页真打通**，连接向导四步走通并落库 | `long-range-plan-t.md` §3 T2-6 |
 | **gateway** | ✅ **可执行（V1 已完成，2026-09-24）**。V1 开工时的基线是「无 main 的库包 + `handleConnect` 占位 + `handleRelay` 恒 502 + `Makefile` dist 不产它 + compose 里 `alpine sleep infinity`」，V1-1~V1-5 已逐项解决（实测证据见 §4 各段） | 现证：`cmd/mynet_gateway/`、`gateway/ws.go`（真握手）、`Makefile:95`（五平台产 `mynet_gateway`）。⚠️ 残留：`scripts/e2e/up.sh:78` 仍自陈「cmd 待接 — 跳过」，该自陈**已过期** |
 | **在线升级** | ~~❌ 纸面（`upgrade.Fetch`/`Install` 是返回 error 的桩）、版本比较是**字典序非 semver**（`0.10.0 < 0.9.0`）~~ → ✅ **V2 已解决**（V2-5 两步协议 Fetch、V2-6 Install 含校验+备份+原子替换+回滚、V2-7 改语义比较、V2-8a 真二进制升一轮） | 现证见 §4「V2 实测证据」：真 `mynet` v0.0.1→v0.0.2；负路径校验和不符被拒且不落 `.bak` |
@@ -58,8 +58,8 @@
 | **多平台** | linux ✅ 真跑（U1 三机）· openwrt ✅ 真跑（VM）· darwin ⚠️ 仅能构建（metrics 全 0）· windows ❌ 从未构建。`mynet_desktop` 只有 12 行 plist + 21 行 unit + 22 行脚本，**无任何 .msi/.nsis/.pkg/.dmg/.deb/.rpm**；`mynet install` 只拷二进制、不装 unit、不 enable；`uninstall` 是 print-only | `mynet_desktop/`；`mynet/cmd_install.go:12-48,50-53,55-64` |
 | **移动 relay** | ⚠️ ~~`/v1/relay` 恒 502、白名单未接线~~ → **V1-4 已解决这两项**（现真转发、`relaypolicy` 已接线，见 §4）。仍缺：① **移动端 / GUI 侧零消费**（`mynet_gui` grep `v1/relay` 0 命中，仍直连 back）——注意这与**节点面**不同，节点面已复用 `/v1/relay`（V1-9）；② spec 要求的 **mynetd 侧** `GET /api/v1/relay?path=` 在 localapi 路由表里不存在（V1-8）；③ 移动端载体：**Capacitor 连产物都出不来**（仓里无 `@capacitor/*` 依赖、无 `src-capacitor/`，`npm run build:capacitor -T android` 会停下来交互索要 appId——Quasar 的 capacitor 模式不会自动兜底）。注意与**桌面 Electron 侧**不同：后者实测 `npm run build:electron` **退出码 0 并产出 `dist/electron`**，但那是 Quasar 在构建时**自动补依赖并生成 `src-electron/` 模板**（本仓原本都没有），且从未发布过（无签名/分发配置） | `spec/control-plane.md:278-289`；`mynetd/localapi/server.go:55-67`；`mynet_gui/quasar.config.ts:205,210`；V1-4 证据见 §4 |
 | **用户文档** | ❌ `mynet_gui/docs/help/index.json` 引用 **47** 个文件、实际只有 **5** 篇正文（`lastUpdated: 2025-09-15`），`HelpPage.vue` 消费它 → 绝大多数链接悬空。**无任何安装指南**。全仓**无隐私政策** | `mynet_gui/docs/help/index.json`；`mynet_desktop/README.md`（8 行，开发向） |
-| **生产环境** | ⚠️ **服务器与证书已存在**：`10.182.236.180`（公网 `52.77.179.176`），ctl/back/gui 共置同机不同 nginx server block，证书 `/etc/letsencrypt/live/mynet.club/{fullchain,privkey}.pem`。但 **back 尚未部署过**（无部署记录）——V3-1/V3-2 已把入口备好（`manage-prod.sh` + `deploy/nginx.conf`），剩余前置是 H5（DBA 建库）与 H6（`back_priv` 入凭证库） | `deployment-registry.md:12-15,20`；`mynet_back/manage-prod.sh`；`mynet_back/deploy/`（4 文件：`.rsyncignore` / `backup.sh` / `nginx.conf` / `README.md`） |
-| **CI/CD** | ❌ `mynet_agent`/`mynet_back` **无 `.github`**；ctl/gui/utc 只有 `copilot-instructions.md`、**无 workflows**；`mynet_openwrt/release.yml` 存在但**该 repo tag 为空 → 从未跑过**；gnb 的 10 个 workflow 产物 rsync 到 **`download.mynet.club`（已废弃链路）不是 ctl** | `mynet_openwrt/.github/workflows/release.yml:1-35`；`mynet_gnb/.github/workflows/build_linux.yml:11,548-555`；`v2-upgrade-plan.md:18` |
+| **生产环境** | ⚠️ **服务器与证书已存在**：`10.182.236.180`（公网 `52.77.179.176`），ctl/back/gui 共置同机不同 nginx server block，证书 `/etc/letsencrypt/live/mynet.club/{fullchain,privkey}.pem`。但 **back 尚未部署过**（无部署记录）——V3-1/V3-2 已把入口备好（`manage-prod.sh` + `deploy/nginx.conf`），剩余前置是 H5（DBA 建库）与 H6（`back_priv` 入凭证库） | `deployment-registry.md:12-15,20`；`mynet_api/manage-prod.sh`；`mynet_api/deploy/`（4 文件：`.rsyncignore` / `backup.sh` / `nginx.conf` / `README.md`） |
+| **CI/CD** | ❌ `mynet_agent`/`mynet_api` **无 `.github`**；ctl/gui/utc 只有 `copilot-instructions.md`、**无 workflows**；`mynet_openwrt/release.yml` 存在但**该 repo tag 为空 → 从未跑过**；gnb 的 10 个 workflow 产物 rsync 到 **`download.mynet.club`（已废弃链路）不是 ctl** | `mynet_openwrt/.github/workflows/release.yml:1-35`；`mynet_gnb/.github/workflows/build_linux.yml:11,548-555`；`v2-upgrade-plan.md:18` |
 
 ---
 
@@ -131,7 +131,7 @@ T3-5（G4 外网可用）、T4-4（双 gateway）、T4-6（真节点压测）、
 | **H3** | **确认证书 SAN**：`/etc/letsencrypt/live/mynet.club/` 现有证书是否已含 `api.` / `gw.` / `console.` / `admin.` 子域；不含则需重签 | 需生产机 root + ACME 交互 | T3-2 | 与 H2 同时 |
 | **H4** | ~~裁定子域命名冲突~~ ✅ **已裁定（2026-09-24）：`console` = 租户管理（back 管理面）、`admin` = 平台管理（框架 platform/operator SPA）、`adm` 弃用**。用户原话：「back管理是租户管理，租户管理是console，admin 是平台管理」 | — | — | 已决 → 待同步 `deployment-registry.md:13` / `ecosystem.md:125` / `brand-guide.md:152` |
 | **H4b** | **`gw` vs `gw1`/`gw2` 未裁定**（H4 只答了 admin/adm）。建议：现阶段单入口 `gw`，等 V4-5/V4-6（presence 真接线）做完再开 `gw1`/`gw2`——现在开两个入口是空的 | 命名与多实例时机是产品决策 | T4-4 | V4 前 |
-| **H5** | **DBA 建库建表**：生产是 MySQL 8，而 `deployment-registry.md:63` 明写「**mynet_back 禁止 migration，需 DBA 走 database/sql/**」 | 生产库变更权限 | T3-4 | H1 之后 |
+| **H5** | **DBA 建库建表**：生产是 MySQL 8，而 `deployment-registry.md:63` 明写「**mynet_api 禁止 migration，需 DBA 走 database/sql/**」 | 生产库变更权限 | T3-4 | H1 之后 |
 | **H6** | **生成 `back_priv` / `back_pub` 并入凭证库**：当前 `.env` 无 `MYNET_BACK_FACE_*` 任何键 → 节点面 DH+HMAC **一律拒绝**（fail-closed：`BackFaceKeys::resolve()` 返 null → `NodeHeartbeatAuthMiddleware.php:192-196` 记 `Log::error` 并 return null → 调用方 `:73-75` `reject()`）。⚠️ 保护等级 **高于**节点私钥（泄露可冒充**所有**节点） | 红线「不碰生产密钥/crt」；且必须走 `crt` 凭证库 | T3-4 · T3-5 | H5 同时 |
 | **H7** | ~~裁定 `back_priv` 形态~~ ✅ **已裁定（2026-09-24）：0600 文件，按原规范**。原实现是 env 注入（`config/mynet.php`）**已改**（V3-6a：`BackFaceKeys`，文件优先且权限过宽即拒绝）；`spec/node-keying.md` 现无 back_priv 条目，**已补**（V3-6b：§4.6） | — | — | 已决 → V3-6a / V3-6b 均已完成 |
 | **H8** | **一台非 VM 真机** + 外网可达的 api 域名 | 硬件 | T3-4 | G4 前 |
@@ -221,7 +221,7 @@ CPI-62 缺 OS 路由 / CPI-54 授权绕过-安全）。
   顺带把 `bundle_changed` 接成完整生命周期（`refresh-config → service start → apply --auto`），
   实测从 back 触发 `bundle/publish` 后节点**零人工干预**跑完三步、隧道未断。
 - ~~**CPI-60**：`RouteController::getRequests()` 是 TODO 桩~~
-  → ✅ **已修**（`mynet_back 884cf9c` + `mynet_agent e5f3657`）。
+  → ✅ **已修**（`mynet_api 884cf9c` + `mynet_agent e5f3657`）。
   ⚠️ 同时**修正我先前对影响的高估**：GUI 走的是 `/route/data` 的 `requests` 子对象
   （`useRoutes.ts:70/73`），一直是好的；`GET /route/requests` 全仓**没有调用方**，
   产品面影响接近零。真正被骗到的是 `zero_to_one.sh` Phase 4 —— 它只断言状态码，
@@ -360,7 +360,7 @@ gateway: result 已转发 path=/api/v1/monitor/commands/9007199254740993/result 
 与 agent 侧 `TestPullPendingCommandsParsesNumericIDs` **两端互锁**。
 
 **门禁**：`mynet_agent` `make check` ✓（16 包，本轮相关包 98 项 PASS，`-race` 干净）；
-`mynet_back` `make check` ✓ **144 tests / 2484 assertions**（连跑 3 次 + `--order-by=reverse` 均稳定）。
+`mynet_api` `make check` ✓ **144 tests / 2484 assertions**（连跑 3 次 + `--order-by=reverse` 均稳定）。
 
 > 过程中修掉一个自己的测试缺陷：`test_returns_one_command_and_marks_executing`
 > 单独跑过、进全量套件就失败——两条命令都用 `now()`，`created_at` 相同导致
@@ -531,7 +531,7 @@ $ MYNET_APPS_INDEX=http://127.0.0.1:18090 mynet update
 2. **test 从未跑过**：`make test` 同样是「无 phpunit 就跳过」。首跑 50 项里
    **20 个 error，全部是 `MissingAppKey`** —— 本仓也没有 `.env`。
 
-这与 mynet_back 的 **CPI-23 同源**：**两个 PHP 仓都缺 `.env`，而两边的门禁都发现不了**
+这与 mynet_api 的 **CPI-23 同源**：**两个 PHP 仓都缺 `.env`，而两边的门禁都发现不了**
 （back 是 phpunit.xml 自带 env 所以测试全绿；ctl 是静默跳过）。
 已分别建本地 dev `.env`（两个仓的 `.gitignore` 都已挡住）。
 
@@ -555,7 +555,7 @@ $ MYNET_APPS_INDEX=http://127.0.0.1:18090 mynet update
 | V3-6a | **按 H7 裁定把 `back_priv` 改为 0600 文件**：文件优先，**权限过宽即拒绝且不回退 env** | H7 ✅ | 代码只从文件读；权限实测；缺/空文件明确报错 | ✅ 2026-09-24（10 测试；「不回退」那条是被测试抓出来的） |
 | V3-6b | **补 `spec/node-keying.md` 的 back_priv 条目**（原先该文件 grep 0 命中 → 规范缺位）：形态、权限、轮换、泄露处置、为什么保护等级高于节点私钥 | V3-6a | 规范与实现一致 | ✅ 2026-09-24。新增 **§4.6 `back_face` 密钥**：形态与权限（含「权限过宽即拒绝」）、**不回退 env 的四种走向**（这条是控制成败所在）、轮换、泄露处置、以及为什么它比节点私钥更该保护。⚠️ 明确写出**轮换能力尚未实现**（无新旧并存、无工具），不含糊过去。顺带修 §5.2「back 侧尚未校验」（与 §4.5 矛盾）与 §8 一条已落地的待决 |
 | V3-6 | `back_priv`/`back_pub` 生成并入 `crt` 凭证库、注入生产 | H6, V3-6a | 节点面 DH+HMAC 在生产真验通过 | 真机心跳 200 | ☐（需 H6） |
-| V3-7 | 补 `deployment-registry.md` 的 stale 项 + 按 H4 把 back 管理面从 `admin` 改称 `console`（原估要同步 3 处） | V3-1..6 | 文档每条都能在盘上找到对应物；子域命名全库一致 | ✅ 2026-09-24。registry **重写**：逐条 `ls` 核对，**5 条路径根本不存在**（含两个退役仓的）→ 删除；矩阵补上 agent / openwrt / desktop / gnb / utc 与「分发到节点」这一类；退役仓单列并写明承接者；**7 处 `<待补>`** 改为如实描述（监控面整体**未建立**，不是「已有什么只是没填」）。命名同步 **5 处**（比预估多 2 处：`ecosystem.md:65` 与 `projects/mynet_back.md:6`）；两个历史文档只加说明、不改原文 |
+| V3-7 | 补 `deployment-registry.md` 的 stale 项 + 按 H4 把 back 管理面从 `admin` 改称 `console`（原估要同步 3 处） | V3-1..6 | 文档每条都能在盘上找到对应物；子域命名全库一致 | ✅ 2026-09-24。registry **重写**：逐条 `ls` 核对，**5 条路径根本不存在**（含两个退役仓的）→ 删除；矩阵补上 agent / openwrt / desktop / gnb / utc 与「分发到节点」这一类；退役仓单列并写明承接者；**7 处 `<待补>`** 改为如实描述（监控面整体**未建立**，不是「已有什么只是没填」）。命名同步 **5 处**（比预估多 2 处：`ecosystem.md:65` 与 `projects/mynet_api.md:6`）；两个历史文档只加说明、不改原文 |
 | V3-8 | **T3-4 真机注册**：非 VM 真机走完「注册→密钥→连接→互通」 | H2, H5, H6, H8, V1, V3-6 | 真机 `node_id` 落库、心跳在线、与另一节点互通 | 真机实测 + back 数据 | ☐（需人工闸门） |
 | V3-9 | **G4**：外网可注册、可互通、`mynet update` 升级不断线 | V2-8, V3-8 | `long-range-plan-t.md:121-123` 三条判据全过 | 外网实测 | ☐（需人工闸门） |
 
@@ -574,7 +574,7 @@ $ MYNET_APPS_INDEX=http://127.0.0.1:18090 mynet update
 | 项目 | 服务器 | 部署路径 | 部署命令 |
 |---|---|---|---|
 | mynet_ctl | `10.182.236.180`（公网 `52.77.179.176`） | `/data/app/mynet.club/ctl` | `bash scripts/deploy/deploy.sh`（rsync + 远程 artisan） |
-| mynet_back | 同上 | `/data/app/mynet.club/api` | `./manage-prod.sh deploy` |
+| mynet_api | 同上 | `/data/app/mynet.club/api` | `./manage-prod.sh deploy` |
 | mynet_gui | 同上 | `/data/app/mynet.club/my/public` | `bash deployment.sh`（本地 build + rsync dist/） |
 
 三者**共置同机、各是独立 nginx server block**，证书在
@@ -593,7 +593,7 @@ $ MYNET_APPS_INDEX=http://127.0.0.1:18090 mynet update
 > 之后才被问「为什么用 Docker」—— 那一步本该在动手前做。
 > 计划表里的条目也是可能定错的，不是免检的。
 >
-> 相关：`repo-migration.md` 里 mynet_back 的 Dockerfile 若曾被列入搬运清单，同样作废。
+> 相关：`repo-migration.md` 里 mynet_api 的 Dockerfile 若曾被列入搬运清单，同样作废。
 
 ### V4 · 规模化与可观测
 
