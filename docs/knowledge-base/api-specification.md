@@ -794,9 +794,10 @@ Response 200:
 }
 ```
 
-#### GET /nodes/{id}/status (v2 only)
+#### GET /nodes/{id}/status （**只读**，2026-10-04 裁定）
 ```
 Middleware: auth:sanctum, token.binding, throttle:api
+路由：app/Modules/VPN/Routes/api.php:136 → NodeController::getStatus()
 
 Response 200:
 {
@@ -818,14 +819,23 @@ Response 200:
       "total_checks": int               // 必选项计数（3），不含可选项
     },
     "can_enable": boolean,
-    "status_updated": boolean,
-    "status_changed": boolean,          // 仅记「配置判据自己改了什么」，不含请求写入
-    "status_evaluated": boolean,        // false = 本次根本没评估判据（见下）
+    "status_updated": boolean,          // 恒 false —— 本端点不写库
+    "status_changed": boolean,          // 恒 false —— 同上；字段保留只为不破契约
+    "status_evaluated": boolean,        // 恒 false —— 只读快照不评估落库判据
     "available_transitions": { "int": "string" },
     "status_definitions": object,
     "next_steps": [string]
   }
 }
+
+⚠️ **这个 GET 不许有写副作用**（2026-10-04 用户裁定 A，见
+spec/node-status-gate.md）。它原先调 checkAndUpdateNodeStatus(null)，而
+Node::updateStatusBasedOnConfig(null) **只能降级不能升级**，于是「缺 node_configs 行」
+的在线节点被一次 GET 打成 -1，随即被 NetworkSemanticsProjector 的对端过滤
+（whereIn node_status [1,2]）从所有 peer 的 bundle 里剔除。改只读后，状态只由
+① 配置写入路径（NodeConfigService / NodeKeyService）、② PATCH /nodes/{id}/status、
+③ 管理员 forceUpdateStatus、④ 心跳（无条件写 1，裁定保留）来写。
+连 nodes.updated_at 也不许动 —— BundleRevisionSync 拿它做脏判定。
 
 ⚠️ node_configs 是**可选**自定义配置（ifname/listen/mtu/proxy），全 fleet 73 个
 节点只有 3 个有这行。它不得计入 is_fully_configured —— 否则绝大多数节点会被判
@@ -835,14 +845,20 @@ Response 200:
 
 ⚠️ 文档漂移（本次已核，勿照抄旧稿）：
 - `completion_percentage` 代码里**不存在**。
+- 本条目标题原写作「(v2 only)」，并在末尾写「v1: 拆分为 status-check 和
+  status-info」——**两处都反了**。mynet_api 里没有任何 v2 路由，模块 Routes/api.php
+  由 ModuleServiceProvider 挂在 `/api/v1` 下；合并后的 `/status` 就是 v1 端点，
+  拆分式的两个 v1 路由反而**没有注册**。已就地改正。
 - 上面 Middleware 原写作 `auth:sanctum, api.zone`；`api.zone` 这个中间件在
   mynet_api 里**根本不存在**（全仓无注册），实际是 `auth:sanctum, token.binding,
   throttle:api`（`app/Modules/VPN/Routes/api.php` 的 nodes 分组）。已就地改正。
-- 下面提到的 v1 `status-check` / `status-info` 两个路由**没有注册**；
-  `NodeController::getStatusInfo()` 与 `::checkConfigurationStatus()` 是无路由
-  的死方法，只有 `getStatus()` 经 `GET /nodes/{id}/status` 对外。
-
-v1: 拆分为 GET /nodes/{id}/status-check 和 GET /nodes/{id}/status-info
+- `NodeController::getStatusInfo()` 与 `::checkConfigurationStatus()` 是无路由
+  的死方法，只有 `getStatus()` 经 `GET /nodes/{id}/status` 对外。后者**仍有写副作用**，
+  docblock 已加 ⚠️ 警告：不要直接给它挂 GET 路由。
+- GUI 侧唯一调用点 `mynet_gui/src/services/node/nodeService.ts:287` 的注释
+  「先副作用更新，再返回完整状态」现已过期，且其调用者
+  `NodeListPage.vue:185` 把响应存进 nodeStatusInfo 后**全文件再没读过**（详见
+  spec/node-status-gate.md「裁决与执行」）。
 ```
 
 ---
@@ -1670,6 +1686,12 @@ Response 200:
 
 ### 5.1 mynet_api API 使用总览
 
+⚠️ **本表的「中间件」列是历史标签，不等于代码事实。** `sanctum+zone` 实际是
+`auth:sanctum, token.binding, throttle:api`；`api.zone` 这个中间件在 mynet_api 里
+**根本不存在**（全仓无注册）。路径后缀的 `(v2)` 同样是旧标注 —— mynet_api 没有 v2
+路由，模块 `Routes/api.php` 一律由 `ModuleServiceProvider` 挂在 `/api/v1` 下。
+以 `app/Modules/VPN/Routes/api.php` 为准。
+
 | # | Method | Path | 中间件 | GUI | client | lua | CTL代理 |
 |---|--------|------|--------|-----|--------|-----|---------|
 | 1 | POST | `/auth/login` | 无 | ✅ | ✅ | ✅ | — |
@@ -1688,8 +1710,8 @@ Response 200:
 | 14 | GET | `/user` | sanctum | ✅ | — | — | — |
 | 15 | PUT | `/users/profile` | sanctum | ✅ | — | — | — |
 | 16 | GET | `/users/search` | sanctum | ✅ | — | — | — |
-| 17 | GET | `/user/zones` | sanctum | ✅ | ✅ | ✅ | ✅ |
-| 18 | POST | `/user/switch-zone` | sanctum | ✅ | ✅ | — | ✅ |
+| 17 | GET | `/user/tenants` | sanctum | ✅ | ✅ | ✅ | ✅ |
+| 18 | POST | `/user/tenants/switch` | sanctum | ✅ | ✅ | — | ✅ |
 | 19 | GET | `/nodes` | sanctum+zone | ✅ | ✅ | ✅ | ✅ |
 | 20 | POST | `/nodes/create` | sanctum+zone | ✅ | ✅ | — | — |
 | 21 | POST | `/nodes/quick-create` | sanctum+zone | ✅ | — | — | — |

@@ -802,6 +802,47 @@
 
 ---
 
+### 📝 2026-10-04 v1 批次 0/1 发现的缺陷（发现即记）
+
+#### CPI-69. `mynet_ctl` 安装向导的后端客户端打的是 `/api/v2/*`，而 mynet_api **只有 v1**
+- **位置**：`mynet_ctl/app/Services/Setup/MynetBackClient.php:46`（`GET /api/v2/user/zones`）、
+  `:51`（`POST /api/v2/user/switch-zone`，body `{zone_id}`）、`:60`（`GET /api/v2/nodes`）；
+  对外由 `mynet_ctl/app/Http/Controllers/Api/V1/SetupController.php:62`
+  （`POST /api/v2/setup/switch-zone`）与 `resources/views/pages/setup.blade.php:282` 使用。
+- **事实核对**：`mynet_api` 全仓**没有任何 v2 路由**，模块 `Routes/api.php` 由
+  `ModuleServiceProvider` 一律挂在 `/api/v1` 下；租户端点实际是
+  `GET /api/v1/user/tenants`、`POST /api/v1/user/tenants/switch`（body `{tenant_id}`）、
+  `GET /api/v1/user/tenants/current`（`Routes/api.php:268-271`）。
+  与 CPI-41「V2 从未上线」是同一件事的下游后果。
+- **影响**：安装向导（`spec/wizard.md`）的「选 Zone/租户 → 列节点」两步打不通。
+  因为 CTL 是**出包发行面**，这条断链会直接体现在用户拿到的安装器上。
+- **修复建议**：`MynetBackClient` 三个方法改指 v1 的 tenants 端点，参数 `zone_id` → `tenant_id`。
+  ⚠️ **不要现在就改**：Zone→Tenant 改名正在按 `spec/zone-removal.md` 分步推进，
+  改早了会与该批次的契约翻转撞车。等第 2 步（契约翻转）落地后一并处理。
+- **优先级**：🟠 P1（发行面的安装向导不可用）
+
+#### CPI-70. `mynet_gui` 对每个「未配置」节点打一次 `GET /nodes/{id}/status`，**响应从未被读取**
+- **位置**：调用点 `mynet_gui/src/services/node/nodeService.ts:287 getNodeStatusInfo()`；
+  唯一调用者 `mynet_gui/src/pages/node/NodeListPage.vue:185`，把结果存进
+  `nodeStatusInfo`（`:186`）后，**全文件再没有读过这个变量**
+  （只有 `:170` 声明、`:179` 去重守卫、`:186` 写入三处）。
+  触发面是 `checkAndLoadUnconfiguredNodes()`（`:198-207`），对所有
+  `isUnconfiguredNode` 的节点**并发**各打一次。
+- **影响**：纯浪费，而且**两个方向都白跑**。触发条件已核实：
+  `isUnconfiguredNode()`（`:284-287`）走 `NodeStatusManager.needsConfiguration()`
+  （`src/utils/nodeStatus.ts:198-206`），数字状态时**只对 `NODE_STATUS.UNCONFIGURED`（-1）
+  返回 true**。所以这次 GET 只打在**已经是 -1** 的节点上：
+  ① 它不是把节点打成 -1 的原因（那些节点早已是 -1）；
+  ② 它也**救不回来**——旧的写副作用走 `updateStatusBasedOnConfig(null)`，
+  该分支只能降级不能升级，对 -1 节点是空转。
+  即：N 个未配置节点 = N 次请求，既不改状态也不用结果。
+- **修复建议**：二选一 —— 要么真的把 `configuration_status` / `next_steps` 渲染到
+  节点卡片上（那才是这次请求的本意，`next_steps` 本来就是给「下一步该做什么」用的），
+  要么删掉这次请求。属 GUI 侧产品决定，未自行处置。
+- **优先级**：🟡 P2（无正确性危害，是无效请求 + 一个没接上的引导能力）
+
+---
+
 ## 📐 架构设计决策（非 bug，易被误判）
 
 #### mynet_gui 生产 VITE_API_BASE_URL=https://my.mynet.club（同源反代）

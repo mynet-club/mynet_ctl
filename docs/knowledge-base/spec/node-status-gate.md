@@ -1,12 +1,45 @@
-# 节点状态门（node_status）— 决策包
+# 节点状态门（node_status）— 决策包（**已裁决**）
 
-> **推荐 ≠ 已定。** 本文件只整理事实与候选方案，供主线裁决；裁决前**没有**按推荐方案改任何代码。
-> 已经落地的部分在最后一节「本包只锁口径，没有扩大行为」里逐条写清。
+> **2026-10-04 用户裁决：议题 1 = A（GET 改只读，已执行）；议题 2 = A（心跳保持无条件写 1，
+> 不动代码），C 记为 v1 之后的方向。** 下面保留裁决前的取证与候选方案原文，
+> 落地情况见「## 裁决与执行」。
 
 起因：2026-10-01 现网 .184 被一次「只改描述」的 PUT 打成 `node_status = -1`，随后从所有对端的
 bundle 里消失，且因为它不向 API 心跳，永久卡死。模型侧判据（把可选的 `node_configs` 当必备项）
 已在 `mynet_api` `5e4936a` 修掉；本轮又修掉了服务侧判据与基本信息 PUT 两处。剩下的是**语义裁决**，
 不是接线便利，所以不在这里自行拍板。
+
+---
+
+## 裁决与执行
+
+| 议题 | 裁决 | 落地 |
+|---|---|---|
+| 1 `GET /nodes/{id}/status` 该不该写 | **A 改只读** | 已改：`NodeController::getStatus()` 的第一步从 `checkAndUpdateNodeStatus()` 换成 `describeNodeStatus()`。响应形状不变，`status_updated`/`status_changed` 恒 `false`，新增 `status_evaluated: false`。 |
+| 2 心跳无条件写 1 | **A 保持现状** | 未改代码（按裁定）。C（`node_status` 与 `presence` 拆字段）记为 v1 之后方向，属数据模型变更，须走 `MYNET_V1_PLAYBOOK.md` §11 合同冻结流程。 |
+
+**裁决前那个 ⚠️「GUI 是否依赖这个 GET 来纠正显示状态」已取证，答案是不依赖：**
+`mynet_gui` 里唯一的调用点是 `src/services/node/nodeService.ts:287 getNodeStatusInfo()`，
+调用者只有 `src/pages/node/NodeListPage.vue:185`，而它把响应存进 `nodeStatusInfo`（:186）之后
+**全文件再没读过这个变量**（只有 :170 声明、:179 去重守卫、:186 写入三处）。
+所以：① A 不会影响任何 GUI 显示；② 顺带发现这个请求目前是**纯浪费**——
+`checkAndLoadUnconfiguredNodes()`（:198-207）对每个「未配置」节点并发打一次 GET，结果丢掉。
+而且**两个方向都白跑**：触发条件 `isUnconfiguredNode()`（:284）只对 `node_status === -1`
+为真（`src/utils/nodeStatus.ts:198-206`），所以它只打在**已经是 -1** 的节点上——
+既不是降级的原因，也救不回来（旧的写副作用走 `updateStatusBasedOnConfig(null)`，
+该分支只能降级不能升级，对 -1 节点是空转）。已记为 CPI-70。本轮没有动 GUI，
+把「要么渲染 `next_steps`、要么删掉这次请求」留作待办，不在本次裁定范围内。
+
+**测试证据**：`NodeStatusGateTest` 10 → 12 用例，新增
+`test_get_status_endpoint_never_writes_node_status`（真请求，断言 `node_status` 与
+`nodes.updated_at` 都不变 —— `updated_at` 也必须钉住，因为 `BundleRevisionSync` 拿它做脏判定，
+一次 GET 改了它就会触发无谓的 bundle 重发）与 `test_get_status_endpoint_is_idempotent`。
+覆盖率自证：把控制器临时还原成 `checkAndUpdateNodeStatus()`，新用例**失败 1 条**；还原修复后
+`OK (12 tests, 52 assertions)`。VPN 模块全量 `OK (243 tests, 1008 assertions)`，无回归。
+
+**行为变化：有。** 一个真缺 IP/密钥的节点被 GET 时不再自动变 -1，会停在原状态，直到
+① 配置写入路径重新评估（`NodeConfigService.php:137/206`、`NodeKeyService.php:48`），
+② 管理员 `forceUpdateStatus`，或 ③ 心跳把它写成 1（议题 2 裁定保留的正是这条）。
 
 ---
 
@@ -79,10 +112,16 @@ bundle 里消失，且因为它不向 API 心跳，永久卡死。模型侧判�
 ### 测试影响
 
 - 新增：GET 一个缺密钥的节点，断言 `node_status` 不变且 `status_evaluated === false`。
+  → **已落地**，见「## 裁决与执行」的测试证据（另加了一条 `updated_at` 不变与一条幂等）。
 - 现有 `NodeStatusGateTest`（10 用例）与 `BundleRevisionSyncTest` 不受影响——它们不走这个端点。
 - `status-check` / `status-info` 两个 v1 路由**并未注册**，`NodeController::getStatusInfo()`（:1182）
   与 `::checkConfigurationStatus()`（:1322）是无路由死方法；若采 A，建议同批删掉，否则
   「同一个判据有三个出口、其中两个不可达」会再次成为藏污点。
+  → **裁决后处置：没有删，改为在 `checkConfigurationStatus()` 的 docblock 上加了 ⚠️ 警告**
+  （「未挂路由的死方法，仍有写副作用，不要直接给它挂 GET 路由」）。理由：删公有控制器方法
+  超出本次裁定范围，且已确认全仓无调用者；警告足以挡住「顺手挂路由把缺陷装回去」。
+  要删请单独下令，可与 `getStatusInfo()`、`NodeService::validateStatusChange()`（:426 死代码，
+  内含赋值后从未使用的 `$canEnable`）一并清理。
 
 ### 需要谁决定
 
@@ -124,7 +163,7 @@ bundle 里消失，且因为它不向 API 心跳，永久卡死。模型侧判�
 
 ---
 
-## 本包只锁口径，没有扩大行为
+## 附：裁决前已落地的部分（只锁口径，没有扩大行为）
 
 本轮**已实现**的是 2026-10-01 定案里「node_config 从必查项移除/改为可选」「状态检查只在配置类
 字段变更时跑并透传 requestedStatus」两条，以及配套的判据同口径。逐条：
@@ -137,4 +176,5 @@ bundle 里消失，且因为它不向 API 心跳，永久卡死。模型侧判�
 3. `NodeService::findOwnedNodeOrFail()` / `statusSnapshot()`——从两处重复的 owner 查询与
    结果构造里提出来，越权判定仍在写之前。
 
-**没有**动的：议题 1、议题 2 涉及的任何行为；`getStatus` 照旧写；心跳照旧无条件写 1。
+裁决前**没有**动的：议题 1、议题 2 涉及的任何行为（当时 `getStatus` 照旧写、心跳照旧无条件写 1）。
+裁决后：议题 1 已按 A 改为只读，议题 2 按 A 保持不动。
