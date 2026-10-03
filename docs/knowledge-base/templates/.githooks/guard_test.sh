@@ -111,6 +111,56 @@ newrepo wt_a3ok
 echo 'APP_KEY=' > "$WORK/wt_a3ok/.env.example"
 expect ".env.example 是允许的模板" 0 wt_a3ok "A3 无敏感文件"
 
+# ── 2b. A4：归档**里面**的敏感文件（A2/A3 都看不见）──────────
+# 起因（2026-10-04 真实事故）：mynet_gnb 把生产节点与公司网关的 *.private、
+# credential.json 打进 .tgz 提交并推到 GitHub。A2 只认 PEM 文本而 GNB 私钥是
+# 裸 32 字节二进制；A3 只认入库文件名而入库的是 _etc_opengnb.tgz —— 两层全瞎。
+# 下面每条用例都复刻那次泄露的一个侧面。
+
+# 裸二进制私钥（无 PEM 头）打进 tgz —— A2 抓不到，A4 必须抓到
+newrepo wt_a4_tgz
+mkdir -p "$WORK/wt_a4_tgz/bk/security"
+head -c 32 /dev/urandom > "$WORK/wt_a4_tgz/bk/security/1002.private"
+( cd "$WORK/wt_a4_tgz" && tar czf leak.tgz bk && rm -rf bk )
+expect "tgz 里的裸 .private → A4 拦下" 1 wt_a4_tgz "A4 归档内含敏感文件"
+
+# zip 里的 credential.json（事故里 etc/mynet/conf/credential.json 就是这么进去的）
+newrepo wt_a4_zip
+mkdir -p "$WORK/wt_a4_zip/conf"
+echo '{}' > "$WORK/wt_a4_zip/conf/credential.json"
+( cd "$WORK/wt_a4_zip" && zip -qr leak.zip conf && rm -rf conf )
+expect "zip 里的 credential.json → A4 拦下" 1 wt_a4_zip "A4 归档内含敏感文件"
+
+# 反向：良性归档不得误报（gnb 主线就跟踪着两个 author 源码 zip）
+newrepo wt_a4_ok
+mkdir -p "$WORK/wt_a4_ok/src"
+echo 'int main(void){return 0;}' > "$WORK/wt_a4_ok/src/x.c"
+echo '# readme' > "$WORK/wt_a4_ok/src/README.md"
+( cd "$WORK/wt_a4_ok" && tar czf src.tgz src && rm -rf src )
+expect "良性 tgz 不误报 A4" 0 wt_a4_ok "A4 已扫描 1 个归档"
+
+# 归档内的 .env.example 仍按 A3 的豁免规则放行（判据必须与 A3 一致，否则两处会打架）
+newrepo wt_a4_envexample
+mkdir -p "$WORK/wt_a4_envexample/cfg"
+echo 'APP_KEY=' > "$WORK/wt_a4_envexample/cfg/.env.example"
+( cd "$WORK/wt_a4_envexample" && tar czf cfg.tgz cfg && rm -rf cfg )
+expect "归档内 .env.example 豁免（与 A3 一致）" 0 wt_a4_envexample "A4 已扫描 1 个归档"
+
+# 暂存区模式（pre-commit 语义）：内容在索引里而不在盘上，A4 必须照样能扫
+newrepo st_a4
+mkdir -p "$WORK/st_a4/bk"
+head -c 32 /dev/urandom > "$WORK/st_a4/bk/node.private"
+( cd "$WORK/st_a4" && tar czf leak.tgz bk && rm -rf bk && git add leak.tgz )
+expect "暂存区里的 tgz 含 .private → A4 拦下" 1 st_a4 "范围：暂存区"
+
+# 本批没有归档时必须**明说**未触发扫描，不能静默（同开头「没东西可查型门禁」教训）
+expect "无归档时 A4 明说未触发" 0 wt_ok "A4 本批无归档文件"
+
+# 损坏的归档：列不出清单也要响，不许当成通过
+newrepo wt_a4_corrupt
+printf 'not an archive at all' > "$WORK/wt_a4_corrupt/broken.tgz"
+expect "损坏归档 → A4 报未能扫描而非通过" 1 wt_a4_corrupt "A4 列不出归档内容"
+
 # ── 3. 工作区模式：已跟踪但未暂存的修改也要查 ────────────────
 newrepo wt_mod
 echo 'ok = 1' > "$WORK/wt_mod/a.conf"

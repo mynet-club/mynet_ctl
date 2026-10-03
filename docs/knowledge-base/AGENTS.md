@@ -84,7 +84,7 @@ mynetd **不含**：探测解析、OS 路由/防火墙写入、驱动配置生�
 - 本机 API / WebUI 端口 **8096**（8192 被 IANA 的 `spytechphone` 与 `mynet_utc` 双重占用）。
 - gateway 默认 8710；back 内网地址是**部署配置**，不下发。
 
-### 1.6 mynet_back 按需 module
+### 1.6 mynet_api 按需 module
 
 **31 个框架包只留 3~4 个**（主框架 / `infrastructure` / `auth` / 待定 `logging`）。
 27 个零引用模块**全砍**（ai / billing / workflow / lottery / voting / coupon / payment /
@@ -92,6 +92,14 @@ operator / platform / plugin / ticket / sms / form / knowledge / conversation �
 
 ⚠️ 连带要删的残留：`app/Services/ToolRegistry.php`、`tests/Stubs/FakeToolRegistry.php`、
 `tests/ActionNodeTest.php`、`tests/Conversation/`——它们属被砍模块。
+
+**2026-10-01 裁定例外（用户批准）：`operator` 回装。**
+「按需 module」的判据是**有没有代码引用它**，而 console 租户后台整条身份链都压在它身上：
+`ConsoleAuthController.php:13-14` 直接 `use Operator / OperatorTenant`，
+`:50` 更是 `OptionalModule::ensure(Operator::class, '租户后台登录')`——不装就是 501。
+`roles` / `operator_tenants` / RBAC 也随它落地（这三张表正是租户后台的鉴权面）。
+所以 **operator 属 console 的依赖链，不是「零引用可砍」项**；其余 26 个仍按本条砍。
+跟踪：`dev-plan.md` 轨道 G（#65–70）。
 
 ### 1.7 整理式重建，不是从零重写
 
@@ -101,7 +109,7 @@ operator / platform / plugin / ticket / sms / form / knowledge / conversation �
 
 ### 1.8 multi_tenant_saas 框架只使用、不修改
 
-`mynet_back` 建立在 `dsplat/multi-tenant-saas`（+ `-module-infrastructure` / `-module-auth`）之上，
+`mynet_api` 建立在 `dsplat/multi-tenant-saas`（+ `-module-infrastructure` / `-module-auth`）之上，
 经 `composer.json` 的 VCS repository 从 `github.com/dsplat/*` 装进 `vendor/dsplat/`。
 
 **我们只使用，不直接修改。** 具体规则：
@@ -111,6 +119,20 @@ operator / platform / plugin / ticket / sms / form / knowledge / conversation �
 - 定位问题时先判**根因落在哪一侧**：`app/`（我们的，可改）还是 `vendor/dsplat/`（框架的，只出报告）。
   判定结论要写进任务记录，别把框架 bug 当自己的 bug 绕过去。
 - 我们自己的业务代码在 `app/Modules/VPN/` 等 `app/` 路径下，**这些可以改**。
+
+### 1.9 WebUI 构建：开发用 dev，发布用 embed
+
+| 场景 | 构建标签 | 行为 |
+|---|---|---|
+| **开发** | `-tags dev` | 从 `MYNET_WEBUI_DIR`（或 `mynetd/localapi/webui`）**读盘**，改前端不重编 |
+| **发布** | `-tags embed` | WebUI **打进二进制**（`make pack` / release 固定此标签） |
+| **OpenWrt / 瘦** | 无标签 | WebUI 不进包，UI 由 LuCI 托管 |
+
+**硬规矩**：
+
+- **`-tags dev` 一律不得进发布包**；打包脚本只允许 `-tags embed`。
+- 发布产物验收：`strings mynetd | grep crumb-page` 应能命中内嵌页；不得依赖运行时目录。
+- 开发：`go run -tags dev ./cmd/mynetd`，改 `mynetd/localapi/webui/` 即生效。
 
 ---
 
@@ -162,15 +184,27 @@ operator / platform / plugin / ticket / sms / form / knowledge / conversation �
 | 闸 1 | `.githooks/pre-commit` → `make guard` | **轻量**：安全红线 + 文件名（秒级） | 每次提交 |
 | 闸 2 | `.githooks/pre-push` → `make check` | **重量**：lint + 全量测试 | 每次推送 |
 
-- **`make guard` 三类红线**（见 `templates/.githooks/guard.sh`，已功能实测 7 用例）：
+- **`make guard` 三类红线**（见 `templates/.githooks/guard.sh`，已功能实测 25 用例）：
 
   | 类 | 红线 | 为什么是红线 |
   |---|---|---|
-  | **A 安全** | A1 硬编码凭据 · A2 私钥泄露 · A3 敏感文件名（`.env`/`*.pem`/`*.key`/`id_rsa*`/`*.private`） | 事后清 git 历史代价大 |
+  | **A 安全** | A1 硬编码凭据 · A2 私钥泄露 · A3 敏感文件名（`.env`/`*.pem`/`*.key`/`id_rsa*`/`*.private`）· **A4 归档内容扫描**（`.tgz`/`.tar*`/`.zip` 入库前列内容清单，按 A3 同一套敏感名 + `credential*.json` 查） | 事后清 git 历史代价大 |
   | **B 结构** | **B1 `mynet_gnb/src/` 只读** · **B2 mynetd 不得依赖系统能力** · **B3 relaypolicy 不得含鉴权** · **B4 业务对象不得含驱动术语** | 架构约束违反后会**静默扩散**，事后重构成本高 |
   | **C 产物** | C1 格式化 bug 产物文件名 · C2 端口漂移（≠8096）· C3 命名漂移（≠`mynet_agent_*`） | 已发生过，静态可查 |
 
   B 类是**最重要的那一类**——「整理式重建」时新架构约束最容易在实现时被忘掉。
+
+  ⚠️ **A4 的由来（2026-10-04 真实事故，别再让 A2/A3 单独值班）**：`mynet_gnb` 的
+  `packages/*/itest/backup-*/` 把生产节点 `10.182.236.180` 与公司整网网关 `192.168.0.2`
+  的 `*.private`、`credential.json` 打进 `.tgz` 提交并推到了 GitHub。A2/A3 双双漏报，
+  因为 **A2 只匹配 PEM 文本** `BEGIN … PRIVATE KEY`，而 GNB 私钥是裸 32 字节 ed25519
+  二进制（§1.1：`clamp(SHA512(seed))`），**没有 PEM 头**；**A3 只匹配入库文件名**，
+  而入库的文件名是 `_etc_opengnb.tgz`。同一次事故还暴露第二条：`mynet_gnb` 是
+  **bare 仓**，`pre-push` 首行 `git rev-parse --show-toplevel || exit 0` 必然失败
+  ⇒ 钩子**一次都没跑过**却静默通过。两处都已修（pre-push 现在打印明确跳过标记）。
+  **A4 不支持 `GUARD-OK` 行内豁免**——二进制没有「违规那一行」；被拦下的归档本就
+  不该入库，正确处置是加进 `.gitignore`。实测：A4 对那次泄露的 13 个归档命中全部
+  9 个敏感条目，对 gnb 主线跟踪的 2 个 author 源码 zip（各 352 条目）零误报。
 - **精确不激进**：误报过多的守护会被 `--no-verify` 绕过，反而失效。正则取窄，宁可漏报。
 - **显式豁免**：在**违规那一行**写 `GUARD-OK <原因>`，该行即豁免；每次豁免记入 `.git/guard-exempt.log` 便于审计。
 - 模板在 `knowledge-base/templates/`，各 repo 复制一份（`Makefile` + `.githooks/`），`make install-hooks` 装 hook。
@@ -210,7 +244,7 @@ operator / platform / plugin / ticket / sms / form / knowledge / conversation �
 
 | 坑 | 后果 |
 |---|---|
-| **`mynet_back` 缺 `.env`** | `APP_KEY` 为空 → **全站每个请求 500**（`MissingAppKeyException`），连 `/` 都不通。而 `phpunit` 走 `phpunit.xml` 的 env，**测试全绿也照样发现不了**。新克隆第一步必须 `cp .env.example .env && php artisan key:generate` |
+| **`mynet_api` 缺 `.env`** | `APP_KEY` 为空 → **全站每个请求 500**（`MissingAppKeyException`），连 `/` 都不通。而 `phpunit` 走 `phpunit.xml` 的 env，**测试全绿也照样发现不了**。新克隆第一步必须 `cp .env.example .env && php artisan key:generate` |
 | **框架默认 `redirectGuestsTo(fn () => route('login'))`** | back 是纯 API 后端、无 `login` 命名路由。`Authenticate.php:104` 仅在请求**未**声明 `expectsJson` 时才调 `redirectTo`，于是**不带 `Accept: application/json` 的未鉴权请求 500 而非 401**。修：`bootstrap/app.php` 里 `$middleware->redirectGuestsTo(null)` |
 | **Testbench 不加载 `bootstrap/app.php`** | 测试态与生产态**静默分叉**——`bootstrap/app.php` 里的中间件/异常配置在测试里一律不生效。`tests/TestCase.php` 必须逐条镜像（现有两处：`IdentifyTenant` prepend、`redirectGuestsTo(null)`）。镜像 `redirectGuestsTo` 要走框架的 `(new Middleware)->redirectGuestsTo(null)`，因为它一次设**三个**静态回调（`Middleware.php:571-575`），而异常渲染路径读的是 `AuthenticationException` 那个 |
 | **Quasar 的 env 命名法与优先级都 ≠ Vite 惯例** | ① 命名：`@quasar/app-vite/lib/utils/env.js:31` 是 `buildType = ctx.dev ? 'dev' : 'prod'`，查找序为 `.env → .env.local → .env.dev → .env.local.dev → .env.spa → …`，所以 **`.env.development` / `.env.production` 永远不会被加载**（曾是仓内被跟踪的死文件，已 `git mv` 为 `.env.dev`/`.env.prod`，CPI-30）。② **优先级与 Vite 相反**：`env.js:101-116` 是 `Object.fromEntries(fileList.flatMap(…))`，**后面的覆盖前面的** → `.env.local` 会被 `.env.dev` 压成 no-op，**本地覆盖必须用 `.env.local.dev`**（且 `.gitignore` 的 `.env.*.local` 匹配不到它，需另加 `.env.local.*`） |
@@ -262,7 +296,7 @@ operator / platform / plugin / ticket / sms / form / knowledge / conversation �
 | `mynet_gui` | Vue3+Quasar — **用户交互前端**（社区域，服务 back，`my.mynet.club`） | **挂载，不动结构** ⚠️ T2-6 的载体 |
 | `mynet_web` | **官网 / 项目主页**（`www.mynet.club`） | 挂载；**不是** WebUI |
 | `mynet_desktop` | 非 OpenWrt 平台适配 | **新建** |
-| `mynet_back` | Laravel — 业务权威 | **新建 + 整理式搬运**，**按需 module（31→3~4）** |
+| `mynet_api` | Laravel — 业务权威 | **新建 + 整理式搬运**，**按需 module（31→3~4）** |
 | `mynet_openwrt` | LuCI 壳 + ubus 薄桥 + ipk | **改造** |
 | `mynet_ctl` | 分发中心 + **知识库中枢**（`docs/knowledge-base/`） | **挂载，不动** |
 | `mynet_gnb` | opengnb fork + 补丁包 | **挂载，不动** ⚠️ git 历史必须保留（rebase 上游） |
@@ -275,7 +309,7 @@ S 段执行 D-4 时只把 `mynet_ui` 的 `local/` 6 页搬进了 `mynet_web`，`
 
 **mynetctl 的 `docs/knowledge-base/` 是文档中枢**——查规范先去那里：
 `spec/unified-platform-architecture.md`（L1–L7 权威）、`spec/control-plane.md`、
-`spec/driver-abstraction.md`、`spec/node-keying.md`、`spec/local-api.md`、`spec/proxy.md`。
+`spec/driver-abstraction.md`、`spec/node-keying.md`、`spec/local-api.md`、`spec/proxy-split.md`（新线）、`spec/proxy.md`（旧线冻结）。
 
 ---
 
