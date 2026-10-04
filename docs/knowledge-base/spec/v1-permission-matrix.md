@@ -200,6 +200,10 @@
    > 读面仍按 `BelongsToTenant` 的租户作用域，策略里刻意不定义 `view` —— 否则会有人以为读也按属主过滤。
    > 框架侧「出方法、下层调用、业务继承 + 扩容」的方法诉求进 G1 那份清单第 13 条，back 不改 vendor、不 fork。
    > ⏸ **扩面已停（2026-10-04，用户指示）**：框架侧**正在实现**同名的属主判定方法 ⇒ back 不再自建第二套。
+   > （**2026-10-05 复核更新**：框架本体仓已落地判定核心 `UserAccessPolicyContract::decide`（`538986f5`），
+   > 但**没进 back 的 vendor 快照** ⇒ 前置动作是**等包下发**；且它对 `ownerUserId = null` 的处置与这里
+   > 的 fail-closed **相反**，接线前要先对齐那一条 —— 签名与语义差见
+   > [upstream-dsplat-issues.md](../upstream-dsplat-issues.md)「对齐请求 1」，本文件不复制细节。）
    > 剩下的 7 处零散比对（`NodeDomainService:299,860,933,1276`、`NodeKeyDomainService:1165`、
    > `RouteRequestDomainService:70`、`SocialDomainService:510`）**不要现在顺手收敛** —— 等框架 API 落地一次接完，
    > 替换点仍是 `OwnerGuard` 一处。清单与理由见 [dev-plan.md](../dev-plan.md) A1 行。

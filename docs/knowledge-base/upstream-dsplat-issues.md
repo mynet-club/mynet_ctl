@@ -12,8 +12,9 @@
 >
 > **本文件在 2026-10-05 补入 `dev-plan.md` 表 F-7…F-21 这批的复核结果**，编号接续既有的
 > 「缺陷 6」，从 **缺陷 7** 起到 **缺陷 18**（共 12 条框架侧缺陷）；`dev-plan` G1 清单的**第 13 条**
-> 不按新缺陷提，写成文末的「对齐请求 1 —— 属主判定（Owner Guard）方法签名」——框架侧已在实现
-> 该判据，这条只剩**签名对齐 + back 侧接线计划**。「本批 12 条 + 1 条对齐请求 = 13 条」，
+> 不按新缺陷提，写成文末的「对齐请求 1 —— 属主判定（Owner Guard）方法签名」——框架本体仓**已落地**
+> 该判据（`538986f5`）但**尚未随包下发**给 back，这条只剩**签名对齐 + back 侧接线计划**
+> （等包下发，不是等框架从零实现）。「本批 12 条 + 1 条对齐请求 = 13 条」，
 > 与 `dev-plan.md:528`（G1 行）的口径一一对上。
 > 同一批里既有各条（缺陷 1/2/3/5/6）的**状态行**是本批复核的产物：判据已不成立的写了原因，
 > 正文一字未删。
@@ -1447,20 +1448,86 @@ cd /Users/arthur/Devel/WorkSpaceAI/mynet-club/mynet_api && sed -n '110,114p;126,
 ### 这条为什么不在「缺陷」序列里
 
 **这不是新诉求。** 裁定 A1（`dev-plan.md:510`）当时把「框架出属主/归属判定方法、下层调用、业务继承 + 扩容」
-记成对框架的**能力诉求**；2026-10-04 用户告知**框架侧已经在实现**同名方法 ⇒
+记成对框架的**能力诉求**；2026-10-04 用户告知**框架侧已经在实现** ⇒
 本条按裁定 G1 的更新口径降级成**签名对齐 + 接线计划**（`dev-plan.md:528`「⚠️ 2026-10-04 更新（第 13 条降级）」），
 **不按「请求框架新增能力」提**。
 
-### 现状核对（2026-10-05，只读）
+> **本批把它改写成「三条语义差」而不是「请补一个方法」**：下一节的现状核对查实，
+> 框架的判定核心**已经在框架仓落地**（`538986f5`，2026-10-04 23:37），只是还没进 back 的 vendor 快照。
+> 所以要对齐的不再是「有没有」，而是 **`ownerUserId = null` 的归属语义**、**reasonCode → HTTP 的映射权威**、
+> **level/rights/credits 这三条判定与 back v1 权益合同的关系** —— 三条里第 ① 条若不先定，接线本身会把
+> back 的 fail-closed 静默翻成 fail-open。
 
-```bash
-cd /Users/arthur/Devel/WorkSpaceAI/mynet-club/mynet_api && grep -rln "OwnerGuard\|ownsResource\|isOwnerOf" vendor/dsplat/
+### 现状核对（2026-10-05 只读）：框架侧**已经落地了一个判定核心**，但它还没进 back 的 vendor
+
+先更正本条撰写时的初判（原判「vendor 0 命中 ⇒ 方法尚未出现，可能在框架仓未发布」——**后半已经查实**）：
+
+| 事实 | 取证 |
+|---|---|
+| back 的 vendor 里没有任何属主判定方法 | `grep -rln "OwnerGuard\|ownsResource\|isOwnerOf\|UserAccessPolicy" mynet_api/vendor/dsplat/` ⇒ **0 命中** |
+| 框架仓里**已有**统一判定核心，2026-10-04 23:37 落地 | 框架源码 `/Users/arthur/Devel/WorkSpaceAI/framework/multi_tenant_saas`（本仓 `composer.json:2` 的 name 就是 `dsplat/multi-tenant-saas`，即 vendor 根包的**本体**）；提交 `538986f5 feat(user-ai): add unified user access policy decision`、`b25c4158 … gate coupon tool with access policy`（同日 23:47）、HEAD `85aac250` |
+| 但它**不在 back 装的快照里** | `composer.lock` 根包 = `dev-main @ e02594ae`（**2026-10-04 12:18**），`git merge-base --is-ancestor 538986f5 e02594ae` ⇒ **不在**（快照早于该提交 11 小时）⇒ **接线的前置动作 = 等下一次包下发，不是等框架从零实现** |
+| 框架自己的登记也说明只到「判定核心」 | `docs/governance/LEDGER.md:139`（U1）：「当前只提供统一只读判定核心，**未宣称 self-scope 工具或 right-gated 入口已接线**」 |
+| 判定核心已被测 | `tests/UserAi/UserAccessPolicyTest.php:25-46` 覆盖 7 条 reasonCode 分支 |
+
+框架侧的形状（逐字，路径相对框架仓根）：
+
+```php
+// src/Contracts/UserAccessPolicyContract.php:13
+public function decide(UserAccessContext $context, UserResourcePolicy $policy): UserAccessDecision;
+// src/Modules/UserAi/Access/UserResourcePolicy.php:9-16  （readonly）
+__construct(int $tenantId, ?int $ownerUserId = null, ?string $requiredRight = null,
+            ?string $minimumLevel = null, int $creditsRequired = 0, string $policyVersion = '1')
+// src/Modules/UserAi/Access/UserAccessContext.php:9-17   （readonly）
+__construct(int $tenantId, ?int $userId, bool $active = true, string $level = 'standard',
+            ?string $scoreVersion = null, int $credits = 0, array $rights = [])
+// src/Modules/UserAi/Services/UserAccessPolicy.php:21-43  判定顺序（短路）
+tenant_mismatch :21-23 → identity_required :24-26 → identity_inactive :27-29
+→ level_insufficient :30-32 → owner_mismatch :33-35 → right_missing :36-38 → credits_insufficient :39-41
 ```
 
-实测 **0 命中** ⇒ 方法**尚未下发到 vendor**（可能还在框架仓未发布，本机够不到）。
-所以 back 维持现状：判据仍在自己的 `OwnerGuard`，**7 处零散比对一处未动**（任务 #54 的核对结论）。
+绑定在 `src/TenancyServiceProvider.php:152-153`（`UserAccessPolicyContract` singleton + `UserAccessContextResolver`）。
 
-### back 现在的签名（逐字，框架同名方法请按这个形状对齐）
+### 三条**必须先对齐才能接**的语义差（这是本条的正题，不是「请求新增能力」）
+
+**① 最重要：`ownerUserId = null` 在框架形状里是「不判属主」，在 back 判据里是「拒」。**
+
+- 框架：`UserAccessPolicy.php:33` `if ($policy->ownerUserId !== null && $policy->ownerUserId !== $context->userId)`
+  ⇒ **null 直接跳过这条判定 = 放行**。
+- back：`OwnerGuard.php:53-55` `$ownerId !== null && (int) $ownerId === $userId` ⇒ **归属列 NULL/0 一律拒**。
+- ⇒ **若不补判据就照形状接线，`nodes`/`routes`/`connections`/`ip_pools` 等 7 处的存量无主行会从「谁都写不了」
+  翻成「谁都能写」** —— 那正是裁定 A1 的 fail-closed 与 A5 的「一步收 NOT NULL + DBA 回填」要防的事
+  （`dev-plan.md:510`/`:514`），而且**翻得很安静**（框架返回 `allowed`，没有任何异常面）。
+- 请求框架定的那句：**属主判定要不要区分「资源无主」与「本操作不需要属主」**？
+  两解都可以，但要显式：**(A)** `ownerUserId` 用 `null` 表示「不需要属主」、另给一个「无主」哨兵（back 建议，改动小）；
+  **(B)** 由 back 在构造 policy **之前**自己判 NULL/0 拒（back 能接受，但这条判据就永久留在 back 侧 = 矩阵 R6 的一处例外，
+  要在框架文档里写明「无主行的判据属下游」）。
+  ⚠️ **back 不擅自选**，也**不在框架下发前把 `owns()` 改掉** —— 现在的 fail-closed 是对的，宁可暂时不接。
+
+**② `decide()` 回的是决策对象，不是布尔/异常 ⇒ 要一张 reasonCode → HTTP 的映射表**
+
+back 的出口已登记在错误码清单里（`spec/v1-error-codes.md` §2.1：越权 = `DomainException::forbidden()` → 403 + `DOMAIN_FORBIDDEN`），
+接线时得逐条落定：`owner_mismatch` / `tenant_mismatch` → **403**；`identity_required` / `identity_inactive` → 走 401 还是 403
+（back 现在无身份就是 403，因为 `auth:sanctum` 已先挡；**这条不要顺手改成 401**，改了会动既有契约）；
+`level_insufficient` / `right_missing` / `credits_insufficient` → back **v1 不产生**（见 ③）。
+⇒ 请框架把这张表的**权威口径**写进 `resources/kb/`，否则七个 reasonCode 会各下游翻译一遍。
+
+**③ `level` / `rights` / `credits` / `scoreVersion` 进了判定核心，但 back 的 v1 合同里没有它们**
+
+- 框架 `UserAccessContextResolver::resolve(int $tenantId, int $userId, array $rights = [])`
+  （`src/Modules/UserAi/Access/UserAccessContextResolver.php:17-52`）从服务端派生：`tenant_users.is_active` + `credits`（`:28-36`）、
+  `users.is_active`（`:38-43`），并明文规定 **「`rights` 只能由受信业务服务传入，不接受请求参数」**（`:11-14` 注释）
+  —— 这半与矩阵 **R4** 完全一致，back 支持并会照用。
+- 但 back 侧裁定 C1（`dev-plan.md:519`）已定：**权益只做租户级 `subscription_plan`，用户级 level/score/right 明确不进 v1 合同**；
+  而 F-28 的取证是**库里根本没有 `level`/`score` 列**、`credits` 只在 `tenant_users` 上且 back 未在用。
+- 默认值是惰性的（`minimumLevel = null` / `creditsRequired = 0` / `rights = []` ⇒ 三条分支都不会触发），
+  所以 back **可以**接属主与租户两条而不引入权益语义。⚠️ 但有两处要框架答一句：
+  **(a)** resolver 把 `users.is_active` 也当判定输入（`:38-43`）⇒ back 的账号若无 active `tenant_users` 行会得到
+  `identity_inactive`，**与 back 现在的「上下文为空 ⇒ 下游自己判」语义不同**（这条正是缺陷 10 同族的归属问题）；
+  **(b)** `level`/`credits` 是不是框架打算逐步接进**通用**用户面判据？若是，back 需要先重裁 C1，
+  而不是在接线里被动接受。
+
+### back 现在的签名（框架下发后 `OwnerGuard` 退成适配层）
 
 ```php
 // app/Modules/VPN/Domain/Guards/OwnerGuard.php
@@ -1469,22 +1536,23 @@ public static function owns(Model $resource, ?int $userId, string $ownerColumn =
 public static function authorize(string $ability, Model $resource): void;                         // :69
 ```
 
-三条设计约束请框架一并保住（**丢了任何一条 back 就得保留第二套判据 = 矩阵 R6**）：
+与框架形状的**结构性差**（接线时的适配动作，不必框架改）：
 
-1. **归属列可参数化**要保留：`node_route_requests` 有 `source_user_id` / `target_user_id` 两列，
-   同一张表要按不同列判两次 —— 写死 `user_id` 就接不住。
-2. **fail-closed 两条**要一致：无认证身份拒（`OwnerGuard.php:49-51`）、归属列为 NULL/0 拒（`:53-55`）。
-   后者是裁定 A5「7 列一步收 NOT NULL + DBA 回填」的配套判据（`dev-plan.md:514`），
-   **框架若把 NULL 当放行，回填口径就被打穿**。
-3. **身份只从已认证主体取**，不接受「以参数定身份」（矩阵 R4）—— 这正是 back 那批
-   `/users/{id}` 端点被下架（裁定 A4）的根因，`authorize()` 的实现里写死了这条（`:61-63` 的注释与 `:71-74`）。
+1. **框架收 `ownerUserId: ?int`，不收 `Model` + 列名** ⇒ 「从哪个列读归属」这件事**永久留在 back**：
+   `node_route_requests` 的 `source_user_id` / `target_user_id` 两列（同一张表要按不同列判两次）
+   只能由 back 的适配层读出来后喂给 policy。**这条不请求框架改**，但要说清：框架的下一次扩容若要收 `Model`，
+   请保持「列名可指定」的语义。
+2. **身份只从已认证主体取**（矩阵 R4）：`authorize()` 的实现里写死了这条（`OwnerGuard.php:61-63` 注释与 `:71-74`），
+   与框架 resolver 的「不接受请求参数」同源 ⇒ 接线时 `UserAccessContext::userId` 一律来自 `auth()->user()`，
+   **不许出现「把请求里的 user_id 当身份」的路径**。
+3. **拒绝要翻成 `DomainException::forbidden()`**（已登记码 `DOMAIN_FORBIDDEN`），不是 Laravel 默认的
+   `AuthorizationException`（那会多出一套码）。
+4. **绝不掺入 tenant 管理员语义** —— 用户面不表达 tenant 权限是 10-04 的既有裁定；
+   框架若把 `canAccessTenant()` 之类塞进同名方法，back **不会接**（那是另一种身份模型）。
+   `tenant_mismatch` 那条是**归属**判定、不是管理员语义，back 接。
 
-另外两条口径：拒绝要翻成 **`DomainException::forbidden()`**（back 已登记错误码 `DOMAIN_FORBIDDEN`，
-`spec/v1-error-codes.md` §2.1），而不是 Laravel 默认的 `AuthorizationException`（那会多出一套码）；
-**绝不掺入 tenant 管理员语义** —— 用户面不表达 tenant 权限是 10-04 的既有裁定，
-框架若把 `canAccessTenant()` 之类塞进同名方法，back **不会接**（那是另一种身份模型）。
 
-### back 侧接线计划（框架方法到位后**一次接完**，改动面就在这几处）
+### back 侧接线计划（框架包下发后**一次接完**，改动面就在这几处）
 
 | # | 停等的调用点（2026-10-05 逐个复核行号） | 所属方法 | 现状出口 |
 |---|---|---|---|
@@ -1496,8 +1564,9 @@ public static function authorize(string $ability, Model $resource): void;       
 | 6 | `RouteRequestDomainService.php:70` | `sendRouteRequest()` `:49` | 已用 `DomainException::forbidden` |
 | 7 | `app/Modules/Social/Domain/Services/SocialDomainService.php:538` | `removeSocialConnection()` `:531` | 已改 `DomainException` ⚠️ **行号漂移**：dev-plan A1 行记 `:509` / `:510`，D2 在其上方插入 `establishFriendship()`（`:227`）后落在 **`:538`** |
 
-**接线动作**（一次做完，不分批）：这 7 处改为调用框架同名方法（或经 `OwnerGuard` 委托到它），
-`OwnerGuard` 退成**适配层**；已接线的 4 处写面（`DELETE /nodes/{id}`、`POST /nodes/{id}/operator`、
+**接线动作**（一次做完，不分批）：这 7 处改为调用框架的判定核心（`UserAccessPolicyContract::decide`，
+经 `OwnerGuard` 委托到它 —— 框架收的是 `UserResourcePolicy` 值对象，不收 Model + 列名，所以**列读取永久留在 back**，
+这正是留适配层的原因；见上文结构性差 1）；已接线的 4 处写面（`DELETE /nodes/{id}`、`POST /nodes/{id}/operator`、
 `DELETE /route/{id}`、`POST /route/bulk/status`）与已收敛的 6 处
 （`IpPoolDomainService:390,420`、`TenantScopedServiceService:263,343,379,440`）跟着换实现点，
 **控制器与 22 个调用方一行不动**（这正是 A1 要求留适配层的原因）。
@@ -1511,7 +1580,10 @@ public static function authorize(string $ability, Model $resource): void;       
 **半成品别照做**：`/tmp/a1-owner-guard-convergence.patch`（209 行）是裁定 A1 那轮停在半路的批次 ——
 `/tmp` 会被清，且框架版本大概率让那份改名直接作废 ⇒ **不要照着它继续做，按框架 API 重新接**。
 
-复核：2026-10-05，7 处行号 + `OwnerGuard` 签名已对源码验证；vendor 侧「方法尚未下发」为本批实测 0 命中
+复核：2026-10-05，7 处行号 + `OwnerGuard` 签名已对源码验证。框架侧状态也已改口重跑：判定核心
+**在框架仓已落地**（`538986f5`，2026-10-04 23:37），**在 back 的 vendor 快照里 0 命中**
+（`composer.lock` 根包 `e02594ae`，同日 12:18；`git merge-base --is-ancestor` 判否）
+⇒ 本条的前置动作是**等包下发**，不是等框架实现。
 
 ---
 
@@ -1525,7 +1597,8 @@ public static function authorize(string $ability, Model $resource): void;       
 | **F-12** | **已由 back 于 2026-10-05 在裁定 D2 自行实现**（`mynet_api@37bd540` + `mynet_gui@b80a577`），不需要框架动作。本清单只保留其中一条**框架侧事实**（写给框架确认语义，不作为诉求）：核销只发生在**建号路径**（email `UserAuthController.php:149,159`、sms `:323,326`、OAuth `GatesOAuthRegistration.php:53,57`），**已注册成员凭码入区（join）不产生 `UserRegistered`** ⇒ back 的「核销即成好友」只覆盖新人。 |
 | **F-13** | 是 **back 的交付件**（给 DBA 的建库 DDL 与生成器对不上），取向已裁（裁定 E1「只取 back 启用的 74 张」）。它牵到框架的只有一句：那 47 张下游表**本来就不该由 mynet 建**，属交付口径不属框架缺陷。 |
 | **F-22 … F-28** | 七条全是 **back 侧裁决项**（2026-10-04 P0 审计提出，全文在 [`spec/v1-permission-matrix.md`](spec/v1-permission-matrix.md) §4/§5 与 [`spec/v1-error-codes.md`](spec/v1-error-codes.md) §3/§5），且**已于同日逐项裁完**（`dev-plan.md:515-527`）⇒ 一条都不进这份对外清单。<br>⚠️ 唯一值得框架知道的一句：**F-28 的端别判定**（框架没给资源属主判定、`RbacService::check()` 对非 Operator 主体直接 `return false`、铁律 `identity-model.md` §2/§4 禁止 `User` 持有角色）是「对齐请求 1」成立的前提 —— 本清单**不把它当 bug 提**，因为那是框架有意的设计；back 只按上文请求签名对齐。 |
-| **A1 的「框架出属主判定方法」那半** | 按上文**对齐请求 1** 提，**不按新增缺陷提**（框架已在实现，用户 2026-10-04 告知）。 |
+| **A1 的「框架出属主判定方法」那半** | 按上文**对齐请求 1** 提，**不按新增缺陷提**：框架本体仓已落地判定核心
+（`538986f5`）但未随包下发到 back 的 vendor ⇒ 要对齐的是签名与三条语义差，不是「请新增能力」。 |
 
 ---
 
