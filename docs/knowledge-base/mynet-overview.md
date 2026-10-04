@@ -232,7 +232,7 @@ driver/gnb/
 |---|---|
 | `friendships` | 双向好友关系（`user_id` / `friend_user_id` / `tenant_id`） |
 | `friend_requests` | 好友请求 |
-| `invitations` | 邀请 |
+| `invitations` | 旧邀请码实现；**2026-10-04 代码面已下架**（`mynet_api@b79440a`），表待 G-8b。现役邀请码是框架的 `invite_codes` / `invite_code_usages` |
 | `social_connections` | 统一表达（`type=friend_request\|invitation`） |
 
 **节点层（拓扑授权）**——表达可访问关系：

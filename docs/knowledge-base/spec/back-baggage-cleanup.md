@@ -112,6 +112,10 @@
 指向不存在的 `App\Notifications\NewUserRegistered`——那条路径**必然 fatal**。
 框架本就有完整实现，back 这份是既重复又跑不通的副本。
 
+> **后续（2026-10-04）**：上表「邀请奖励与好友关系逻辑保留」里保留的旧 `invitations`
+> 邀请码实现，已按当日裁定整体下架（邀请码统一走框架 `invite_codes`，好友关系逻辑仍在），
+> 见 `dev-plan.md` G-7 / G-8。本表是 `b8c7b973` 那轮的记录，原文不改。
+
 **消费者层现状（back 只剩业务）**：
 - **109 条业务路由**：nodes / route / ippools / services / social / notifications /
   users / ids / tenants / mynet stats / monitor 心跳

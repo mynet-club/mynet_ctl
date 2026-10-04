@@ -172,7 +172,7 @@ components:
 
     RegisterRequest:
       type: object
-      required: [name, email, password, invitation, activation_url]
+      required: [name, email, password, activation_url]
       properties:
         name:
           type: string
@@ -187,9 +187,9 @@ components:
         device_name:
           type: string
           maxLength: 255
-        invitation:
+        invite_code:
           type: string
-          maxLength: 255
+          maxLength: 32
         activation_url:
           type: string
           format: uri
@@ -2872,7 +2872,7 @@ paths:
         - sanctum: []
       responses:
         "200":
-          description: 好友/邀请/申请综合数据
+          description: 好友/申请综合数据
 
   /social/search-users:
     post:
@@ -3041,56 +3041,6 @@ paths:
       responses:
         "200":
           description: 好友已删除
-
-  /social/invitations:
-    get:
-      tags: [social]
-      operationId: getInvitations
-      summary: 获取邀请码列表
-      security:
-        - sanctum: []
-      responses:
-        "200":
-          description: 邀请码列表
-
-  /social/invitation:
-    post:
-      tags: [social]
-      operationId: generateInvitation
-      summary: 生成邀请码
-      security:
-        - sanctum: []
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                max_uses:
-                  type: integer
-                expires_at:
-                  type: string
-                  format: date-time
-      responses:
-        "200":
-          description: 邀请码已生成
-
-  /social/invitation/{id}:
-    delete:
-      tags: [social]
-      operationId: deleteInvitation
-      summary: 删除邀请码
-      security:
-        - sanctum: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
-      responses:
-        "200":
-          description: 邀请码已删除
 
   # ── Tenants（原 Zones，实体已更名）────────────────────────────────────────────
   /tenants:

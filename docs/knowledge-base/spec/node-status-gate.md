@@ -60,7 +60,7 @@ bundle 里消失，且因为它不向 API 心跳，永久卡死。模型侧判�
     所以这个 GET 的写入没有任何「自愈」价值，纯粹是一条降级通道。
 - 降级的爆破半径不止本节点：`NetworkSemanticsProjector.php:215` 按
   `whereIn('node_status', [ENABLED, ONLINE])` 挑对端，一个节点变 -1 就从**所有**对端的
-  bundle 里消失。同一过滤还出现在 `SocialDomainService.php:387/540/788`、
+  bundle 里消失。同一过滤还出现在 `SocialDomainService.php:384/537/785`、
   `NodeRebootService.php:231/277`、`MonitorHistoryService.php:472/504`、
   `RouteDomainService.php:247/275`。
 - 另有三个 `node_status` 写入者，规则各不相同：

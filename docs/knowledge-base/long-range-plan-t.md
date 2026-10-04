@@ -124,7 +124,7 @@ T1 真连通 ──────────────► G3：双节点 gnb/wg
 | 缺 `.env` → `APP_KEY` 空 | 项目根 | **全站每个请求 500**（`MissingAppKeyException`），连 `/` 都不通 |
 | 未覆盖框架默认 `redirectGuestsTo(fn () => route('login'))` | `bootstrap/app.php` | 不带 `Accept: application/json` 的未鉴权请求 → `RouteNotFoundException` 500 而非 401 |
 | `Node` 只有 scope 没有实例方法 | `app/Modules/VPN/Models/Node.php` | `SocialDomainService:547/:700/:840` 调 `isOnline()`/`isEnabled()` → `BadMethodCallException` → 两个好友节点端点 500 → **向导「可用设备」恒 0、下一步永远禁用** |
-| `nodes_count` 硬编码 0 | `SocialDomainService.php:397`（原 `// TODO`） | 好友列表永远报 0 个节点，与 `getAllFriendsNodes():857` 口径不一致 |
+| `nodes_count` 硬编码 0 | 原 `SocialDomainService.php:397`；现该处已是批量计数（`:384-387` 批量 + `:405` 取用），`getAllFriendsNodes()` 在 `:748` | ⚠️ 行号按 `b79440a` 后的文件重测；这条**看着已被实现消化**，但本轮未复核语义，留待确认 |
 | CORS 默认值失效 | `config/cors.php` | 默认 `'localhost,127.0.0.1'` 缺 scheme+port，与真实 `Origin` 精确匹配永不相等 → 浏览器全线被拦 |
 
 门禁：`make check` **126 tests / 2398 assertions** 全绿（含新增 `TenantServiceApiTest` 20 项、

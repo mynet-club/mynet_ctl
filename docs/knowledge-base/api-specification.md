@@ -179,7 +179,7 @@ Request:
   "email": string,                     // required, email, unique:users, max:255
   "password": string,                  // required, min:8
   "device_name": string|null,          // optional, max:255
-  "invitation": string,               // required, max:255
+  "invite_code": string|null,         // optional, max:32（框架 `UserAuthController.php:118`；旧 `invitation` 字段已随 `mynet_api@b79440a` 下架）
   "activation_url": string            // required, url, max:2048
 }
 

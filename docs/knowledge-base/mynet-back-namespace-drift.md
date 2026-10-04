@@ -256,7 +256,7 @@
 | 内联引用 | 位置 | 实际类（若存在） |
 |---|---|---|
 | `App\Models\Node` | `app/Modules/Monitor/Domain/Services/NodeHeartbeatDomainService.php:455,467` | ✅ `Modules\VPN\Models\Node` |
-| `App\Http\Resources\{Node,User,Friend,FriendRequest,Invitation,SocialOverview}Resource` | `app/Modules/VPN/Controllers/Api/V1/SocialController.php:31-261` | ❓ 待查 |
+| `App\Http\Resources\{Node,User,Friend,FriendRequest,SocialOverview}Resource` | `app/Modules/VPN/Controllers/Api/V1/SocialController.php:31-261`（`Invitation` 那一档已随 `mynet_api@b79440a` 下架） | ❓ 待查 |
 | `App\Core\Domain\Node\*`（3 处） | SocialController 内 | ❓ 待查 |
 | `App\Events\User{Registered,Updated,Deleted}Event` | 待查 | ❓ 待查 |
 | `App\Handlers\Event\*`（3 处） | 待查 | ❓ 待查 |

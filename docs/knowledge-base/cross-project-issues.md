@@ -157,7 +157,7 @@
   `monitor_rt_cmds` `node_configs` `node_devices` `node_ips` `node_access_rules`
   `node_peer_connections` `node_services` `service_approvals` `service_connection_logs`
   `service_shares` `binary_assets` `customers`
-- **被 app/ 代码引用的**（即生产上会直接 500，不是「死表」）：`invitations`(5 个文件)、
+- **被 app/ 代码引用的**（即生产上会直接 500，不是「死表」）：~~`invitations`(5 个文件)~~ → **0**（旧实现已于 2026-10-04 整体下架 `mynet_api@b79440a`，`grep -r invitations app` 只剩注释），
   `friendships`(4)、`node_configs`(4)、`monitor_rt_cmds`(3)、`friend_requests`(1)、`node_access_rules`(1)
 - **性质**：与 AGENTS.md §4 记的「Testbench 不加载 `bootstrap/app.php` → 测试态与生产态
   **静默分叉**」同一类，只是分叉点在 schema 而不是中间件。测试全绿（154/2503）
@@ -277,7 +277,7 @@
 | **CPI-23** | `mynet_api/.env`（缺失） | 仓库无 `.env` → `APP_KEY` 空 → **全站每个请求 500**（`MissingAppKeyException`，`EncryptionServiceProvider.php:83`），连 `/` 都不通。`phpunit` 走 `phpunit.xml` 的 env，**73/73 全绿也发现不了**。→ 建本地 dev `.env`（sqlite + file/sync）+ `key:generate`；`.env` 已被 `.gitignore:16` 挡住 |
 | **CPI-24** | `mynet_api/bootstrap/app.php` | 未覆盖框架默认 `redirectGuestsTo(fn () => route('login'))`（`ApplicationBuilder.php:291`）。back 是纯 API 后端、无 `login` 命名路由，而 `Authenticate.php:104` 仅在请求**未**声明 `expectsJson` 时才调 `redirectTo` → **不带 `Accept: application/json` 的未鉴权请求抛 `RouteNotFoundException` → 500 而非 401**。→ 加 `$middleware->redirectGuestsTo(null)` |
 | **CPI-25** | `mynet_api/app/Modules/VPN/Models/Node.php` | 只有 `scopeOnline()`/`scopeEnabled()` 两个**查询作用域**，无同名实例方法；`SocialDomainService` 三处（`:547`/`:700`/`:840`）按实例方法调用 → `BadMethodCallException` → `/social/friends/{id}/nodes` 与 `/social/friends/all/nodes` **双双 500**。GUI 捕获后回退空数组，表现为**连接向导「可用设备」恒 0、下一步永远禁用**——故障在后端、症状在前端。→ 补 `isOnline()`/`isEnabled()`，语义与 scope 对齐 |
-| **CPI-26** | `SocialDomainService.php:397` | `'nodes_count' => 0, // TODO: 计算好友的节点数量` —— 硬编码 0，与 `getAllFriendsNodes():857` 的真算法口径不一致，好友列表永远谎报 0 节点。→ 改为批量查询，口径与 `:776-777` 一致（只计 ENABLED/ONLINE） |
+| **CPI-26** | 原 `SocialDomainService.php:397`（`b79440a` 后该处已是批量计数 `:384-387` + 取用 `:405`；`getAllFriendsNodes()` 移到 `:748`，口径行 `:785`） | `'nodes_count' => 0, // TODO: 计算好友的节点数量` —— 硬编码 0，与真算法口径不一致，好友列表永远谎报 0 节点。→ 改为批量查询，只计 ENABLED/ONLINE。⚠️ 行号为重测结果；该 TODO 在当前文件里已不存在，本条**疑似已被实现消化，未复核、未关单** |
 | **CPI-27** | `mynet_api/config/cors.php` | 默认值 `'localhost,127.0.0.1'` **缺 scheme+port**，而浏览器 `Origin` 头永远是完整的 `http://localhost:5173`，精确匹配永不相等 → 预检返 204 但**无 `Access-Control-Allow-Origin`**，浏览器全线拦。→ 本地 `.env` 配 `CORS_ALLOWED_ORIGINS`；**生产白名单仍待办**（与本文件 P1 第 3 条同源，那条记录的 `['*']` 已过时） |
 | **CPI-28** | `mynet_api/phpunit.xml` | `Default` suite（= `make test` = DoD 门禁 = pre-push）**不含** `app/Modules/VPN/tests/Feature`，43 个 HTTP 层测试长期游离在门禁外。「TenantServiceController 500」被误记成控制器缺陷正是因此无人把守。→ Feature 并入 `Default`，`make check` 从 73/2253 变为 **126/2398** |
 | **CPI-29** | `mynet_api/tests/TestCase.php` | Orchestra Testbench **不加载 `bootstrap/app.php`** → 测试态与生产态静默分叉（`TestCase.php:65` 原有注释已承认，`long-range-plan.md:129` 也写过「e2e 用真实 bootstrap，不走 Testbench」）。→ 在 TestCase 里镜像 `redirectGuestsTo(null)`；**必须走框架的 `(new Middleware)->redirectGuestsTo(null)`**，因为它一次设三个静态回调（`Middleware.php:571-575`），异常渲染路径读的是 `AuthenticationException` 那个 |

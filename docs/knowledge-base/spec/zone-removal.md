@@ -389,7 +389,7 @@ GUI 半边照着这份断言清单改读法，不靠猜。
   用户看到的是空数据而不是错误。这正是 Playbook §9 反对的 fail-open。
 - 注意：**服务端确实有一个平台兜底租户，但不是这个值。** SSOT 是
   `mynet_api/config/id.php:51` `'platform_tenant_id' => env('PLATFORM_TENANT_ID', 9007199254740991)`
-  （2^53-1，即 JS 安全整数上限），生产代码在 `SocialDomainService.php:1024` 与 `:1175`
+  （2^53-1，即 JS 安全整数上限），生产代码原在 `SocialDomainService.php:1024` 与 `:1175`（旧 `invitations` 实现，已随 `mynet_api@b79440a` 删除）
   用它兜 `$user->tenant_id` / `$invitation->tenant_id` 为空的场合；
   `InvitationJoinTenantTest.php:30` 也把它钉成 `PLATFORM_TENANT` 常量。
   也就是说 GUI 的 `999999999` 与服务端的平台租户是**两个互不相干的魔法数**，
