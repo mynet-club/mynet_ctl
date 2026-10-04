@@ -191,7 +191,9 @@
    > 归属列 NULL/0 拒），`NodePolicy`/`RoutePolicy` 只是它的 Gate 形状，由 `app/Providers/AuthServiceProvider.php`
    > **显式** `Gate::policy()` 注册 —— 不走命名空间约定推导：本仓模型在 `App\Modules\VPN\Models\*`，而 Gate 推导失配的
    > 默认结果是**一律拒绝**，表现为「功能莫名 403」且不可 grep。上面那句「全仓 **0** 处」的现值为
-   > **5 处 `OwnerGuard::authorize()` 写面 + 6 处收敛到 `owns()` 的零散判据**；落码清单、接线时打出的两条真 bug
+   > **4 处 `OwnerGuard::authorize()` 写面 + 6 处收敛到 `owns()` 的零散判据 + 2 处 Policy→owns**（现值 12；
+   > 原为 13/5 —— `PUT /route/{id}` 是幻影端点，2026-10-04 裁定下架后连带撤了它的 authorize，
+   > `RoutePolicy::update` 保留，bulk 路径仍在用该 ability）；落码清单、接线时打出的两条真 bug
    > （`deleteNode` 旧签名不收 `$userId`、`createRoute` 只写不存在的 `created_by` 列）、以及**仍未收敛**的读面查询级
    > `where('user_id')` 过滤，全部见 [dev-plan.md](../dev-plan.md)「2026-10-04 逐项裁定」A1 行。
    > 两条边界照旧守：本层**只答属主**，绝不掺入 tenant 管理员语义（用户面不表达 tenant 权限是既有裁定）；
@@ -199,15 +201,28 @@
    > 框架侧「出方法、下层调用、业务继承 + 扩容」的方法诉求进 G1 那份清单第 13 条，back 不改 vendor、不 fork。
    > ⏸ **扩面已停（2026-10-04，用户指示）**：框架侧**正在实现**同名的属主判定方法 ⇒ back 不再自建第二套。
    > 剩下的 7 处零散比对（`NodeDomainService:299,860,933,1276`、`NodeKeyDomainService:1165`、
-   > `RouteRequestDomainService:70`、`SocialDomainService:509`，其中 4 处抛裸 `\Exception` ⇒ 越权表现为 500）
-   > **不要现在顺手收敛** —— 等框架 API 落地一次接完，替换点仍是 `OwnerGuard` 一处。清单与理由见
-   > [dev-plan.md](../dev-plan.md) A1 行。
+   > `RouteRequestDomainService:70`、`SocialDomainService:510`）**不要现在顺手收敛** —— 等框架 API 落地一次接完，
+   > 替换点仍是 `OwnerGuard` 一处。清单与理由见 [dev-plan.md](../dev-plan.md) A1 行。
+   > **例外（2026-10-04 第二轮裁定「只修异常类型」，`mynet_api@69e0c2d`）**：这 7 处里有 4 处抛裸 `\Exception`，
+   > 越权因此一律表现为 **HTTP 500**（别人的节点报「服务端坏了」，既污染 5xx 告警又让客户端以为重试有用）。
+   > 已把这 4 处出口换成 `DomainException::forbidden/notFound`（`NodeDomainService:299,933,1276` +
+   > `SocialDomainService:510`），**判据调用一字未动** ⇒ ⏸ 状态不变。控制器侧必须同批加
+   > `catch (DomainException) { domainErrorResponse() }`：`DomainException extends \DomainException extends \Exception`，
+   > 只换类型仍被原有宽 catch 吞掉、症状一点不变。另三处本来就不是 500 出口（`:860` 返 null、
+   > `NodeKeyDomainService:1165` 已抛 `NodeException::accessDenied`、`RouteRequestDomainService:70` 已用
+   > `DomainException::forbidden`），一行未动。
    > **✅ 配套件 A5 已落（2026-10-04，`mynet_api@589e4c2`）**：上面那条「归属列为空 ⇒ 对任何用户都可见」现在
    > 有了 schema 层的收口方向 —— `OwnerGuard::owns()` 选的 fail-closed（NULL 与 0 一律**拒**）会把存量无主行
    > 变成「谁都写不了」，所以它的出路只有 A5 的「一步收 NOT NULL + DBA 回填」，**不是**在判定层加兜底放行。
    > 本批交付的是**待执行件**：迁移件先逐表数 NULL（含软删行），数到就在第一条 ALTER 之前整件拒绝并打印计数
    > （MySQL 非严格模式会把 NULL **静默改成 0**，事后查不出来 —— 守卫因此不可省），零 NULL 才改列；
-   > 回填规则仍待 DBA 清单（只读 `database/sql/2026_10_04_owner_columns_null_inventory.sql`）。
+   > 回填规则**已裁（2026-10-04 第二轮）**：走推断链（`routes.node_id → nodes.user_id`、
+   > `node_route_requests` 两端各自成列、`connection_grants.connection_id → connections`、
+   > `ip_pools` 按现役 create 路径本就带 `user_id`），但**清单仍要跑** —— 授权的是归属口径不是跳过取证，
+   > inventory 的 `inference_state` 有四态（`inferable` / `node_also_ownerless` / `dangling_node_ref` /
+   > `no_node_ref`），后三态推断覆盖不到，而守卫见到非空即整件拒绝 ⇒ 回填要把四态清成 0，
+   > 不能指望迁移件兜底。范围外 2 列（`node_ips.user_id`、`service_connection_logs.user_id`）
+   > 已裁「**保留可空 + 登记语义**」。只读 `database/sql/2026_10_04_owner_columns_null_inventory.sql`。
    > **写这一层判据时最容易搞错的一点**：选 0 哨兵**不解决问题** —— `owns()` 对 NULL 与 0 给同一个答案「拒」，
    > 换成 0 只是给「无主」换个写法，除非同时裁定「谁能动 0 号行」。
 
@@ -294,11 +309,21 @@ grep -rn "Gate::\|Policies\|->authorize(\|canAny" app/ | grep -v vendor | wc -l
 #   命名空间行和注释。要看接线面跑下面这条。
 
 grep -rn "OwnerGuard::authorize(\|OwnerGuard::owns(" app/ | grep -v "Guards/OwnerGuard.php" | grep -v tests | grep -v ' \*' | wc -l
-#   13 处 = 5 个写面 authorize（`NodeDomainService:525` 删节点 /
-#        `NodeOperatorDomainService:76` 远程指令 / `RouteDomainService:117,173,526` 改·删·批量）
+#   12 处 = 4 个写面 authorize（`NodeDomainService:525` 删节点 /
+#        `NodeOperatorDomainService:76` 远程指令 / `RouteDomainService:116,469` 删·批量）
 #        + 6 处旧零散判据收敛（`IpPoolDomainService:390,420` + `TenantScopedServiceService:263,343,379,440`）
 #        + 2 处 Policy→owns（`NodePolicy:27` / `RoutePolicy:22`）
+#   （2026-10-04 前是 13/5 —— 第 5 个写面 `PUT /route/{id}` 是幻影端点，裁定下架后连带撤 authorize；
+#    `RoutePolicy::update` 仍在，bulk 路径在用该 ability）
 #   ⇒ 规则本体仍只在 `OwnerGuard::owns()` 一处（R6）；要扩面就加 authorize 调用点，别复制判据
+
+php artisan test --filter 'DomainExceptionHttpStatusTest|PhantomEndpointRemovalTest'
+#   24 passed  —— 两条负向口径各由一组用例锁住：
+#   ① 越权/不存在**不许表现为 500**（node 链路 403/404 + 「我的仍然 200」正向控制 + 被拒零副作用）。
+#      摘掉任一控制器的 `catch (DomainException)` 复跑即红 ⇒ 只换异常类型不算修好。
+#   ② 已下架端点不许复活：两种「不存在」的形状分开断言 —— URI 整个没有 ⇒ **404**
+#      （`DELETE /nodes/commands/{id}`），URI 在但方法不收 ⇒ **405**（`PUT|PATCH /route/{id}`），
+#      并锁 body 不含「Call to undefined method」/「更新成功」、路由表里查不到这两条。
 
 grep -rn "where('user_id'" app/Modules/VPN/Controllers/Api/ | wc -l
 #   15         —— 唯一的「归属」实现方式：控制器里零散 where，非集中判据
