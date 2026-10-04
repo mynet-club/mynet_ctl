@@ -71,7 +71,10 @@
 1. **`❌` 用户面整组无授权判据**：`VPN/Routes/api.php:97-286` 这 **116 条路由声明**上只挂了 `auth:sanctum` + `token.binding` + throttle，没有任何 permission/role 判据。8 个 FormRequest **一个授权判据都没有** —— 6 个 `authorize()` 直接 `return true`（例：`app/Http/Requests/GetRouterKeysRequest.php:14-17`），另外 2 个只判「登录了没」（`app/Modules/VPN/Requests/Node/CreateNodeRequest.php:21-24`、`Requests/Route/CreateRouteRequest.php:19-22` 都是 `Auth::check()`）。这不是「缺 RBAC」，是**缺 R2 的最低那层：能不能碰这个资源**。
 2. **`❌` 跨用户写与读**：`PUT /api/v1/users/{id}` 任意登录用户可改他人 `name/email/phone` —— `UserController::update()`（`app/Modules/VPN/Controllers/Api/V1/UserController.php:210-232`）把 `$id` 直接喂给 `UserService::updateUser()`，而后者（`app/Services/UserService.php:196-213`）**完全忽略 `$updaterId`**。同组还有 `GET /users`（全站列表，`:33-52`）、`GET /users/{id}`（`:145-162`）、`/{id}/statistics|activity|nodes|tenants`。
    **消费者取证**：`mynet_gui` 只用 `/users/profile`（`src/services/api.ts:430`）与 `/users/onboarding`（`stores/onboarding.ts:432,453`）；console SPA 与 Lua 均不调这些 `/{id}` 端点 ⇒ **零消费者的管理语义端点**，与 #36 删掉的 Social 死副本控制器同类。
+   > **✅ 已落（2026-10-04，裁定 A4）**：上面点名的按 id 端点**整组从用户面删净**（路由 + handler + `UserService` 三个孤儿方法 + `UserDetailResource`），OpenAPI `back.yaml` 同批改（含从未注册的 `/users/{id}/permissions` 幻影）。锁住它的是新用例 `VPN/tests/Feature/Api/UserSelfSurfaceTest.php`：路由表 users 段逐条不存在、按 id 请求回 404 而非 500、`PUT /users/profile` 只作用当前登录用户的白名单列。
+   > **本条未收口的部分（归 A1 的 Gate 层）**：`GET /users` 与 `GET /users/search` 仍在，且都是只受 `auth:sanctum` 的**跨租户全站查询**；`index` 那个 `tenant_id` 参数**根本没生效**（`UserService::getUserList()` 不读它）——「参数在、判据不在」比没参数更容易骗人。已在 `UserController` 类 docblock 显式登记。
 3. **`❌` 悬空路由**：`DELETE /api/v1/users/{id}` 指向不存在的 `UserController::destroy` ⇒ 命中即 500（`VPN/Routes/api.php:226`）。
+   > **✅ 已随 A4 消失**（路由整组下架，命中变 404；`UserSelfSurfaceTest` 里那条 404 断言就是为了防止它以「路由在、handler 不存在」的形状长回来）。
 4. **`❌` 租户归属有两个来源，而其中一个是客户端可写的、且无归属校验**（本条 2026-10-04 复测后重写，原记载「改法唯一：只认 TenantContext」**不成立**）：
    - 参数优先：`NodeMonitorHistoryController.php:110,176` 写 `$request->input('tenant_id') ?? TenantContext::getId()` ——
      注释自陈「请求参数优先」，违 R4/R6。
