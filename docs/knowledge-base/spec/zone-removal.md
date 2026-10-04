@@ -4,6 +4,12 @@
 > `9007199254740991`，用户注明「现在生产端在用」）。**
 > 用户同时确认了本包的核心判断：「zone 就是 tenant，防火墙那个 zone 是另外一回事，
 > 从这个上来看，确实不能粗暴说删 zone」。
+> **第二轮追加三条裁定（同日）**：① 用户面**不表达** tenant 权限/边界（「user 是 user，
+> operator 是 operator……用户无感 tenant 的存在」「GUI = 普通用户前端」「收敛该收敛的吧」）
+> ② LocalStorage 键 `current_zone` 改名并做迁移 ③ en-US 用词 = **Network**。
+> **状态：本包四步全部落地**（`mynet_api df6c4da/1e42a4d/5aa8f34/8a98e3d` +
+> `mynet_gui 44f389d/68b273f/cf00de3/61d6b86/434701b/716f431` + `mynet_agent b80c029/9223eeb`）；
+> 剩下的 7 条未决见「第 2 步留下的未处置项」。
 > 下面保留裁决前的取证与候选方案原文；落地情况见「## 裁决与执行」。
 
 用户裁定是「干净，可以删掉」。动手前做了一轮取证，结论是：**这个任务的性质和裁定时以为的不一样。**
@@ -16,10 +22,13 @@
 
 | 议题 | 裁决 | 落地 |
 |---|---|---|
-| 1 `ZoneListPage`/`ZoneSharingPage`/`/zones`/`ZoneSelector` | **A 改名保留** | Zone* → Tenant*，路由 `/zones` → `/tenants`，功能不减。**第 1 步（GUI 内部改名）已落**：`mynet_gui` `cf00de3`（24 文件，5 个 `git mv`）；**第 2 步（契约翻转）待做**，见「建议的切法」。 |
+| 1 `ZoneListPage`/`ZoneSharingPage`/`/zones`/`ZoneSelector` | **A 改名保留** | Zone* → Tenant*，路由 `/zones` → `/tenants`，功能不减。**第 1 步（GUI 内部改名）已落**：`mynet_gui` `cf00de3`（24 文件，5 个 `git mv`）；**第 2 步（契约翻转）已落**：`mynet_api 5aa8f34` + `mynet_gui 716f431`，见下「第 2 步落地」与「建议的切法」。 |
 | 2 `DEFAULT_GLOBAL_ZONE`（`999999999`） | **B 改指真实平台租户** | 已执行：`mynet_gui` `68b273f`，提出 `PLATFORM_TENANT_ID = 9007199254740991` 常量替掉四处魔法数，与 `mynet_api config/id.php:51 platform_tenant_id` 同源。**兜底行为按 B 保留**，没有改成 A 的显式错误态。 |
 | — 第 0 步零风险清理 | — | 已执行：API 侧 7 处「另一个 zone」注释加防误删标记、③④ 类文案清理（`mynet_api` `df6c4da`）；删 GUI 死副本 `zoneServiceApiWithCache.ts`（`mynet_gui` `44f389d`）。 |
 | 3 GUI 改名后界面叫什么 | **网络区**（2026-10-04 追加裁决） | 已执行：`mynet_gui` `61d6b86` + 补漏 `434701b`；API 侧中文消息 `mynet_api` `8a98e3d`；节点侧 WebUI+CLI `mynet_agent` `b80c029` + 补漏 `9223eeb`（`mynet/commands.go:usage` 的向导帮助行漏了）。产物侧已随 `v0.0.7-pkg` 出包（`make dist` 五平台 + `make pkg-darwin`，见下「出包口径」）。用户原话「我也觉得『租户』太技术腔……先叫网络区，用个变量名替代吧，这样我们后续想到好词可以替换」，第二轮追加「都统一吧，能否也设置为变量」。 |
+| 4 en-US 界面词（第 3 项留下的未决 ①） | **Network**（2026-10-04 第二轮裁定） | 已执行：`mynet_gui 716f431`，`i18n/en-US.ts` **只改值不改 key**（`zones.*`、`navigation.zones` 等 key 名保持，属下面冻结的 i18n key 层）。落词：`navigation.zones='Network Management'`、`zones.*` 整块、`routes.friendNodes.zone='Network'`(`:1199`)、`social.search.zone='Network'`(`:1697`)、`ippools.quotaExhausted`、`tips.zoneManagement.{title,content}`、`nodes.quickCreate.noZone`。cluster B 的 `zoneServices`/`zoneSharing`/`zoneFilter` **没动**，挂在未决 ③ 上。 |
+| 5 LocalStorage 键 `current_zone`（未决 ②） | **改名 + 迁移，不许静默丢用户已选网络区** | 已执行：`mynet_gui 716f431`。新键 `current_network` **只存 tenant_id**；旧键 `current_zone` 双读迁移（兼容历史上「对象」与「JSON 串」两种形态），迁移成功即写新键删旧键，解析失败只 warn 不崩，logout 两键都清。键名常量在 `config/app.ts:27-28`。 |
+| 6 用户面要不要表达 tenant 权限/边界（第 2 步执行中冒出的越权面） | **不表达 —— 用户无感 tenant 的存在**（2026-10-04 裁定，原话见下「user≠operator 裁定」） | 已执行：`mynet_api 5aa8f34`（`/tenants` CRUD 收敛到 console 面）+ `mynet_gui 716f431`（删管理面残留）。**没有**给 `User` 补 `isTenantAdmin`/`canAccessTenant` 一类判定。 |
 
 ### 界面用词的三层分工（第 3 项裁落后固化，别再混用）
 
@@ -27,7 +36,7 @@
 |---|---|---|
 | 中文界面文案 | **网络区** | 四个面各有一个取词单点，换词四处一起改：① `mynet_gui/src/config/terms.ts` 的 `TERM_ZONE`（`i18n/zh-CN.ts`、`router/routes.ts` 的 `meta.title`、`TipsRegistry` 的 fallback 都从它拼接）② `mynet_api/config/mynet.php` 的 `terms.zone`（`term_zone()`，覆盖直接渲染到前端的校验/错误消息）③ 节点 WebUI `mynet_agent/mynetd/localapi/webui/index.html` 内联的 `TERM` ④ 节点 CLI `mynet/cmd_node.go` 的 `termZone`（同包的 `commands.go:usage` 帮助文案也拼它）。 |
 | 代码标识符 | **Tenant** | 类型/文件/方法/组件名（第 1 步 `cf00de3` 已搬）。 |
-| 接口 wire 字段 | **`zone_*`**（历史遗留） | 第 2 步（任务 #14）api+gui 同批原子翻转，翻之前不许单边改。 |
+| 接口 wire 字段 | **`tenant_*`**（2026-10-04 第 2 步已翻） | `mynet_api 5aa8f34` + `mynet_gui 716f431` 同批原子翻完，`zone_id/zone_name/zone_status/zone_remarks/zone_domain/zone_admin_name/total_zones/active_zones` 在**租户域**已消失。两处例外没跟翻，都有理由：① WebSocket 频道名 `zone.{id}.nodes`（`mynet_gui/src/services/websocket.ts:153/169`）与 `NodeEventPayload.zone_id`（`:28`）——**服务端没有对应实现**，不自行发明契约；② 非租户域的 `zone_id`（Node/Route/Friend/IPPools 等，见下「第 2 步留下的未处置项」）。 |
 
 为什么用 TS 常量而不是 vue-i18n 的 `@:term.zone` 链接消息（实测，非推断）：intlify 的
 key 解析器会把链接标记后面的中文字符一起吃进 key —— `@:term.zone名称` 被解析成 key
@@ -70,7 +79,8 @@ make pkg-darwin VERSION=v0.0.7-pkg
 `mynet version` 三查（baseline/patches/builder）、二进制内 `网络区` 有 / `租户`·`网络空间` 无、
 `shasum -c checksums.txt` 全 OK、dmg 内 pkg 与 `dist/pkg` 同字节。
 
-未决：en-US 仍显示 "Zone"（用户只裁了中文措辞），列在本包末尾待裁决清单。
+未决：~~en-US 仍显示 "Zone"~~ —— 已于 2026-10-04 第二轮裁定为 **Network** 并落地
+（`mynet_gui 716f431`），见上表第 4 项。
 
 **旧名对照**（本包「裁决前取证」原文不改写，按旧名 grep 会落空，映射如下）：
 `pages/zone/ZoneListPage.vue` → `pages/tenant/TenantListPage.vue`、
@@ -80,19 +90,33 @@ make pkg-darwin VERSION=v0.0.7-pkg
 `services/zone/zoneService.ts` → `services/tenant/tenantService.ts`。
 `services/zone/`（`index.ts` + `zoneServiceApi.ts`）**没动**——那是 cluster B。
 
-### 议题 2 落地后**新出现**的一个未决项（没有自行处置）
+### 议题 2 落地后新出现的 `pivot.is_admin` 权限语义 —— **已按「user≠operator」裁定消解**
 
 `DEFAULT_GLOBAL_ZONE.pivot.is_admin: 1` 是当年伪造 `999999999` 时一起编的。改指真实
 平台租户之后，它等于在客户端断言「当前用户是平台租户管理员」。
 
-- 读取点（第 1 步改名后的现名）：`useTenants.ts:38`（`isCurrentTenantAdmin`）、
+- 当年的读取点（第 1 步改名后的名字）：`useTenants.ts:38`（`isCurrentTenantAdmin`）、
   `:233`（`hasTenantManagePermission`）、`TenantListPage.vue:101`
   （`v-if="tenant.pivot.is_admin === 1"`）—— 决定是否渲染管理入口。
 - **不是提权**：真鉴权在服务端，客户端这个标志只能让按钮显示出来，点了照样 403。
 - 但危害比原先大：原先指向一个不存在的租户，整个对象都是废的；现在指向真实租户，
   一个不属于平台租户的用户会看到「我是这里的管理员」。
-- 候选：① `is_admin: 0`（保守，兜底租户只读）② 保持 1 ③ 删掉整个兜底（= 原议题 2 的 A）。
-  属权限语义，**等裁决**，本轮按原样保留。
+- **处置（第 2 步，`mynet_gui 716f431`）**：候选 ①②③ 都没选，因为用户 2026-10-04 的
+  裁定把问题本身取消了 ——
+  > 「我们的设计里, user 是 user, operator 是 operator，所以不会有 `isTenantAdmin` 这种
+  > 可能出现的逻辑判断……使用这套框架, 就不应该对前端用户产生类似的权限/边界判断,
+  > 用户无感 tenant 的存在。」
+  > 「GUI = 普通用户前端」「此前设计我想让用户一个终端配置多个网络区的节点，因此有可以
+  > 选择网络区、设置网络区的能力，都在用户面，所以后来泛滥到租户面了。**收敛该收敛的吧**。」
+
+  所以管理入口连同读取点一起删除：`useTenants` 不再导出 `isCurrentTenantAdmin` /
+  `hasTenantManagePermission`，`TenantListPage` 不再渲染管理 chip，
+  `DEFAULT_PLATFORM_TENANT` 不再编造 `pivot.is_admin`
+  （`config/app.ts:42` 只剩 `{ user_id: 1, tenant_id: PLATFORM_TENANT_ID }`，
+  因为框架 `Tenant` 模型 `pivot` 是关系附带列、不给会 TS 报缺字段）。
+  服务端半边是 `mynet_api 5aa8f34`：`/tenants` CRUD 收敛到 console 面。
+- 顺带取证到的事实，写死在这里免得下次又编：**`tenant_users` 表没有 `is_admin` 列**，
+  所以任何 `pivot.is_admin` 都不可能有真值来源；成员关系表里也只有 `tenant_id`/`user_id`。
 
 ### 顺带记入 CPI 的两条（都不是本包范围）
 
@@ -184,6 +208,123 @@ if (!authStore.isAuthenticated || !zoneId || !userId || isWebSocketInitialized) 
 这类 fail-quiet 正是 Playbook §9 要求 fail-closed 的反面。
 
 推论：**api 与 gui 必须同批改、同批发布**，中间不能存在只改一边的状态。
+
+**落地后状态（2026-10-04，`mynet_gui 716f431`）**：这条耦合已经消掉，做法不是「两边都改成
+`tenant_id`」而是**把来源收成一处** —— 三个 `X-Tenant-ID` 注入点（`services/api.ts:61/:115/:140`、
+`boot/websocket.ts:16`、`pages/system/TokenDebugPage.vue:212`）现在**全部只读
+`authStore.user?.tenant_id`**，而 `user.tenant_id` 的唯一写者就是 `authStore`
+（`stores/auth.ts` 的 `login:68` / `switchTenant:216` / `restoreCurrentTenant:193`）。
+`services/websocket.ts:108` 那行头发本身不用改 —— 它接收的是形参。
+另外原来的静默 return 改成带字段的 `debug.warn`（`boot/websocket.ts:19-23`）：
+缺 `tenant_id` 或 `user_id` 时至少留下「通知推送不可用」的痕迹，不再 fail-quiet。
+`services/websocket.ts` 的 `connected` 事件载荷也从 `{zone_id}` 改成 `{tenant_id}`。
+
+⚠️ 但**这条仍然是全站最脆的一条**：GUI 没有类型检查（见「验证」节），字段名写错不会编译失败，
+只会让通知静默失效。改这三个注入点之一时，用这条 grep 自查：
+`grep -rn "X-Tenant-ID" mynet_gui/src`（当前 3 个写入点在 `api.ts:61/115/140`，
+另两处走 `connect(token, String(tenantId))` 的形参）。
+
+---
+
+## 第 2 步落地：契约翻转（2026-10-04，`mynet_api 5aa8f34` + `mynet_gui 716f431`）
+
+### 谁先动、怎么保证不撞车
+
+API 半边先提交（`5aa8f34`，`php artisan test` **333 通过**），因为它带了一条
+**真请求**用例把 wire 钉死：`tests/Feature/Api/TenantWireContractTest.php` 断言
+租户列表项的键**恰为** `['tenant_id','name','status','description','domain','admin_name']`、
+`pivot.tenant_id` 存在、`can_access` / `pivot.is_admin` / **任何 `zone_*` 不存在**、
+`status` 保持字符串 `'active'`（不是 0/1）、switch 响应键恰为 `['tenant_id','name']`、
+overview 键为 `['total_tenants','active_tenants','total_nodes','total_routes']`。
+GUI 半边照着这份断言清单改读法，不靠猜。
+
+### GUI 侧三层收敛（不只是换字段名）
+
+| 层 | 位置 | 职责 |
+|---|---|---|
+| wire 通道 | `services/tenant/tenantService.ts`（125 行适配层 → **52 行**纯通道） | 只有 `getUserTenants` / `switchTenant` / `getIndexServices` 三个方法 + `unwrap()`。**不做字段改名、不折算 status** —— 旧适配层把 `status` 折算成 `zone_status=0/1`，而另一条直连裸 wire 的路径读不到，`TenantListPage` 因此一直是空值渲染。 |
+| 状态与持久化 | `stores/auth.ts`（唯一写入者） | `readSavedTenantId:21` / `persistTenantId:43` / `loadUserTenants:184` / `restoreCurrentTenant:193` / `switchTenant:216` / `login:68` / `logout:160`。 |
+| UI 编排 | `composables/useTenants.ts`（292 行 → **80 行**） | 导出 `{loading, availableTenants, currentTenant, hasTenants, fetchAvailableTenants, switchTenant, init}`，**不持有自己的租户状态**。 |
+
+删掉的重复实现：`boot/auth.ts` 与 `layouts/MainLayout.vue` 各写了 ~60/~70 行的「4 层兜底恢复」
+（读 LocalStorage → `JSON.parse` → 找 availableTenants → 回落 `user.zone_id`），两边会悄悄分叉；
+现在各自只剩一句 `authStore.restoreCurrentTenant()`（`boot/auth.ts:120`、`MainLayout.vue:747`）。
+第三条写入口 `authStore.setCurrentTenant` 一并删除。
+
+`switchTenant` 新增一条**服务端回执校验**（`stores/auth.ts:216-250`）：
+`result.tenant_id !== 请求的 tenantId` 就抛错，不把「接口 200 但切到别处」当成功。
+
+### 验证（本仓的证据只有这三条 + grep）
+
+- `npx eslint`（15 个改动文件）：**0 error / 11 warning**。逐条与 HEAD 对照
+  （`git show HEAD:<file> | npx eslint --stdin --stdin-filename <file>`）：HEAD 同文件集合
+  **12 条**，本批 **-2**（删掉 `api.ts` 的死 `Tenant`、`boot/auth.ts` 的死 `APP_CONFIG` 导入）、
+  **新增 0**。
+- `node dev-tools/check-i18n.js`：只剩既有的 `profile.preferences` 双语缺失（第 1 步已确认与 zone 无关）。
+- `npm run build`：exit 0。
+- 字段回归靠 grep：`grep -rn "can_access\|is_active\|pivot" mynet_gui/src` ——
+  租户域已无这三个名字的读取（残余 `is_active` 属 node-keys/services/mockData 的另一语义）。
+
+⚠️ **这三条都不等于行为验证**。实测确认的 GUI 校验盲区（已单独立档，见记忆
+「mynet_gui 验证工具的三个实测盲区」）：
+① 仓库**没有类型检查**（`package.json` 无 `vue-tsc`，`quasar build` 走 vite/esbuild 只剥类型）；
+② `vitest` 装了但**零个 spec 文件**、无 `vitest.config`、无 `jsdom`/`@vue/test-utils`；
+③ 无 `.githooks`，guard 在本仓提交上不运行；
+④ `check-i18n` 只报「缺失」不报「未使用」，且对带插值实参的 `t()` 调用点是瞎的。
+所以界面未实测（没起 dev server 点过网络区切换/选择器），字段读对只由 grep + build 背书。
+
+### 第 2 步留下的未处置项（均未自行动手，等裁决）
+
+1. **非租户域的 `zone_*` 死读**（这些是 Node/Route/Friend/Social/IPPools 域自己的字段，
+   不在本步「租户 wire」范围内）：`types/index.ts:77/96/191/192/228/273/319/320/361/376`
+   （`Node.zone_id`、`Route.zone_id`、`SearchUser.zone_id/zone_name`、`RouteStats.zone_id`、
+   `RouteDataResponse.zone_id`、`IndexServiceMeta.zone_id`）、
+   `useIPPools.ts:34/47/48/79/102/176/185/253/301`、`useConnectionsData.ts:59`、
+   `pages/social/InvitationsPage.vue:77`（`user.zone_name`，界面直接渲染，
+   而 `SearchUser` 的 wire 若真是 `zone_name` 就有值 —— **未实测**）、
+   `services/zone/zoneServiceApi.ts:17`。
+   注意 `useIPPools` 那几处**本来就是死代码**（取证见上节「IP 池的 `zone_id` 查询参数是双端死代码」；
+   第 1 步改名只把局部变量改成了 `tenantId`，**查询参数名仍是 `zone_id`**，`:79/:176`），
+   换死名字不解决问题，别在第 3 步顺手「修好」它。
+2. **类型层断链，因为没类型检查所以从没暴露**：`TokenDebugPage.vue:122` 从
+   `services/websocket.ts` 导入 `TimeUpdateMessage`，而该文件**没有导出这个名字**。
+   同文件里 `handleConnected(data)` 现在读 `data.tenant_id`（`:244`），而
+   `services/websocket.ts` 的 `connected` 载荷是内联对象 —— 编译器不参与，靠人工核对。
+3. **WebSocket 服务端契约缺失**：`NodeEventPayload.zone_id`（`services/websocket.ts:28`）与
+   频道名 `zone.{id}.nodes`（`:153/169`，日志里还写成 `private-zone.{id}.nodes`，`:144` 注释）
+   在 `mynet_api` **没有任何对应实现**（无 broadcasting channel 声明）。GUI 侧订阅调用是
+   单侧发明，所以本步**有意不动**它 —— 改名等于给不存在的功能定契约。
+4. **vendor 框架侧的租户级端点 —— 复核后判定「无越权洞」，但口径与本项目不同源**：
+   `mynet_api/vendor/dsplat/multi-tenant-saas-module-infrastructure/Routes/api.php`
+   的 `tenants/{tenantId}/{modules,webhooks,ip-whitelist,tenant-keys,branding,…}`
+   挂的是 **`rbac.permission:setting.view|update`**（`:16/20/26/31/39/43/49/54/61/65/70/74`），
+   不是 `domain.console` + `tenant.permission:tenant_admin`。
+   本包第一版曾把它记成「只挂 `auth:sanctum` 的越权面」—— **那是错的，已纠**：
+   `CheckRbacPermission` 走 `RbacService::check()`，而
+   `multi-tenant-saas-module-auth/Services/RbacService.php:41-44` 明写
+   **「角色仅属于 Operator；User 不拥有角色，无 RBAC 权限」并直接 `return false`**，
+   所以 User 的 Bearer 打进去是 403；`checkOperatorPermission()`（`:79-91`）在
+   无租户上下文且非 platform scope 时也 `return false`；控制器侧还有
+   `TenantContext::getId()` + `ensureTenantAccess()` 二次校验
+   （`WebhookController.php:22-30/32-36`）。
+   剩下的不是洞而是**分歧**：本项目 console 面的门禁是
+   `auth:sanctum + domain.console + tenant.identify + tenant.permission:tenant_admin`
+   （G-3 命名裁定，见 `dev-plan.md` 轨道 G），框架这组端点走的是 `rbac.permission:*` 且
+   不声明 `domain.console`。两条门禁口径并存，将来 console 面（任务 G-4 业务页）要不要
+   复用这组端点、复用时以哪套为准 —— **待裁决**，本包没动。
+   另：`TenantDomainService::getOverview(UserId)`（`app/Modules/VPN/Domain/Services/
+   TenantDomainService.php:173`）只按单个 `user.tenant_id` 聚合，跨租户 operator 视角的
+   总览口径未定。
+5. **cluster B 命名**（原未决 ③）：`services/zone/`、`types/zoneService.ts`、
+   `useZoneServices`、`components/zone/`、en-US 的 `zoneServices` / `zoneSharing` /
+   `zoneFilter` 三条 —— 指的是**租户内共享的服务**，不是租户实体，正确目标名应是
+   `Service*` 而不是 `Tenant*`。等命名裁决。
+6. **已删功能留下的死文案 key**（`check-i18n` 不报未使用，所以留着没人发现）：
+   `zones.actions.create`、`zones.dialogs.createZone`、`zones.create*` / `update*` /
+   `delete*`、`zones.stats.*`、`fetchOverviewError` 等 —— 管理入口随裁定 6 删了，文案没跟着删。
+7. **5 个无路由孤儿页面**（原未决 ④，含 `pages/tenant/TenantSharingPage.vue`，
+   它内部还有 46 处 zone 引用）、`profile.preferences` 的双语缺失措辞、
+   未跟踪文件 `mynet_api/database/sql/migrate-tenant-to-platform.sql`（124 行）处置。
 
 ---
 
@@ -290,14 +431,18 @@ Playbook §9 对鉴权与租户隔离明确要求 fail-closed。
    `availableZones`→`availableTenants`、`useZones`→`useTenants`、目录 `services/zone`→
    `services/tenant`、`pages/zone`→`pages/tenant`），但**仍然读 `zone_id`**。
    这一步纯 GUI 内部，不动契约，可独立验证。
-3. **第 2 步（契约翻转，一次提交内完成两仓）**：API 的 `zone_id`/`total_zones`/`active_zones`
+3. **第 2 步（契约翻转，一次提交内完成两仓）—— ☑ 已落 2026-10-04**：
+   `mynet_api 5aa8f34` + `mynet_gui 716f431`。API 的 `zone_id`/`total_zones`/`active_zones`
    → `tenant_id`/`total_tenants`/`active_tenants`，同时 GUI 改读新名。
-   必须先写一条**真请求**用例钉住 `X-Tenant-ID` 的来源字段，否则 WS 断裂无人知晓。
+   「必须先写真请求用例钉住 `X-Tenant-ID` 的来源字段」这条已照做 ——
+   `TenantWireContractTest.php` 钉响应形状，来源字段收成单点（见上「第 2 步落地」）。
    - **本步范围只有 3 处 API 写字段**（`TenantDomainService.php:157`、`UserService.php:104`、
      `TenantDomainService.php:177/186/187` 的统计键）+ 5 处配套注释。**请求参数不在范围内**——
      取证见下条「IP 池的 `zone_id` 查询参数是双端死代码」，别顺手给它改名，那是给不存在的
      功能改接口。
-4. **第 3 步**：处理议题 1、议题 2 的裁决结果。
+4. **第 3 步**：处理议题 1、议题 2 的裁决结果。☑ 已落（议题 1 = `cf00de3`、议题 2 = `68b273f`）。
+   **本包四步全部走完**；剩下的只是上面「第 2 步留下的未处置项」里的 7 条未决，
+   那些已不属于「Zone→Tenant」这件事，需要单独裁决或单独建包。
 
 ### IP 池的 `zone_id` 查询参数是双端死代码（2026-10-04 补取证）
 
@@ -332,7 +477,11 @@ GUI `src/` 46 文件 / 1041 行；API `app/ database/ routes/ config/` 9 文件 
 ## 本包没有做的事
 
 - **裁决前**没有改任何代码、没有改名、没有删任何文件。裁决后的落地情况逐条记在
-  开头「## 裁决与执行」表里（第 0 步、议题 2、第 1 步、议题 3 已提交；**只剩第 2 步契约翻转**）。
+  开头「## 裁决与执行」表里（**四步全部已提交**：第 0 步、议题 2、第 1 步、第 2 步契约翻转、
+  议题 3 用词 + 其下 4/5/6 三条追加裁定）。
+- **界面全程未实测**：第 2 步的 GUI 半边只有 eslint / check-i18n / `npm run build` + grep 背书，
+  本仓零测试用例（详见上「验证」节的四条盲区）。网络区切换、选择器、一键建节点三条路径
+  **没有点过**。
 - 没有对生产 API 或真节点发请求；`X-Tenant-ID: 9007199254740991` 的实际服务端行为**未实测**
   （缺外部条件 1 条：需要能连生产或起本地全栈）。裁决 B 的依据是用户口述「现在生产端在用」，
   加上 `config/id.php:51` 的默认值与之相同，**不是**实测。
@@ -343,16 +492,19 @@ GUI `src/` 46 文件 / 1041 行；API `app/ database/ routes/ config/` 9 文件 
 - **议题 2 落地后新冒出的 `pivot.is_admin: 1` 权限语义未裁决**（见上文专节），本轮按原样保留。
 - CPI-69 明确**压后**，等第 2 步落地再改，避免和改名批次撞车。
 
-### 第 3 项（网络区）落地后留下的待裁决清单（4 条，均未自行处置）
+### 第 3 项（网络区）落地后留下的待裁决清单（4 条 → 2 条已裁，2 条仍未决）
 
-1. **en-US 用词**：英文界面仍显示 "Zone"（`en-US.ts` 的 `switchZone: 'Switch Zone'` 等）。
-   用户只裁了中文措辞。英译要么跟 `Tenant`、要么跟 `Zone`，属产品口径，不自行选。
-2. **LocalStorage key `current_zone`**：改名会让用户已选的租户选择静默丢失（下次登录回默认
-   租户）。候选：保持死名字 / 双读迁移。**未决**。
+1. **en-US 用词**：~~英文界面仍显示 "Zone"~~ **已裁 = Network，已落**（`mynet_gui 716f431`，
+   只改值不改 key）。原取证：英文界面曾显示 "Zone"（`en-US.ts` 的 `switchZone: 'Switch Zone'` 等），
+   用户第一轮只裁了中文措辞。
+2. **LocalStorage key `current_zone`**：~~保持死名字 / 双读迁移~~ **已裁 = 改名 + 迁移，已落**
+   （`mynet_gui 716f431`）。新键 `current_network` 只存 tenant_id，旧键双读后删除；
+   迁移路径见 `stores/auth.ts:21-45`。用户裁定原话：「不许静默丢用户已选网络区」。
 3. **cluster B 的归属命名**：`services/zone/`、`types/zoneService.ts`、`useZoneServices`、
    `ZoneService` 指的是**租户内共享的服务**，不是租户实体，所以第 1 步没跟着改名，
    `services/zone/index.ts` 里留了边界说明。它们调的全是 `/services/*` 端点，该不该改叫
-   `services/service/` 属另一轮命名裁决。
+   `services/service/` 属另一轮命名裁决。**仍未决**（en-US 的 `zoneServices`/`zoneSharing`/
+   `zoneFilter` 三条也挂在这上面）。
 4. **无路由孤儿页面**（含 `pages/tenant/TenantSharingPage.vue`）共 5 个：没挂在任何路由上，
    但仍在 lint/build 覆盖范围内。改名时按 A「功能不减」一并搬到了 tenant 目录并保持了原状，
-   去留**未决**。
+   去留**仍未决**。
