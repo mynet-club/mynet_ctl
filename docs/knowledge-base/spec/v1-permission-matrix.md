@@ -15,7 +15,7 @@
 |---|---|---|
 | R1 | **每个业务写操作只有一个权威判据点，在服务端。** 前端隐藏按钮**不算**防线，只能算防误点 | 「前端有门禁、服务端没有」在本项目已有三处实测（§4-3/§4-5/§4-8），表现都是「界面拦住了，URL 直达拦不住」 |
 | R2 | **用户面（GUI）只有「自己 + 本租户作用域」这一种权限语义。** 不出现角色下拉、不出现 tenant 管理边界、不出现 `is_admin` 之类字段 | 用户裁定原话：「user 是 user，operator 是 operator……用户无感 tenant 的存在」 |
-| R3 | **console 面（租户后台）= Operator 主体 + `tenant_admin` 角色闸门**；普通 `User` 一律拒。v1 不在 console 内做细粒度分权（要做得先补权限项注册，见 §5-F-24） | 框架那套 `rbac.permission` 在 back 不可调用（dev-plan F-1），拿它当 v1 前提会阻塞 |
+| R3 | **console 面（租户后台）= Operator 主体 + `tenant_admin` 角色闸门**；普通 `User` 一律拒。**v1 不在 console 内做细粒度分权**（裁定 B3，2026-10-05 已落：`vpn.*` 权限名不入库、前端假门椒已清，取证见 §5-F-24；要升级先回看那条） | 框架那套 `rbac.permission` 在 back 不可调用（dev-plan F-1），拿它当 v1 前提会阻塞 |
 | R4 | **节点面（设备通道）判据 = 验签 + 节点自身租户上下文**，绝不接受请求体里传来的 `tenant_id` 作为归属依据 | 该面没有登录用户，任何「以参数定租户」的写法都是越权入口 |
 | R5 | **本机面（mynetd 8096）判据 = 回环 Host + 同源 Origin**，它的安全性来自「只监听 127.0.0.1」这个物理事实，不来自 token | 见 [local-api.md](local-api.md)；token 只用于种 cookie |
 | R6 | **同一操作的判据在两个地方各写一遍 = 缺陷**，必须收敛到单点（服务层或中间件），并让另一处只读上下文 | 实测：`NodeMonitorHistoryController` 让 `input('tenant_id')` 压过已校验的 TenantContext（§4-4）⇒ **2026-10-04 随 A2 收敛到单点**，同批还删了第 5 个实现 `NodeDomainService::getCurrentTenantId()`（未传参时自取 `Auth::user()->tenant_id`）与 `NodeController` 的哨兵 `1` 覆写 |
@@ -51,7 +51,7 @@
 | 服务策略 / Proxy 开关 | 🟡 | ✅ 只读 | — | 🟡 执行归 uci/Lua | 🟡 本机全权限 |
 | bundle 下发与私钥 | 🟡（私钥出口已收口，dev-plan P0-4） | — | ✅ 只发该节点应得的 bundle | — | 🟡 |
 | 节点在线状态写 | 🟡 | 🟡 | ✅ 心跳（无条件写 `STATUS_ENABLED` 已裁定保持） | — | 🟡 |
-| console 内细粒度分权（比 `tenant_admin` 更细） | 不适用 | **⏸ 需先注册权限项**（G-5 半边 + §5-F-24） | — | — | — |
+| console 内细粒度分权（比 `tenant_admin` 更细） | 不适用 | **v1 不做**（裁定 B3 已落：`vpn.*` 不入库，§5-F-24） | — | — | — |
 
 ## 4. 现状与冻结的差（洞，按可修性分级）
 
@@ -235,7 +235,7 @@
 
 - **F-22**（→ **已裁 A4**：整组从用户面下架，同批改 OpenAPI）：§4-1/§4-2/§4-3 的用户面 `/{id}` 管理端点怎么收 —— 路径 A：整组从用户面下架（零消费者，与 #20 `/tenants` 收敛同类处置）；路径 B：保留但补 self-only + 租户内判据。**下架会改变 OpenAPI 面**（`docs/api/openapi/back.yaml:3596,3638-3753` 声明着它们），back 不擅自选。
 - **F-23**（→ **已裁 B4**：v1 平台面不进 back，`default => $next` 保持不动）：§4-6 平台 admin 面 —— 是要在 back 真正装载 `IdentifyDomain` 打开平台面，还是明确「v1 平台面不进 back」并把 `default => $next` 改成 fail-closed。**后者会同时影响 console 面**（`domain.console` 缺失时的行为）。
-- **F-24**（→ **已裁 B3**：v1 不做细粒度，`vpn.*` 不入库，前端假门禁死码清掉）：G-5 的「权限项入库」半边 —— v1 要不要在 `permissions`/`role_permissions` 注册 mynet 自有权限名（`vpn.*`）并把 console 门禁从「角色 = tenant_admin」升级为「权限项」。见 dev-plan G-5 行与 F-2（菜单组头裁定同批）。
+- **F-24**（→ **已裁 B3，且已落 2026-10-05**）：G-5 的「权限项入库」半边 —— v1 要不要在 `permissions`/`role_permissions` 注册 mynet 自有权限名（`vpn.*`）并把 console 门禁从「角色 = tenant_admin」升级为「权限项」。裁决 = **不注册**，闸门停在 R3 那一档。落地取证：① 代码里从来没有过 `vpn.*` 权限名（全仓 grep 命中的 `vpn.` 全是 config 键，如 `vpn.gnb.versions.default…`），所以这条是**负向承诺** —— 以后有人想摊分权，先来回看这里，别顺手往 `permissions` 表塞名字；② 前端假门椒已清：`mynet_gui/src/stores/auth.ts` 的 `hasPermission()` / `hasRole()`（读 `user.permissions`，**零调用点**）与 `src/types/index.ts` 里 `User.permissions?: string[]` 一并删除 —— 后端用户面响应从未下发这一列，留着的表现是「恒 false ⇒ 功能莫名不见了」，而不是「无权限」。真正的分权界面在 console 面，闸门在服务端中间件（R1）。
 - **F-27**（§4-4，本轮新增，**这条是六条里唯一带真实跨租户读风险的**）⇒ **已裁 A2：路径 A，服务端指针唯一权威**（详见 §4-4 末尾「裁定」段与 dev-plan 逐项裁定表 A2/A3 行）：用户面的「当前区」权威来源放哪 ——
   - **路径 A：服务端为唯一权威。** `ResolveTenantFromUser` 改为优先读 `users.tenant_id`（切换指针）并校验它仍是 active 成员，
     `BaseApiController::getCurrentTenantId()` 删掉 `X-Tenant-ID` / `tenant_id` 参数回退。
