@@ -62,6 +62,7 @@
 #5 / #7 → **F-24**；#6 → **F-23**；**#8 = 立刻可修**（裁定已经有了 —— 「用户面不表达 tenant 权限」是
 2026-10-04 的既有裁定，这里只是执行：删 GUI 的 `admin_name` 展示 + 响应不再带 `admin_id/admin_name`）；
 #9 = **非洞**，记为已知设计，但必须在 [local-api.md](local-api.md) 写明。
+**#10 → F-28**（本轮新增；它给 #1/#2 补的是「端别判定」—— 属主层缺在 **back**，框架只是**没提供**而非**提供坏了**）。
 
 1. **`❌` 用户面整组无授权判据**：`VPN/Routes/api.php:97-286` 这 **116 条路由声明**上只挂了 `auth:sanctum` + `token.binding` + throttle，没有任何 permission/role 判据。8 个 FormRequest **一个授权判据都没有** —— 6 个 `authorize()` 直接 `return true`（例：`app/Http/Requests/GetRouterKeysRequest.php:14-17`），另外 2 个只判「登录了没」（`app/Modules/VPN/Requests/Node/CreateNodeRequest.php:21-24`、`Requests/Route/CreateRouteRequest.php:19-22` 都是 `Auth::check()`）。这不是「缺 RBAC」，是**缺 R2 的最低那层：能不能碰这个资源**。
 2. **`❌` 跨用户写与读**：`PUT /api/v1/users/{id}` 任意登录用户可改他人 `name/email/phone` —— `UserController::update()`（`app/Modules/VPN/Controllers/Api/V1/UserController.php:210-232`）把 `$id` 直接喂给 `UserService::updateUser()`，而后者（`app/Services/UserService.php:196-213`）**完全忽略 `$updaterId`**。同组还有 `GET /users`（全站列表，`:33-52`）、`GET /users/{id}`（`:145-162`）、`/{id}/statistics|activity|nodes|tenants`。
@@ -114,6 +115,24 @@
 8. **`🖥` 用户面仍在表达租户管理边界（违 R2）**：`mynet_gui/src/pages/…/TenantListPage.vue:36,95` 显示 `admin_name`；数据源 `/user/tenants` 返回整个 Tenant 模型（含 `admin_id/admin_name`，`UserTenantController.php:36-44` + infra 迁移 `:200`）；`types/index.ts:16 permissions?`、`stores/auth.ts:381-387` 残留未删（零调用）。
 9. **`🟡` mynetd localapi 的 token 不在请求侧校验**（`server.go` 只在 `ensureToken` 里比对以防重种）。防线是 Host/Origin，与 R5 一致 ⇒ **记为已知设计**，不是洞；但 [local-api.md](local-api.md) 必须写明，否则后来人会以为有 token 闸门。
 
+10. **`🔴` 「属主鉴定」这一层缺在 back，不在框架**（2026-10-04 针对「用户面可操作没鉴权」的端别判定）：
+   先把两种「鉴权」分开 —— **租户归属**（我是不是这个区的成员）和**资源属主**（这条路由/节点/池是不是我的）。
+   - **框架只给前者，且刻意不给后者**：`IdentifyTenant::resolveWithOwnershipCheck()`
+     （`vendor/.../Infrastructure/Http/Middleware/IdentifyTenant.php:161-192`）名字里的 ownership 查的是
+     `tenant_users` / `operator_tenants` 的 active 成员关系，**输入里没有任何资源**；
+     `RbacService::check()`（`vendor/.../Auth/Services/RbacService.php:40-43`）对非 Operator 主体
+     **直接 `return false`**；框架铁律 `vendor/dsplat/multi-tenant-saas/.qoder/rules/identity-model.md` §2/§4
+     明写「User 不拥有角色…禁止以任何方式让 User 持有角色。需要区分 User 侧能力时走套餐/功能开关」。
+     ⇒ **「这是框架层的问题」只对一半**：框架不是漏了属主判定，是把它划给自己下游（back）。
+   - **back 是真缺陷端**：全仓 **0** 处 `Gate::` / `Policies` / `->authorize(`（`grep -rn "Gate::\|Policies\|->authorize(" app/` = 空）
+     —— 属主判定层从来没建。落点证据：`UserService::updateUser():196-213` 收下 `$updaterOrData` 却只用它分辨参数形态，
+     正文 `User::find($userId)->fill(...)->save()` 无任何归属比较 ⇒ 任意登录用户可改他人 `name/phone`。
+   - **数据层同样没钉死「谁的东西」**：`nodes.user_id` / `connections.user_id` / `routes.user_id` / `ip_pools.user_id`
+     **全是 nullable**（`database/migrations/2026_09_23_000001_create_vpn_business_tables.php:30,106,124,161`），
+     只有 `services.user_id` NOT NULL（`:176`）。所以 15 处零散 `where('user_id')` 之外，归属为空的行对任何用户都「可见」。
+   - **GUI 端不是缺陷端**：`router/middleware.ts:105-108` 的 `hasNodeEditPermission()` 是恒 `true` 的 TODO 桩 ——
+     按 R1 前端隐藏从来不算防线，但它现在**也没有可依据的数据源**（见 F-28）。
+
 ## 5. 待裁定（已进 dev-plan 决策包）
 
 - **F-22**：§4-1/§4-2/§4-3 的用户面 `/{id}` 管理端点怎么收 —— 路径 A：整组从用户面下架（零消费者，与 #20 `/tenants` 收敛同类处置）；路径 B：保留但补 self-only + 租户内判据。**下架会改变 OpenAPI 面**（`docs/api/openapi/back.yaml:3596,3638-3753` 声明着它们），back 不擅自选。
@@ -128,6 +147,29 @@
     查 `tenant_users` 的 active 成员关系，不通过则忽略该来源并回退），不改 vendor。
     代价：每请求多一次 `tenant_users` 查询（框架本来也这么做）；且**参数优先那半（§4-4 第一条）仍要单独修**。
   - 两条路径都不改变 console 面（那里 `tenant.identify` 已在校验）。**back 不擅自选**：A 动 wire 语义、B 动每请求成本。
+- **F-28**（§4-10，本轮新增 —— 用户点名的「userid 有 owner/level/score/credits/right，前端判断要立住」的正面包）：
+  **属主与权益的权威载体定在哪一层**。先交付逐字段取证（2026-10-04 实跑）：
+
+  | 字段 | 库里是否存在 | 权威位置 | 现状 |
+  |---|---|---|---|
+  | `owner` | 半有 | 各资源表的 `user_id`（**除 `services` 外全 nullable**） | 无统一 owner 抽象；框架不提供 |
+  | `credits` | 有 | `tenant_users.credits`（pivot，infra 迁移 `:172`）+ `tenants.total_credits/used_credits` | **不在 `users` 上**；`TenantController.php:40` 自陈「框架 SaaS 计费用的，back 没有在用」 |
+  | `level` | **无** | — | `users` / `tenant_users` 均无此列，全仓 0 命中 |
+  | `score` | **无** | — | GUI 唯一命中是 `sceneParser.ts:248` 的场景解析打分，与身份无关 |
+  | `right`(权益) | **无此列名** | 框架给的对应机制 = `tenants.subscription_plan` + `feature_flags` | **这条链在 back 是断的**（见下） |
+
+  - 权益链的断点：`feature_flags` 表与 `CheckFeatureFlag` 中间件都由**必装**的 Infrastructure 提供
+    （infra 迁移 `:65-80`、`Http/Middleware/CheckFeatureFlag.php:38-58`），但它依赖的 `FeatureFlagService`
+    属**可选的 module-platform** —— back 的 `composer.json:31-34` 只装了 core/auth/infrastructure/operator，
+    于是该中间件对每条路由都 **fail-closed 返 404**；且 `bootstrap/app.php:87-92` 的别名表**根本没注册 `feature.flag`**
+    （`grep -rn "feature.flag\|CheckFeatureFlag" bootstrap/ app/` = 空）。⇒ 「走功能开关」目前是**能力宣称，不是可用机制**。
+  - 反向的一处应删未删：`users.role`（我方迁移 `2026_09_25_000001:58-63` 加的，默认 `platform_user`）**全仓无人读**，
+    却经 `UserService::getUserDetail():108-109` 以 `user_role`/`role` 发到前端，GUI `types/index.ts:8` 接着 ——
+    与「user 设计不设 role」和框架铁律直接冲突（同 #8 一族）。
+  - **待裁的两问**：① 属主判据落在哪层 —— Laravel `Gate`/Policy（框架零使用，但它是标准位、可被 `->authorize()` 复用）
+    vs back 服务层单点判据（与 #20 `/tenants` 收敛、F-22 路径 B 同口径）；② 权益载体 —— 是把 `credits`/套餐真正接进
+    用户面读模型（需要先决定 module-platform 装不装，属依赖变更），还是 v1 明确「权益只做租户级 `subscription_plan`、
+    用户级 level/score/right 不进 v1 合同」。**back 不擅自选**：①决定后续所有写路径的改法，②决定要不要引新依赖。
 
 ## 6. 复现口径（下次核对就跑这几条，2026-10-04 实测值写在行尾）
 
@@ -155,6 +197,23 @@ php artisan tinker --execute='$g = app("router")->getMiddlewareGroups(); print_r
 
 grep -rn "ApiTenantMiddleware\|FrontendTenantMiddleware" app routes bootstrap config | grep -v Middleware/ApiTenant | grep -v Middleware/Frontend
 #   0          —— 两个租户中间件：删前取证为「零注册的死码」（§4-4 末 / 错误码清单 §3-8），2026-10-04 已删
+
+grep -rn "Gate::\|Policies\|->authorize(\|canAny" app/ | grep -v vendor | wc -l
+#   0          —— §4-10：back 全仓没有任何属主判据层（Laravel Gate/Policy 一次都没用过）
+
+grep -rn "where('user_id'" app/Modules/VPN/Controllers/Api/ | wc -l
+#   15         —— 唯一的「归属」实现方式：控制器里零散 where，非集中判据
+
+grep -n "user_id" database/migrations/2026_09_23_000001_create_vpn_business_tables.php | grep -c nullable
+#   7          —— nodes(:30)/connection_grants(:77)/connections(:106)/routes(:124)
+#                node_route_requests 的两端(:140,142)/ip_pools(:161) 的归属列全可空；
+#                只有 services.user_id（:176）NOT NULL ⇒「谁的东西」在 schema 层就没钉死
+
+grep -rn "feature.flag\|CheckFeatureFlag" bootstrap/ app/ | wc -l
+#   0          —— §5-F-28：框架的功能开关中间件在 back 连别名都没注册
+
+grep -n "dsplat/multi-tenant-saas" composer.json | grep -c platform
+#   0          —— module-platform 未安装 ⇒ CheckFeatureFlag 即便挂上也是恒 404（fail-closed）
 ```
 
-未取证（下次补）：`NodeController`/console 控制器内部 owner 校验的逐条一致性；`module.enabled` 各模块实际启停态；`config/auth.php` 双主体 guard 细节。
+未取证（下次补）：`NodeController`/console 控制器内部 owner 校验的逐条一致性（已知的 15 处 `where('user_id')` 覆盖到哪条路由还没逐条对）；`config/auth.php` 双主体 guard 细节；`tenants.subscription_plan` 在生产库上的实际取值分布。
