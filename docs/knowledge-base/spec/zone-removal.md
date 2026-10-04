@@ -16,17 +16,44 @@
 
 | 议题 | 裁决 | 落地 |
 |---|---|---|
-| 1 `ZoneListPage`/`ZoneSharingPage`/`/zones`/`ZoneSelector` | **A 改名保留** | Zone* → Tenant*，路由 `/zones` → `/tenants`，功能不减。执行中（第 1、2 步）。 |
+| 1 `ZoneListPage`/`ZoneSharingPage`/`/zones`/`ZoneSelector` | **A 改名保留** | Zone* → Tenant*，路由 `/zones` → `/tenants`，功能不减。**第 1 步（GUI 内部改名）已落**：`mynet_gui` `cf00de3`（24 文件，5 个 `git mv`）；**第 2 步（契约翻转）待做**，见「建议的切法」。 |
 | 2 `DEFAULT_GLOBAL_ZONE`（`999999999`） | **B 改指真实平台租户** | 已执行：`mynet_gui` `68b273f`，提出 `PLATFORM_TENANT_ID = 9007199254740991` 常量替掉四处魔法数，与 `mynet_api config/id.php:51 platform_tenant_id` 同源。**兜底行为按 B 保留**，没有改成 A 的显式错误态。 |
 | — 第 0 步零风险清理 | — | 已执行：API 侧 7 处「另一个 zone」注释加防误删标记、③④ 类文案清理（`mynet_api` `df6c4da`）；删 GUI 死副本 `zoneServiceApiWithCache.ts`（`mynet_gui` `44f389d`）。 |
+| 3 GUI 改名后界面叫什么 | **网络区**（2026-10-04 追加裁决） | 已执行：`mynet_gui` `61d6b86`。用户原话「我也觉得『租户』太技术腔……先叫网络区，用个变量名替代吧，这样我们后续想到好词可以替换」。 |
+
+### 界面用词的三层分工（第 3 项裁落后固化，别再混用）
+
+| 层 | 叫什么 | 落点 |
+|---|---|---|
+| 中文界面文案 | **网络区** | `mynet_gui/src/config/terms.ts` 的 `TERM_ZONE`，**唯一真相**；`i18n/zh-CN.ts`、`router/routes.ts` 的 `meta.title`、`TipsRegistry` 的 fallback 都从它拼接。换词只改这一行。 |
+| 代码标识符 | **Tenant** | 类型/文件/方法/组件名（第 1 步 `cf00de3` 已搬）。 |
+| 接口 wire 字段 | **`zone_*`**（历史遗留） | 第 2 步（任务 #14）api+gui 同批原子翻转，翻之前不许单边改。 |
+
+为什么用 TS 常量而不是 vue-i18n 的 `@:term.zone` 链接消息（实测，非推断）：intlify 的
+key 解析器会把链接标记后面的中文字符一起吃进 key —— `@:term.zone名称` 被解析成 key
+`term.zone名称` 并报 `Not found ... in 'zh' locale messages`。中文文案里「网络区名称/
+网络区描述/切换网络区后」这类粘连用法是多数，链接方案覆盖不到，所以走模板字符串拼接。
+打包产物可验证：`dist/spa/assets/index-*.js` 里「网络区」只出现 1 次（`const ng="网络区"`），
+其余全是 `` `切换${ng}` ``。
+
+未决：en-US 仍显示 "Zone"（用户只裁了中文措辞），列在本包末尾待裁决清单。
+
+**旧名对照**（本包「裁决前取证」原文不改写，按旧名 grep 会落空，映射如下）：
+`pages/zone/ZoneListPage.vue` → `pages/tenant/TenantListPage.vue`、
+`pages/zone/ZoneSharingPage.vue` → `pages/tenant/TenantSharingPage.vue`、
+`components/common/ZoneSelector.vue` → `components/common/TenantSelector.vue`、
+`composables/useZones.ts` → `composables/useTenants.ts`、
+`services/zone/zoneService.ts` → `services/tenant/tenantService.ts`。
+`services/zone/`（`index.ts` + `zoneServiceApi.ts`）**没动**——那是 cluster B。
 
 ### 议题 2 落地后**新出现**的一个未决项（没有自行处置）
 
 `DEFAULT_GLOBAL_ZONE.pivot.is_admin: 1` 是当年伪造 `999999999` 时一起编的。改指真实
 平台租户之后，它等于在客户端断言「当前用户是平台租户管理员」。
 
-- 读取点：`useZones.ts:39`（`isZoneAdmin`）、`:234`（`canManageZone`）、
-  `ZoneListPage.vue:101`（`v-if="zone.pivot.is_admin === 1"`）—— 决定是否渲染管理入口。
+- 读取点（第 1 步改名后的现名）：`useTenants.ts:38`（`isCurrentTenantAdmin`）、
+  `:233`（`hasTenantManagePermission`）、`TenantListPage.vue:101`
+  （`v-if="tenant.pivot.is_admin === 1"`）—— 决定是否渲染管理入口。
 - **不是提权**：真鉴权在服务端，客户端这个标志只能让按钮显示出来，点了照样 403。
 - 但危害比原先大：原先指向一个不存在的租户，整个对象都是废的；现在指向真实租户，
   一个不属于平台租户的用户会看到「我是这里的管理员」。
@@ -271,7 +298,7 @@ GUI `src/` 46 文件 / 1041 行；API `app/ database/ routes/ config/` 9 文件 
 ## 本包没有做的事
 
 - **裁决前**没有改任何代码、没有改名、没有删任何文件。裁决后的落地情况逐条记在
-  开头「## 裁决与执行」表里（第 0 步与议题 2 已提交，第 1、2 步待做）。
+  开头「## 裁决与执行」表里（第 0 步、议题 2、第 1 步、议题 3 已提交；**只剩第 2 步契约翻转**）。
 - 没有对生产 API 或真节点发请求；`X-Tenant-ID: 9007199254740991` 的实际服务端行为**未实测**
   （缺外部条件 1 条：需要能连生产或起本地全栈）。裁决 B 的依据是用户口述「现在生产端在用」，
   加上 `config/id.php:51` 的默认值与之相同，**不是**实测。
@@ -281,3 +308,17 @@ GUI `src/` 46 文件 / 1041 行；API `app/ database/ routes/ config/` 9 文件 
   将来两仓合并时会带上，本包未处理。
 - **议题 2 落地后新冒出的 `pivot.is_admin: 1` 权限语义未裁决**（见上文专节），本轮按原样保留。
 - CPI-69 明确**压后**，等第 2 步落地再改，避免和改名批次撞车。
+
+### 第 3 项（网络区）落地后留下的待裁决清单（4 条，均未自行处置）
+
+1. **en-US 用词**：英文界面仍显示 "Zone"（`en-US.ts` 的 `switchZone: 'Switch Zone'` 等）。
+   用户只裁了中文措辞。英译要么跟 `Tenant`、要么跟 `Zone`，属产品口径，不自行选。
+2. **LocalStorage key `current_zone`**：改名会让用户已选的租户选择静默丢失（下次登录回默认
+   租户）。候选：保持死名字 / 双读迁移。**未决**。
+3. **cluster B 的归属命名**：`services/zone/`、`types/zoneService.ts`、`useZoneServices`、
+   `ZoneService` 指的是**租户内共享的服务**，不是租户实体，所以第 1 步没跟着改名，
+   `services/zone/index.ts` 里留了边界说明。它们调的全是 `/services/*` 端点，该不该改叫
+   `services/service/` 属另一轮命名裁决。
+4. **无路由孤儿页面**（含 `pages/tenant/TenantSharingPage.vue`）共 5 个：没挂在任何路由上，
+   但仍在 lint/build 覆盖范围内。改名时按 A「功能不减」一并搬到了 tenant 目录并保持了原状，
+   去留**未决**。
