@@ -181,6 +181,9 @@
    - **数据层同样没钉死「谁的东西」**：`nodes.user_id` / `connections.user_id` / `routes.user_id` / `ip_pools.user_id`
      **全是 nullable**（`database/migrations/2026_09_23_000001_create_vpn_business_tables.php:30,106,124,161`），
      只有 `services.user_id` NOT NULL（`:176`）。所以 15 处零散 `where('user_id')` 之外，归属为空的行对任何用户都「可见」。
+     复测校正：该迁移里的可空归属列实为 **7 列**（另加 `connection_grants.user_id:77`、
+     `node_route_requests.source_user_id/target_user_id:140,142`），全库另有 2 处可空 `user_id`
+     （`node_ips`、`service_connection_logs`）**不在属主语义内**，逐条理由见 dev-plan A5 行。
    - **GUI 端不是缺陷端**：`router/middleware.ts:105-108` 的 `hasNodeEditPermission()` 是恒 `true` 的 TODO 桩 ——
      按 R1 前端隐藏从来不算防线，但它现在**也没有可依据的数据源**（见 F-28）。
    > **✅ 已落（2026-10-04，裁定 A1，`mynet_api@b3493a8`）**：判据单点在
@@ -199,6 +202,14 @@
    > `RouteRequestDomainService:70`、`SocialDomainService:509`，其中 4 处抛裸 `\Exception` ⇒ 越权表现为 500）
    > **不要现在顺手收敛** —— 等框架 API 落地一次接完，替换点仍是 `OwnerGuard` 一处。清单与理由见
    > [dev-plan.md](../dev-plan.md) A1 行。
+   > **✅ 配套件 A5 已落（2026-10-04，`mynet_api@589e4c2`）**：上面那条「归属列为空 ⇒ 对任何用户都可见」现在
+   > 有了 schema 层的收口方向 —— `OwnerGuard::owns()` 选的 fail-closed（NULL 与 0 一律**拒**）会把存量无主行
+   > 变成「谁都写不了」，所以它的出路只有 A5 的「一步收 NOT NULL + DBA 回填」，**不是**在判定层加兜底放行。
+   > 本批交付的是**待执行件**：迁移件先逐表数 NULL（含软删行），数到就在第一条 ALTER 之前整件拒绝并打印计数
+   > （MySQL 非严格模式会把 NULL **静默改成 0**，事后查不出来 —— 守卫因此不可省），零 NULL 才改列；
+   > 回填规则仍待 DBA 清单（只读 `database/sql/2026_10_04_owner_columns_null_inventory.sql`）。
+   > **写这一层判据时最容易搞错的一点**：选 0 哨兵**不解决问题** —— `owns()` 对 NULL 与 0 给同一个答案「拒」，
+   > 换成 0 只是给「无主」换个写法，除非同时裁定「谁能动 0 号行」。
 
 ## 5. 待裁定（已进 dev-plan 决策包）
 
@@ -225,7 +236,7 @@
 
   | 字段 | 库里是否存在 | 权威位置 | 现状 |
   |---|---|---|---|
-  | `owner` | 半有 | 各资源表的 `user_id`（**除 `services` 外全 nullable**） | 无统一 owner 抽象；框架不提供 |
+  | `owner` | 半有 | 各资源表的 `user_id`（**除 `services` 外全 nullable**；A5 已出**待执行**迁移件收 7 列，尚未落库） | 无统一 owner 抽象；框架不提供 |
   | `credits` | 有 | `tenant_users.credits`（pivot，infra 迁移 `:172`）+ `tenants.total_credits/used_credits` | **不在 `users` 上**；`TenantController.php:40` 自陈「框架 SaaS 计费用的，back 没有在用」 |
   | `level` | **无** | — | `users` / `tenant_users` 均无此列，全仓 0 命中 |
   | `score` | **无** | — | GUI 唯一命中是 `sceneParser.ts:248` 的场景解析打分，与身份无关 |
@@ -296,6 +307,16 @@ grep -n "user_id" database/migrations/2026_09_23_000001_create_vpn_business_tabl
 #   7          —— nodes(:30)/connection_grants(:77)/connections(:106)/routes(:124)
 #                node_route_requests 的两端(:140,142)/ip_pools(:161) 的归属列全可空；
 #                只有 services.user_id（:176）NOT NULL ⇒「谁的东西」在 schema 层就没钉死
+#                注意这条数**只看旧迁移**，A5 的件不在它的计数范围内。
+
+php artisan test --filter OwnerColumnNotNullMigrationTest
+#   6 passed   —— A5（2026-10-04，`mynet_api@589e4c2`）的交付形状是「待执行件」，不是「已落库」：
+#                `2026_10_04_000002_harden_owner_columns_not_null.php` 的 up() 先逐表数 NULL
+#                （含软删行），非空即在第一条 ALTER 前整件抛异常 ⇒ 判据不能是「迁移跑过了」，
+#                而是这条用例锁住的五件事（改前可空 / up 后 NOT NULL / DB 真挡 / 守卫拒在 ALTER 前 / down 还原）。
+#                上面那条 grep 仍返回 7 是**对的** —— 测试库 schema 来自 tests/Schema/*Module.php，
+#                本件不进建库路径。现网执行前必须先跑只读清单
+#                database/sql/2026_10_04_owner_columns_null_inventory.sql 并按裁定回填。
 
 grep -rn "feature.flag\|CheckFeatureFlag" bootstrap/ app/ | wc -l
 #   0          —— §5-F-28：框架的功能开关中间件在 back 连别名都没注册
