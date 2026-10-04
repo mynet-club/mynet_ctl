@@ -22,6 +22,7 @@ trap 'rm -rf "$WORK"' EXIT INT TERM
 
 pass=0; fail=0
 FAILED_CASES=""
+ENVS=""
 
 # 建一个临时仓（含一个空提交，好让 `git diff --cached` 有 HEAD 可比）。
 # hook 自身必须提交进去 —— 否则它在每个用例里都是「未跟踪文件」，
@@ -38,14 +39,15 @@ newrepo() {
 }
 
 # run <repo> → 把输出放进 OUT，退出码放进 RC
+# ENVS 由 expect 的第 5 参设置（如 `C4_ALLOW=assets/`），默认空 ⇒ 平时等同直接 sh。
 run() {
-  OUT=$(cd "$WORK/$1" && sh .githooks/guard.sh 2>&1)
+  OUT=$(cd "$WORK/$1" && env $ENVS sh .githooks/guard.sh 2>&1)
   RC=$?
 }
 
-# expect <用例名> <期望退出码> <repo> <输出必须含>
+# expect <用例名> <期望退出码> <repo> <输出必须含> [传给 guard 的环境变量赋值]
 expect() {
-  _name=$1; _want=$2; _repo=$3; _needle=$4
+  _name=$1; _want=$2; _repo=$3; _needle=$4; ENVS=${5:-}
   run "$_repo"
   if [ "$RC" -ne "$_want" ]; then
     printf '  ✗ %s：退出码 %s，期望 %s\n' "$_name" "$RC" "$_want"
@@ -154,20 +156,24 @@ expect "新增敏感名文件即使带标注 → A3 仍硬拦" 1 a3_new_mark "A3
 # credential.json 打进 .tgz 提交并推到 GitHub。A2 只认 PEM 文本而 GNB 私钥是
 # 裸 32 字节二进制；A3 只认入库文件名而入库的是 _etc_opengnb.tgz —— 两层全瞎。
 # 下面每条用例都复刻那次泄露的一个侧面。
+#
+# ⚠️ 这一组全部传 C4_ALLOW 放行归档本身：C4（产物不得入库）对 .tgz/.zip 是硬拦，
+#    和 A4 一起响就会让退出码无法归因 —— 将来 C4 单方面坏掉也能顶着「A4 用例全绿」。
+#    两条红线各管一头：A4 问「归档里有什么」，C4 问「归档该不该入库」，分开测才有效。
 
 # 裸二进制私钥（无 PEM 头）打进 tgz —— A2 抓不到，A4 必须抓到
 newrepo wt_a4_tgz
 mkdir -p "$WORK/wt_a4_tgz/bk/security"
 head -c 32 /dev/urandom > "$WORK/wt_a4_tgz/bk/security/1002.private"
 ( cd "$WORK/wt_a4_tgz" && tar czf leak.tgz bk && rm -rf bk )
-expect "tgz 里的裸 .private → A4 拦下" 1 wt_a4_tgz "A4 归档内含敏感文件"
+expect "tgz 里的裸 .private → A4 拦下" 1 wt_a4_tgz "A4 归档内含敏感文件" "C4_ALLOW=leak.tgz"
 
 # zip 里的 credential.json（事故里 etc/mynet/conf/credential.json 就是这么进去的）
 newrepo wt_a4_zip
 mkdir -p "$WORK/wt_a4_zip/conf"
 echo '{}' > "$WORK/wt_a4_zip/conf/credential.json"
 ( cd "$WORK/wt_a4_zip" && zip -qr leak.zip conf && rm -rf conf )
-expect "zip 里的 credential.json → A4 拦下" 1 wt_a4_zip "A4 归档内含敏感文件"
+expect "zip 里的 credential.json → A4 拦下" 1 wt_a4_zip "A4 归档内含敏感文件" "C4_ALLOW=leak.zip"
 
 # 反向：良性归档不得误报（gnb 主线就跟踪着两个 author 源码 zip）
 newrepo wt_a4_ok
@@ -175,21 +181,21 @@ mkdir -p "$WORK/wt_a4_ok/src"
 echo 'int main(void){return 0;}' > "$WORK/wt_a4_ok/src/x.c"
 echo '# readme' > "$WORK/wt_a4_ok/src/README.md"
 ( cd "$WORK/wt_a4_ok" && tar czf src.tgz src && rm -rf src )
-expect "良性 tgz 不误报 A4" 0 wt_a4_ok "A4 已扫描 1 个归档"
+expect "良性 tgz 不误报 A4" 0 wt_a4_ok "A4 已扫描 1 个归档" "C4_ALLOW=src.tgz"
 
 # 归档内的 .env.example 仍按 A3 的豁免规则放行（判据必须与 A3 一致，否则两处会打架）
 newrepo wt_a4_envexample
 mkdir -p "$WORK/wt_a4_envexample/cfg"
 echo 'APP_KEY=' > "$WORK/wt_a4_envexample/cfg/.env.example"
 ( cd "$WORK/wt_a4_envexample" && tar czf cfg.tgz cfg && rm -rf cfg )
-expect "归档内 .env.example 豁免（与 A3 一致）" 0 wt_a4_envexample "A4 已扫描 1 个归档"
+expect "归档内 .env.example 豁免（与 A3 一致）" 0 wt_a4_envexample "A4 已扫描 1 个归档" "C4_ALLOW=cfg.tgz"
 
 # 暂存区模式（pre-commit 语义）：内容在索引里而不在盘上，A4 必须照样能扫
 newrepo st_a4
 mkdir -p "$WORK/st_a4/bk"
 head -c 32 /dev/urandom > "$WORK/st_a4/bk/node.private"
 ( cd "$WORK/st_a4" && tar czf leak.tgz bk && rm -rf bk && git add leak.tgz )
-expect "暂存区里的 tgz 含 .private → A4 拦下" 1 st_a4 "范围：暂存区"
+expect "暂存区里的 tgz 含 .private → A4 拦下" 1 st_a4 "范围：暂存区" "C4_ALLOW=leak.tgz"
 
 # 本批没有归档时必须**明说**未触发扫描，不能静默（同开头「没东西可查型门禁」教训）
 expect "无归档时 A4 明说未触发" 0 wt_ok "A4 本批无归档文件"
@@ -197,7 +203,7 @@ expect "无归档时 A4 明说未触发" 0 wt_ok "A4 本批无归档文件"
 # 损坏的归档：列不出清单也要响，不许当成通过
 newrepo wt_a4_corrupt
 printf 'not an archive at all' > "$WORK/wt_a4_corrupt/broken.tgz"
-expect "损坏归档 → A4 报未能扫描而非通过" 1 wt_a4_corrupt "A4 列不出归档内容"
+expect "损坏归档 → A4 报未能扫描而非通过" 1 wt_a4_corrupt "A4 列不出归档内容" "C4_ALLOW=broken.tgz"
 
 # ── 3. 工作区模式：已跟踪但未暂存的修改也要查 ────────────────
 newrepo wt_mod
@@ -286,6 +292,63 @@ newrepo port_debug
 mkdir -p "$WORK/port_debug/debug"
 printf '/usr/sbin/mynetd -once -listen 127.0.0.1:18096\n' > "$WORK/port_debug/debug/install.sh"
 expect "debug 脚手架的临时端口不算漂移" 0 port_debug "C2 端口无漂移"
+
+# ── 8. C4：编译产物不得入库（源码仓只提交源码，中间产物一概过滤）──
+#
+# 这条红线的价值全在**没有扩展名的裸二进制**那一支：后缀名单谁都想得到，
+# 而 `go build -o mynet` 落在仓库根既能 `git add` 得上、又不撞 .gitignore
+# （.gitignore 里写 `/mynet` 反而会连带挡掉同名源码目录 —— 见 agent/.gitignore 开头那条）。
+# 所以每支用例都断言「报的是 C4 且理由说对」，光看退出码会把 A4 命中当成 C4 命中。
+
+newrepo c4_elf
+printf '\177ELF\002\001\001\000\000\000' > "$WORK/c4_elf/mynet"
+expect "仓库根的裸 ELF 二进制（无扩展名）→ C4 拦下" 1 c4_elf "C4 编译产物不得入库（ELF 可执行）"
+
+newrepo c4_fat
+printf '\312\376\272\276\000\000\000\011' > "$WORK/c4_fat/universal"   # ca fe ba be
+expect "Mach-O fat（cafebabe）→ C4 拦下" 1 c4_fat "C4 编译产物不得入库（Mach-O fat）"
+
+newrepo c4_macho
+printf '\317\372\355\376\007\000\000\000' > "$WORK/c4_macho/prog"      # cf fa ed fe（64 位小端）
+expect "Mach-O 64 单 arch → C4 拦下" 1 c4_macho "C4 编译产物不得入库（Mach-O 可执行）"
+
+newrepo c4_pe
+printf 'MZ\220\000\003\000' > "$WORK/c4_pe/app.exe"
+expect ".exe → C4 按后缀拦下（不必读魔数）" 1 c4_pe "C4 编译产物不得入库（产物后缀）"
+
+newrepo c4_obj
+echo x > "$WORK/c4_obj/thing.o"
+expect ".o 中间产物 → C4 拦下" 1 c4_obj "C4 编译产物不得入库（产物后缀）"
+
+newrepo c4_dist
+mkdir -p "$WORK/c4_dist/dist"
+echo 'build log' > "$WORK/c4_dist/dist/notes.md"
+expect "dist/ 之下连文本也算产物" 1 c4_dist "C4 编译产物不得入库（产物目录）"
+
+# 归档：A4 查**内容**、C4 查**该不该入库**，两条各管一头，必须同时响。
+newrepo c4_tgz
+mkdir -p "$WORK/c4_tgz/src" && echo x > "$WORK/c4_tgz/src/a.c"
+tar czf "$WORK/c4_tgz/bundle.tgz" -C "$WORK/c4_tgz" src
+expect ".tgz 即使内容干净也不该入库 → C4 拦下" 1 c4_tgz "C4 编译产物不得入库（归档"
+
+# 暂存区模式（pre-commit 真语义）：内容在索引里，取字节走的是 git show 那一支。
+newrepo c4_staged
+printf '\177ELF\002\001\001\000' > "$WORK/c4_staged/mynetd_bin"
+( cd "$WORK/c4_staged" && git add mynetd_bin )
+expect "已暂存的裸 ELF → C4 走索引分支照样拦下" 1 c4_staged "C4 编译产物不得入库（ELF 可执行）"
+
+# 误报即失效：图标这类**合法二进制资产**是各仓真有的（agent 的 cmd/mynet_tray/*.png
+# 与 .ico 已在版本库里），把它们也拦下就等于教人用 --no-verify。
+newrepo c4_icon
+mkdir -p "$WORK/c4_icon/assets"
+printf '\211PNG\r\n\032\n\000\000' > "$WORK/c4_icon/assets/icon.png"
+expect "PNG 图标不被魔数误伤 → 通过" 0 c4_icon "C4 无编译产物"
+
+# 白名单是 C4 唯一的放行通道（二进制没有「违规那一行」，故不支持 GUARD-OK）。
+newrepo c4_allow
+mkdir -p "$WORK/c4_allow/assets"
+printf '\177ELF\002\001\001\000' > "$WORK/c4_allow/assets/tool.bin"
+expect "C4_ALLOW 前缀命中才放行" 0 c4_allow "C4 无编译产物" "C4_ALLOW=assets/"
 
 # ── 汇总 ─────────────────────────────────────────────────────
 echo

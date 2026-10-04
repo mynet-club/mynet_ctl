@@ -184,13 +184,13 @@ operator / platform / plugin / ticket / sms / form / knowledge / conversation �
 | 闸 1 | `.githooks/pre-commit` → `make guard` | **轻量**：安全红线 + 文件名（秒级） | 每次提交 |
 | 闸 2 | `.githooks/pre-push` → `make check` | **重量**：lint + 全量测试 | 每次推送 |
 
-- **`make guard` 三类红线**（见 `templates/.githooks/guard.sh`，功能自测 `templates/.githooks/guard_test.sh` **35 用例**）：
+- **`make guard` 三类红线**（见 `templates/.githooks/guard.sh`，功能自测 `templates/.githooks/guard_test.sh` **45 用例**）：
 
   | 类 | 红线 | 为什么是红线 |
   |---|---|---|
   | **A 安全** | A1 硬编码凭据 · A2 私钥泄露 · A3 敏感文件名（`.env`/`*.pem`/`*.key`/`id_rsa*`/`*.private`，**豁免判据见下，与 A1/A2 不同**）· **A4 归档内容扫描**（`.tgz`/`.tar*`/`.zip` 入库前列内容清单，按 A3 同一套敏感名 + `credential*.json` 查） | 事后清 git 历史代价大 |
   | **B 结构** | **B1 `mynet_gnb/src/` 只读**（按 `--absolute-git-dir` 判仓，bare+worktree 也算；非 gnb 仓明说「跳过」不装通过）· **B2 mynetd 不得依赖系统能力** · **B3 relaypolicy 不得含鉴权** · **B4 业务对象不得含驱动术语** | 架构约束违反后会**静默扩散**，事后重构成本高 |
-  | **C 产物** | C1 格式化 bug 产物文件名 · C2 端口漂移（**断言 SSOT**：提到 `mynetd` 的行其 loopback 端口必须 = 8096，不再只枚举已知错值；`scripts/e2e/`·`debug/`·`tests/` 的临时端口除外）· C3 命名漂移（≠`mynet_agent_*`） | 已发生过，静态可查 |
+  | **C 产物** | C1 格式化 bug 产物文件名 · C2 端口漂移（**断言 SSOT**：提到 `mynetd` 的行其 loopback 端口必须 = 8096，不再只枚举已知错值；`scripts/e2e/`·`debug/`·`tests/` 的临时端口除外）· C3 命名漂移（≠`mynet_agent_*`）· **C4 编译产物不得入库**（后缀/`dist`·`bin`·`build`·`out` 目录 **+ 无扩展名裸二进制的魔数**：ELF / Mach-O 单 arch 与 fat / PE） | 已发生过，静态可查 |
 
   B 类是**最重要的那一类**——「整理式重建」时新架构约束最容易在实现时被忘掉。
 
@@ -213,6 +213,17 @@ operator / platform / plugin / ticket / sms / form / knowledge / conversation �
   不该入库，正确处置是加进 `.gitignore`。实测：A4 对那次泄露的 13 个归档命中全部
   9 个敏感条目，对 gnb 主线跟踪的 2 个 author 源码 zip（各 352 条目）零误报。
 
+  ⚠️ **C4 的由来（2026-10-04 裁定：源码仓只提交源码，中间编译产物一概过滤）**：
+  后缀名单谁都想得到，**真窟窿是没有扩展名的裸二进制** —— `go build -o mynet` 落在
+  仓库根既能 `git add` 得上、又不撞 `.gitignore`；而这条路**不能**靠 `.gitignore` 补：
+  无尾斜杠的模式同时匹配目录，写 `/mynet` 会把同名**源码目录**下的新文件静默挡掉
+  （实测 `git add` 报 `already up to date`、rc=0，不报错）。所以只能由 guard 用魔数拦。
+  和 A4 一样**不支持 `GUARD-OK` 行内豁免**，确需入库的非产物二进制走 `C4_ALLOW`
+  （空格分隔的路径前缀，如 `assets/`）并在提交说明里写明理由。已跟踪的合法二进制资产
+  （png/ico 图标）不在魔数表里，不会误伤 —— 误报的直接后果就是教人用 `--no-verify`。
+  ⚠️ A4 与 C4 对归档**同时响**（一个查内容、一个查该不该入库），因此自测里 A4 那组
+  一律传 `C4_ALLOW` 隔离：否则退出码无法归因，C4 单方面坏掉也能顶着「A4 用例全绿」。
+
   ⚠️ **A3 的豁免口径与 A1/A2 不同：文件名不在任何一行里，所以「违规那一行写
   `GUARD-OK`」对它不成立。** A3 另立一条**更严**的文件级判据，两条同时成立才降级为 ⚠：
   ① 文件**已在 `HEAD`**（历史遗留，不是本次新入库）；② 文件内**自带一行** `GUARD-OK <理由>`
@@ -222,7 +233,7 @@ operator / platform / plugin / ticket / sms / form / knowledge / conversation �
   公开值，无凭据），而 Quasar 按**固定文件名**查找 env（`@quasar/app-vite/lib/utils/env.js:31`，
   命名法里只有 `dev`/`prod`，没有 `development`/`production`），**改名即失效、必须入库**。
   不加这条路，日常改一次 `.env.dev` 就撞一次 A3，结局就是教人用 `--no-verify`。
-  实测（`guard_test.sh` 35 用例）：四个文件加标注后降级 ⚠ 并通过、豁免进审计日志；
+  实测（`guard_test.sh` 45 用例）：四个文件加标注后降级 ⚠ 并通过、豁免进审计日志；
   历史在库但未标注仍硬拦；新建 `.env.prod` 即使带标注仍硬拦。
 - **精确不激进**：误报过多的守护会被 `--no-verify` 绕过，反而失效。正则取窄，宁可漏报。
 - **显式豁免**：在**违规那一行**写 `GUARD-OK <原因>`，该行即豁免；每次豁免记入 `.git/guard-exempt.log` 便于审计。`A4`（二进制归档）没有行可言、`A3`（按文件名）走上面那条文件级判据。

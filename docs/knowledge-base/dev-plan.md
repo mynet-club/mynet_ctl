@@ -529,6 +529,7 @@ mynet（配置工具 + 系统能力）
 | **G2** | **不装 module-ai，占位 stub 继续兑** | `resources/js/console/stubs/AiAssistant.vue`（零行为）+ vite 精确别名保持不变；「缺包不报错」作框架建议保留。不为一个悬浮按钮摊它的表与路由 | 口径已定 |
 | **G3** | **F-18 Operator 自我隔离 / 最后一个 admin 保护：只上报，back 不代做** | 不改 vendor、不自建第二套写面；back 已有的前端闸门（`is_self` 禁用对自己的角色下拉/停用/移出）保留 | 口径已定 |
 | **G4** | **生产 `app.timezone` 定 `Asia/Shanghai`，框架序列化偏移口径归 G1** | back 自有端点带偏移、框架那批无偏移字符串按同一墙钟读，`format.ts` 的 `toDate()` 收口不变。⚠️ 落码时要在部署清单写死「框架端点的时间字符串按应用时区解释」，否则同页混用仍会显出 8 小时差 | 口径已定（待 G-6） |
+| **H1**（10-04 追加，非 22 项之内） | **源码仓只提交源码，中间编译产物一概过滤**（用户原话：「mynet_agent 一定只提交源码, 中间编译产物,一概过滤」）| **✅ 已落成 guard 红线 C4**（`templates/.githooks/guard.sh` + 同步 `mynet_agent/.githooks/guard.sh`，`guard_test.sh` 用例 **35 → 45**）。两层判据缺一层就漏：① 后缀 / `dist`·`bin`·`build`·`out` 目录；② **无扩展名裸二进制的魔数**（ELF `7f454c46`、Mach-O 单 arch 四态、fat `cafebabe`/`bebafeca`、PE `4d5a9000`）—— 因为 `go build -o mynet` 落在仓库根既 `git add` 得上又不撞 `.gitignore`，而这条路**补不了** `.gitignore`：无尾斜杠的模式同时匹配目录，写 `/mynet` 会静默挡掉同名源码目录下的新文件（实测 `git add` 报 `already up to date`、rc=0 不报错）。与 A4 同口径**不支持 `GUARD-OK` 行内豁免**，非产物二进制确需入库走 `C4_ALLOW`（路径前缀）并在提交说明写明理由；已跟踪的 png/ico 图标不在魔数表内 ⇒ 不误伤。**顺带一条自测纪律**：C4 对 `.tgz`/`.zip` 硬拦，与 A4 的归档用例同时响 ⇒ A4 那组一律传 `C4_ALLOW` 做**轴隔离**，否则退出码无法归因（C4 单方面坏掉也能顶着「A4 全绿」）—— 这条正是本轮自测先出 4 红时查出来的 | 已落（未 push 前 `make guard` 已实测拦下 `c4_probe.tgz` / 裸 ELF，`git commit` 被 pre-commit 真拦下） |
 
 **已闭环、无需再裁的旧待定**：F-1（补 `rbac.permission` 别名，已落 `912ab7e`）、F-3/F-4/F-5/F-6（已执行或已关闭）、F-12 的文案半边（已随 `072ac70` 改回事实，本表 D2 只裁行为）、`public/console.scrm-placeholder/`（已裁定删除，`eebd6b1`）。
 
