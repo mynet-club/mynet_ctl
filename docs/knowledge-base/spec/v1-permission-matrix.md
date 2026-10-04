@@ -18,7 +18,7 @@
 | R3 | **console 面（租户后台）= Operator 主体 + `tenant_admin` 角色闸门**；普通 `User` 一律拒。v1 不在 console 内做细粒度分权（要做得先补权限项注册，见 §5-F-24） | 框架那套 `rbac.permission` 在 back 不可调用（dev-plan F-1），拿它当 v1 前提会阻塞 |
 | R4 | **节点面（设备通道）判据 = 验签 + 节点自身租户上下文**，绝不接受请求体里传来的 `tenant_id` 作为归属依据 | 该面没有登录用户，任何「以参数定租户」的写法都是越权入口 |
 | R5 | **本机面（mynetd 8096）判据 = 回环 Host + 同源 Origin**，它的安全性来自「只监听 127.0.0.1」这个物理事实，不来自 token | 见 [local-api.md](local-api.md)；token 只用于种 cookie |
-| R6 | **同一操作的判据在两个地方各写一遍 = 缺陷**，必须收敛到单点（服务层或中间件），并让另一处只读上下文 | 实测：`NodeMonitorHistoryController` 让 `input('tenant_id')` 压过已校验的 TenantContext（§4-4） |
+| R6 | **同一操作的判据在两个地方各写一遍 = 缺陷**，必须收敛到单点（服务层或中间件），并让另一处只读上下文 | 实测：`NodeMonitorHistoryController` 让 `input('tenant_id')` 压过已校验的 TenantContext（§4-4）⇒ **2026-10-04 随 A2 收敛到单点**，同批还删了第 5 个实现 `NodeDomainService::getCurrentTenantId()`（未传参时自取 `Auth::user()->tenant_id`）与 `NodeController` 的哨兵 `1` 覆写 |
 
 ## 2. 表面清单（现状，带证据）
 
@@ -103,9 +103,26 @@
      `tenants()` 关联的首个 active 行 —— 于是 `NodeConfigController.php:937,984,1026` 那三处
      `(int) $user->tenant_id`（注释还写着「✅ 从认证上下文获取，不信任客户端输入」）**读的是 ① 的伪装版**：
      看着像服务端权威，实际是「有指针用指针、没指针偷偷查关联」，永远不会暴露归属为空。
-   - **裁定（2026-10-04，A2）：路径 A —— 服务端指针唯一权威**。落法见 dev-plan 逐项裁定表与 task 线：
-     `ResolveTenantFromUser` 改优先读 ①（并校验仍是 active 成员）、`getCurrentTenantId()` 删 ③ 的 header/参数回退、
-     `NodeConfigController` 那三处改读 TenantContext（四路归一）、GUI 的 `current_network` 本地缓存降为显示用。
+   - **裁定（2026-10-04，A2）：路径 A —— 服务端指针唯一权威**。落法见 dev-plan 逐项裁定表 A2/A3 行。
+   - **✅ 已落（2026-10-04，`TenantSourceAuthorityTest` 13 条 / 全套 382 passed）**，落码时**来源比上面记的多**：
+     除 ①②③ 外还有 **④ `NodeController::getCurrentTenantId()` 覆写**（上下文为空时**返回哨兵 `1`**
+     —— 等于把无区用户当成 1 号区）和 **⑤ `NodeDomainService::getCurrentTenantId():123-149`**
+     （控制器没传 tenant_id 时自己回退 `Auth::user()->tenant_id`）。⑤ 就是 §4-R6 的现行实例：
+     同一个判据在服务层再写一遍，于是出现过「控制器按 A 区查、响应里 `tenant_id` 写 B 区」。
+     改动清单（全部只读上下文，客户端来源与再造来源删净）：
+     `ResolveTenantFromUser`（①优先 + active 成员校验，否则回退最小 active 成员区）、
+     `BaseApiController::getCurrentTenantId()`（= `TenantContext::getId()`，**指针回退也删**，理由见方法注释：
+     `BelongsToTenant` 在无上下文时本来就 `WHERE 1=0`，那条回退救不了查询，只会造成错位）、
+     `NodeController`（删 ④ 覆写 + 3 处）、`NodeDomainService`（⑤ 只取入参）、
+     `NodeConfigController`×3、`NodeMonitorHistoryController`×2、`RouteController`、`SocialController`、
+     `MyNetController`×6、`UserTenantController::getCurrentTenant()`、`User::getTenantIdAttribute()`（回退补 `orderBy`，与中间件同判据）；
+     GUI 侧 `current_network` 明确降为显示缓存（`mynet_gui/src/config/app.ts` 注释）。
+   - **落码得到的新事实（进 A5 的 DBA 回填清单条件）**：
+     「有 `users.tenant_id` 指针、但 `tenant_users` 一行 active 成员都没有」的账号，
+     在 ②③④⑤ 全删之后**处处为空**（列表空、`/user/tenants/current` 404）—— 而这在删之前也是空的
+     （`BelongsToTenant` 早就 fail-closed），所以这不是新回归，是**存量脏数据的既有故障**，
+     只有补成员行能修。`TenantSourceAuthorityTest::test_pointer_without_any_membership_row_is_empty_everywhere`
+     钉的是「两边一起空」的一致性，不许再造一个来源来掩盖它。
    - **为什么全仓测试抓不到它**（同 dev-plan **B-6**）：`tests/TestCase.php:73` 用
      `pushMiddlewareToGroup('api', IdentifyTenant::class)` 把这道闸**只在测试态**装进 api 组。
      于是套件里凡是「给 `tenant_users` 补一条 active 记录才敢发 `X-Tenant-ID`」的用例
@@ -113,6 +130,11 @@
      测的是**生产不存在的护栏**——它们全绿，而真实用户面根本不跑这段校验。
      **这是「测试说通过 ≠ 没洞」的本项目最典型实例，F-27 落地时必须连 B-6 一起收口**
      （否则修完仍然测不到）。
+   - **✅ B-6 已随 A2 收口（2026-10-04）**：`tests/TestCase.php` 补了 `pushMiddlewareToGroup('api', ResolveTenantFromUser::class)`
+     （按生产顺序，在 `IdentifyTenant` 之后、邀请码之前）。⚠️ 但**测试态的 `IdentifyTenant` 保持没删**（裁定 A3 选「重建用例」
+     而非「改装配」，19 个文件的头逐个对齐成本大于收益），于是它仍比生产多一道闸：要断言「当前区 = 服务端指针」的用例
+     **必须自己 `withoutMiddleware(IdentifyTenant::class)`**，新落地的 `TenantSourceAuthorityTest` 就是这么写的。
+     下次再加用户面租户相关用例时，忘了这一句就等于又测了一遍生产不存在的护栏。
    - 记一条边界，免得下次误判成洞：`TenantContext::getId()` 在无属性时回退
      `config('tenancy.default_tenant_id')`（`vendor/.../src/Context/TenantContext.php:51-60`）；
      back 实测该配置为 **null**（`config/tenancy.php:4`）⇒ 这条路**不会**兜到平台默认租户，未识别即空值 + `TenantScope` fail-closed。
