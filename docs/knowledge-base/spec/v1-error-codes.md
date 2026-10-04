@@ -3,6 +3,9 @@
 > **状态**：2026-10-04 首次成文。这份文件**先登记现状，再给出冻结口径**。
 > 现状部分每条带 `file:line` 且都已实读核对；冻结部分标 `⏸ 待裁定` 的没有生效，
 > 已进 `../dev-plan.md` 决策包（F-25 / F-26）。
+> **2026-10-04 更新：F-25 / F-26 已裁定**（裁 B2 / B1，见 dev-plan「2026-10-04 逐项裁定」表）——
+> C1 生效（E1 为唯一 HTTP 信封，只对新代码硬约束、存量按 §2 登记不动），本机面按**改文档承认现状**处置。
+> 下面 `⏸` 标记保留作取证上下文。
 >
 > 为什么 P0 必须先做这件事：错误码是**代理与壳的编程接口**。playbook §11 要求
 > 「代理不得静默改变…错误码语义」—— 而现在全仓有 **7 套响应信封、3 种 `code` 语义**，
@@ -100,7 +103,9 @@
    `:16` 还声称 service 端点返回稳定码 `unsupported`（`grep unsupported mynet_agent` 只命中注释 `mynet/plugin_proxy.go:235`），
    `:83` 指向的路径 `mynet_agent/internal/localapi` **不存在**（实为 `mynet_agent/mynetd/localapi`）；
    `spec/control-plane.md:76` 的 `unauthorized|stale_ts|bad_sig|replayed` 与 `challenge/session_id` 在 `mynet_agent/gateway/` 零命中。
-   ⇒ 这是**契约文档在描述一个没建的面**，比没文档更危险。⏸ 待裁定，见 F-25。
+   ⇒ 这是**契约文档在描述一个没建的面**，比没文档更危险。⏸ 待裁定，见 F-25 ⇒ **已裁（B2）：改文档承认现状**，
+   不给本机面补 `{ok,error{code}}` 契约。落地 = 把 `spec/local-api.md` 的信封改成代码真实形状
+   `{success,message,data[,stage][,need_login]}`，并写明「分类靠文本嗅探、防线是 Host/Origin 而非 token」。
 6. **`TenantAccessDeniedException` 的第 3 个参数被静默丢弃**：调用点传自定义文案
    （`NodeDomainService.php:831,838` 传 `'用户身份验证失败'` / `'无权限访问该Tenant'`），
    而构造器只收 `(UserId, TenantId)` 两个参数并自拼消息（`Domain/Exceptions/TenantAccessDeniedException.php:17-27`）。
@@ -126,6 +131,7 @@
    `X-Tenant-ID`」的用例，测的是生产根本不跑的护栏。**注释已于 2026-10-04 按实测改写**
    （`ModuleServiceProvider.php:43-54`，把「有闸门」的记载换成「本面没有，且测试态有」的真实口径）；
    `tests/TestCase.php:73` 那半边**留着没动** —— 它是测试地基决定（B-6 自标「待裁定」），要连 F-27 的选型一起收口。
+   **⇒ F-27 已裁（A2：服务端指针 `users.tenant_id` 为唯一权威），B-6 同时裁（A3：不逐条对齐装配，那批用例直接重建）。**
 
 ## 4. 消费侧为什么现在无法冻结（三条实测）
 
@@ -141,11 +147,11 @@
 
 | # | 规则 | 状态 |
 |---|---|---|
-| C1 | **一个响应信封**：E1 `{success, code(HTTP 整数), message, error_code?, data, timestamp}` 为唯一 HTTP 信封；E2 trait 删除或改名以免与 E1 混淆；E3 节点面必须补 `error_code`（见 C4） | ⏸ 待裁定（F-26） |
+| C1 | **一个响应信封**：E1 `{success, code(HTTP 整数), message, error_code?, data, timestamp}` 为唯一 HTTP 信封；E2 trait 删除或改名以免与 E1 混淆；E3 节点面必须补 `error_code`（见 C4） | **已裁（B1）**：认 C1，**只对新代码硬约束**，存量 7 套按 §2 登记不动；E2 trait 在落码时定删或改名 |
 | C2 | **`code` 只放 HTTP 整数**；业务码一律 `error_code`，字符串、`UPPER_SNAKE`，**不含模块名、不复用语义、只增不改**（改名视为新增 + 旧值标 deprecated） | 建议即刻生效（新代码遵守；存量按 §2 登记） |
 | C3 | **`message` 不得作为判据**：客户端只允许读 `error_code`；文案进 i18n（后端出 key 或前端按码取词），中文不再是协议 | 建议即刻生效 |
 | C4 | **节点面（agent ↔ back）最小码集冻结**：验签失败 / 时间戳过期 / 重放 / 节点不存在 / bundle 版本不支持 / bundle 校验和不符 —— 六条必须是码而不是文本；当前实现全是自由文本（§1-E3） | ⏸ 需实现（P2/P3 前置） |
-| C5 | **本机面（8096）码表冻结**：`need_login` / `not_running` / `unsupported` / `preflight_failed` / `port_conflict` —— 现在这些语义只存在于字符串里（`config_api.go:42` 用 `strings.Contains(err.Error(),"need_login")` 分类；Lua 用 `_svc_error_hint` 匹配 `private_key`/`node.conf`/`gnb_ctl`/`kmod-tun`，`mynet.lua:332-352`） | ⏸ 待裁定（F-25 决定信封后落地） |
+| C5 | **本机面（8096）码表冻结**：`need_login` / `not_running` / `unsupported` / `preflight_failed` / `port_conflict` —— 现在这些语义只存在于字符串里（`config_api.go:42` 用 `strings.Contains(err.Error(),"need_login")` 分类；Lua 用 `_svc_error_hint` 匹配 `private_key`/`node.conf`/`gnb_ctl`/`kmod-tun`，`mynet.lua:332-352`） | **已裁（B2）**：本机面走「改文档承认现状」，这张码表随 `spec/local-api.md` 重写时一并决定是否补进代码 |
 | C6 | **死码清理**：GUI `4031/4032`、agent `shared/errors`、`utils.BaseResponse`、`errors.md`/`api-specification.md` 两份旧清单 —— 要么补上真实 emit，要么删干净。**back 侧两处已清**（2026-10-04：§3-8 那两个零注册的租户中间件连同其 5 个 `TENANT_*` 码一起删） | 可执行，无需裁定 |
 
 ## 6. 复现口径

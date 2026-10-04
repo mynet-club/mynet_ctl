@@ -64,6 +64,10 @@
 #9 = **非洞**，记为已知设计，但必须在 [local-api.md](local-api.md) 写明。
 **#10 → F-28**（本轮新增；它给 #1/#2 补的是「端别判定」—— 属主层缺在 **back**，框架只是**没提供**而非**提供坏了**）。
 
+> **2026-10-04：上面所有「需裁定」的项已全部裁完**（#1/#2/#3 = A4、#4 = A2+A3、#5/#7 = B3、#6 = B4、
+> #10 = A1+C1，另有 #8 属执行项随 C1 收）。裁定原文见 [dev-plan.md](../dev-plan.md)「2026-10-04 逐项裁定」表。
+> 本节下面的分级继续保留 —— 它同时是**取证位置索引**，落码时按它找行号。
+
 1. **`❌` 用户面整组无授权判据**：`VPN/Routes/api.php:97-286` 这 **116 条路由声明**上只挂了 `auth:sanctum` + `token.binding` + throttle，没有任何 permission/role 判据。8 个 FormRequest **一个授权判据都没有** —— 6 个 `authorize()` 直接 `return true`（例：`app/Http/Requests/GetRouterKeysRequest.php:14-17`），另外 2 个只判「登录了没」（`app/Modules/VPN/Requests/Node/CreateNodeRequest.php:21-24`、`Requests/Route/CreateRouteRequest.php:19-22` 都是 `Auth::check()`）。这不是「缺 RBAC」，是**缺 R2 的最低那层：能不能碰这个资源**。
 2. **`❌` 跨用户写与读**：`PUT /api/v1/users/{id}` 任意登录用户可改他人 `name/email/phone` —— `UserController::update()`（`app/Modules/VPN/Controllers/Api/V1/UserController.php:210-232`）把 `$id` 直接喂给 `UserService::updateUser()`，而后者（`app/Services/UserService.php:196-213`）**完全忽略 `$updaterId`**。同组还有 `GET /users`（全站列表，`:33-52`）、`GET /users/{id}`（`:145-162`）、`/{id}/statistics|activity|nodes|tenants`。
    **消费者取证**：`mynet_gui` 只用 `/users/profile`（`src/services/api.ts:430`）与 `/users/onboarding`（`stores/onboarding.ts:432,453`）；console SPA 与 Lua 均不调这些 `/{id}` 端点 ⇒ **零消费者的管理语义端点**，与 #36 删掉的 Social 死副本控制器同类。
@@ -88,6 +92,20 @@
      而后者才是 `POST /user/tenants/switch` 持久化的「当前选中区」指针（`UserTenantController.php:78-80`）。
      直接把 `getCurrentTenantId()` 改成只认 TenantContext，会**打断多租户用户的切区**（列表静默变另一个区）。
      ⇒ 两条合法路径都要动，已进 §5-F-27 裁决。
+   - **复测后修正：「当前区」不止两条来源，实际是三条并存**（2026-10-04，这条比原记载更严重）：
+     ① **服务端指针** `users.tenant_id` —— `POST /user/tenants/switch` 写它（`UserTenantController.php:77-78`），
+     `getCurrentTenant():100` 也读它（空则 404「未设置当前网络区」）；
+     ② **`TenantContext`** ← `ResolveTenantFromUser` 取 `tenant_users` 最小的 active `tenant_id`，**明文不读 ①**；
+     ③ **客户端来源** `X-Tenant-ID` / `?tenant_id=` ← `BaseApiController::getCurrentTenantId()` 直采。
+     ⇒ 症状不是抽象的「客户端可指定租户」，而是**切区之后同一个账号在不同端点各按不同区回数据**：
+     走 ① 的端点显示新区、走 ② 的显示最小区、走 ③ 的跟随请求头。三者互不知情。
+     另有一层**掩盖机制**：`User::getTenantIdAttribute()`（`app/Models/User.php:27-38`）在属性缺键时回退查
+     `tenants()` 关联的首个 active 行 —— 于是 `NodeConfigController.php:937,984,1026` 那三处
+     `(int) $user->tenant_id`（注释还写着「✅ 从认证上下文获取，不信任客户端输入」）**读的是 ① 的伪装版**：
+     看着像服务端权威，实际是「有指针用指针、没指针偷偷查关联」，永远不会暴露归属为空。
+   - **裁定（2026-10-04，A2）：路径 A —— 服务端指针唯一权威**。落法见 dev-plan 逐项裁定表与 task 线：
+     `ResolveTenantFromUser` 改优先读 ①（并校验仍是 active 成员）、`getCurrentTenantId()` 删 ③ 的 header/参数回退、
+     `NodeConfigController` 那三处改读 TenantContext（四路归一）、GUI 的 `current_network` 本地缓存降为显示用。
    - **为什么全仓测试抓不到它**（同 dev-plan **B-6**）：`tests/TestCase.php:73` 用
      `pushMiddlewareToGroup('api', IdentifyTenant::class)` 把这道闸**只在测试态**装进 api 组。
      于是套件里凡是「给 `tenant_users` 补一条 active 记录才敢发 `X-Tenant-ID`」的用例
@@ -135,10 +153,15 @@
 
 ## 5. 待裁定（已进 dev-plan 决策包）
 
-- **F-22**：§4-1/§4-2/§4-3 的用户面 `/{id}` 管理端点怎么收 —— 路径 A：整组从用户面下架（零消费者，与 #20 `/tenants` 收敛同类处置）；路径 B：保留但补 self-only + 租户内判据。**下架会改变 OpenAPI 面**（`docs/api/openapi/back.yaml:3596,3638-3753` 声明着它们），back 不擅自选。
-- **F-23**：§4-6 平台 admin 面 —— 是要在 back 真正装载 `IdentifyDomain` 打开平台面，还是明确「v1 平台面不进 back」并把 `default => $next` 改成 fail-closed。**后者会同时影响 console 面**（`domain.console` 缺失时的行为）。
-- **F-24**：G-5 的「权限项入库」半边 —— v1 要不要在 `permissions`/`role_permissions` 注册 mynet 自有权限名（`vpn.*`）并把 console 门禁从「角色 = tenant_admin」升级为「权限项」。见 dev-plan G-5 行与 F-2（菜单组头裁定同批）。
-- **F-27**（§4-4，本轮新增，**这条是六条里唯一带真实跨租户读风险的**）：用户面的「当前区」权威来源放哪 ——
+> **2026-10-04 全部已裁**，裁定原文与落地动作在
+> [dev-plan.md](../dev-plan.md) 的「2026-10-04 逐项裁定」表（菜单编号 A1–A5 / B1–B4 / C1 / D1–D3 / E1–E4 / F1 / G1–G4，
+> 共 22 项；A2 重问一次、A5 的回填规则另问一次）。本节保留的是**裁定时的取证与合法路径全集**，
+> 下面每条末尾标注对应裁定编号与结论。
+
+- **F-22**（→ **已裁 A4**：整组从用户面下架，同批改 OpenAPI）：§4-1/§4-2/§4-3 的用户面 `/{id}` 管理端点怎么收 —— 路径 A：整组从用户面下架（零消费者，与 #20 `/tenants` 收敛同类处置）；路径 B：保留但补 self-only + 租户内判据。**下架会改变 OpenAPI 面**（`docs/api/openapi/back.yaml:3596,3638-3753` 声明着它们），back 不擅自选。
+- **F-23**（→ **已裁 B4**：v1 平台面不进 back，`default => $next` 保持不动）：§4-6 平台 admin 面 —— 是要在 back 真正装载 `IdentifyDomain` 打开平台面，还是明确「v1 平台面不进 back」并把 `default => $next` 改成 fail-closed。**后者会同时影响 console 面**（`domain.console` 缺失时的行为）。
+- **F-24**（→ **已裁 B3**：v1 不做细粒度，`vpn.*` 不入库，前端假门禁死码清掉）：G-5 的「权限项入库」半边 —— v1 要不要在 `permissions`/`role_permissions` 注册 mynet 自有权限名（`vpn.*`）并把 console 门禁从「角色 = tenant_admin」升级为「权限项」。见 dev-plan G-5 行与 F-2（菜单组头裁定同批）。
+- **F-27**（§4-4，本轮新增，**这条是六条里唯一带真实跨租户读风险的**）⇒ **已裁 A2：路径 A，服务端指针唯一权威**（详见 §4-4 末尾「裁定」段与 dev-plan 逐项裁定表 A2/A3 行）：用户面的「当前区」权威来源放哪 ——
   - **路径 A：服务端为唯一权威。** `ResolveTenantFromUser` 改为优先读 `users.tenant_id`（切换指针）并校验它仍是 active 成员，
     `BaseApiController::getCurrentTenantId()` 删掉 `X-Tenant-ID` / `tenant_id` 参数回退。
     切区从此只有 `POST /user/tenants/switch` 一条路；GUI 的三个注入点降级为装饰（可随后删）。
@@ -147,6 +170,7 @@
     查 `tenant_users` 的 active 成员关系，不通过则忽略该来源并回退），不改 vendor。
     代价：每请求多一次 `tenant_users` 查询（框架本来也这么做）；且**参数优先那半（§4-4 第一条）仍要单独修**。
   - 两条路径都不改变 console 面（那里 `tenant.identify` 已在校验）。**back 不擅自选**：A 动 wire 语义、B 动每请求成本。
+    ⇒ **裁定 A**，且 A3 另裁「测试代码不逐条对齐，按新判据重建那批用例」。
 - **F-28**（§4-10，本轮新增 —— 用户点名的「userid 有 owner/level/score/credits/right，前端判断要立住」的正面包）：
   **属主与权益的权威载体定在哪一层**。先交付逐字段取证（2026-10-04 实跑）：
 
@@ -166,10 +190,17 @@
   - 反向的一处应删未删：`users.role`（我方迁移 `2026_09_25_000001:58-63` 加的，默认 `platform_user`）**全仓无人读**，
     却经 `UserService::getUserDetail():108-109` 以 `user_role`/`role` 发到前端，GUI `types/index.ts:8` 接着 ——
     与「user 设计不设 role」和框架铁律直接冲突（同 #8 一族）。
-  - **待裁的两问**：① 属主判据落在哪层 —— Laravel `Gate`/Policy（框架零使用，但它是标准位、可被 `->authorize()` 复用）
-    vs back 服务层单点判据（与 #20 `/tenants` 收敛、F-22 路径 B 同口径）；② 权益载体 —— 是把 `credits`/套餐真正接进
-    用户面读模型（需要先决定 module-platform 装不装，属依赖变更），还是 v1 明确「权益只做租户级 `subscription_plan`、
-    用户级 level/score/right 不进 v1 合同」。**back 不擅自选**：①决定后续所有写路径的改法，②决定要不要引新依赖。
+  - **待裁的两问**（⇒ **已裁：① = A1，② = C1**）：① 属主判据落在哪层 —— **裁定：Laravel `Gate`/Policy**，且写成
+    **可被框架同名方法替换的接线点**（判据集中在一个适配层；框架补上属主/归属判定方法后只改适配层，不动控制器），
+    同时把「框架出方法、下层调用、业务继承 + 扩容」列为对框架的第 13 条诉求（G1 那份清单）；
+    ② 权益载体 —— **裁定：v1 只做租户级 `subscription_plan`，用户级 `level`/`score`/`right` 明确不进 v1 合同**；
+    `credits` 作为 `tenant_users` 既有列只读摊平，不引入计费写路径、**不装 module-platform**，
+    `feature_flags` 链保持未接线。
+    （取证原文保留如下，供下次核对 —— 原两问：Laravel `Gate`/Policy（框架零使用，但它是标准位、可被 `->authorize()` 复用）
+    vs back 服务层单点判据（与 #20 `/tenants` 收敛、F-22 路径 B 同口径）；把 `credits`/套餐真正接进
+    用户面读模型（需要先决定 module-platform 装不装，属依赖变更）vs 只做租户级。**back 不擅自选**：①决定后续所有写路径的改法，②决定要不要引新依赖。）
+  - 顺带一条由 ② 派生的执行项（**已裁 C1，无争议**）：上表「应删未删」的 `user_role`/`role` 外发
+    （`UserService::getUserDetail():108-109` + GUI `types/index.ts:8`）随 C1 一起收 —— 用户面不再表达角色。
 
 ## 6. 复现口径（下次核对就跑这几条，2026-10-04 实测值写在行尾）
 
