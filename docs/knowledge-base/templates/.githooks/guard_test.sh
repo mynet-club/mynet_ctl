@@ -119,6 +119,36 @@ newrepo wt_a3ok
 echo 'APP_KEY=' > "$WORK/wt_a3ok/.env.example"
 expect ".env.example 是允许的模板" 0 wt_a3ok "A3 无敏感文件"
 
+# A3 的**文件级**豁免（判据比 A1/A2 的行内豁免更严，两条同时成立才降级）：
+#   ① 文件已在 HEAD 里（历史遗留，不是本次新入库）　② 文件内自带一行 GUARD-OK 理由
+# 立这条判据的场景：mynet_gui 的 .env/.env.dev/.env.embed/.env.prod 是团队共享的
+# 前端构建期配置（只有 API 域名与客户端公开值，无凭据），而 Quasar 按**固定文件名**
+# 查找（@quasar/app-vite/lib/utils/env.js:31，命名法里没有 development/production），
+# 改名即失效、必须入库。没有这条路，日常改一次 .env.dev 就撞一次 A3 ——
+# 结局就是教人用 --no-verify，守护反而失效。
+newrepo a3_hist_unmark
+echo 'API_URL=https://api.example' > "$WORK/a3_hist_unmark/.env.dev"
+( cd "$WORK/a3_hist_unmark" && git add .env.dev \
+  && git -c user.name=t -c user.email=t@t commit -q -m base )
+printf '\nNODE_ENV=development\n' >> "$WORK/a3_hist_unmark/.env.dev"
+expect "历史在库但未标注的 .env.dev → A3 仍硬拦" 1 a3_hist_unmark "A3 敏感文件不得入库"
+
+newrepo a3_hist_mark
+echo 'API_URL=https://api.example' > "$WORK/a3_hist_mark/.env.dev"
+( cd "$WORK/a3_hist_mark" && git add .env.dev \
+  && git -c user.name=t -c user.email=t@t commit -q -m base )
+printf '\n# %s 前端构建期配置，无凭据，需入库\nNODE_ENV=development\n' 'GUARD-OK' >> "$WORK/a3_hist_mark/.env.dev"
+expect "历史在库 + 文件内标注 → A3 降级豁免并通过" 0 a3_hist_mark "A3 已豁免"
+[ -s "$WORK/a3_hist_mark/.git/guard-exempt.log" ] \
+  && { printf '  ✓ A3 文件级豁免记入审计日志\n'; pass=$((pass+1)); } \
+  || { printf '  ✗ A3 豁免未记审计日志\n'; fail=$((fail+1)); FAILED_CASES="$FAILED_CASES A3豁免审计"; }
+
+# 硬拦的那半边：**新**入库的敏感名文件即使写了标注也照样拦。gnb 私钥事故（§AGENTS 2.6）
+# 的形态就是「新文件」，所以「已在 HEAD」是豁免的前置条件，不是可选项。
+newrepo a3_new_mark
+printf 'API_URL=https://api.example\n# %s 写了标注也没用\n' 'GUARD-OK' > "$WORK/a3_new_mark/.env.prod"
+expect "新增敏感名文件即使带标注 → A3 仍硬拦" 1 a3_new_mark "A3 敏感文件不得入库"
+
 # ── 2b. A4：归档**里面**的敏感文件（A2/A3 都看不见）──────────
 # 起因（2026-10-04 真实事故）：mynet_gnb 把生产节点与公司网关的 *.private、
 # credential.json 打进 .tgz 提交并推到 GitHub。A2 只认 PEM 文本而 GNB 私钥是

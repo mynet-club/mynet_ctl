@@ -184,11 +184,11 @@ operator / platform / plugin / ticket / sms / form / knowledge / conversation �
 | 闸 1 | `.githooks/pre-commit` → `make guard` | **轻量**：安全红线 + 文件名（秒级） | 每次提交 |
 | 闸 2 | `.githooks/pre-push` → `make check` | **重量**：lint + 全量测试 | 每次推送 |
 
-- **`make guard` 三类红线**（见 `templates/.githooks/guard.sh`，已功能实测 31 用例）：
+- **`make guard` 三类红线**（见 `templates/.githooks/guard.sh`，功能自测 `templates/.githooks/guard_test.sh` **35 用例**）：
 
   | 类 | 红线 | 为什么是红线 |
   |---|---|---|
-  | **A 安全** | A1 硬编码凭据 · A2 私钥泄露 · A3 敏感文件名（`.env`/`*.pem`/`*.key`/`id_rsa*`/`*.private`）· **A4 归档内容扫描**（`.tgz`/`.tar*`/`.zip` 入库前列内容清单，按 A3 同一套敏感名 + `credential*.json` 查） | 事后清 git 历史代价大 |
+  | **A 安全** | A1 硬编码凭据 · A2 私钥泄露 · A3 敏感文件名（`.env`/`*.pem`/`*.key`/`id_rsa*`/`*.private`，**豁免判据见下，与 A1/A2 不同**）· **A4 归档内容扫描**（`.tgz`/`.tar*`/`.zip` 入库前列内容清单，按 A3 同一套敏感名 + `credential*.json` 查） | 事后清 git 历史代价大 |
   | **B 结构** | **B1 `mynet_gnb/src/` 只读**（按 `--absolute-git-dir` 判仓，bare+worktree 也算；非 gnb 仓明说「跳过」不装通过）· **B2 mynetd 不得依赖系统能力** · **B3 relaypolicy 不得含鉴权** · **B4 业务对象不得含驱动术语** | 架构约束违反后会**静默扩散**，事后重构成本高 |
   | **C 产物** | C1 格式化 bug 产物文件名 · C2 端口漂移（**断言 SSOT**：提到 `mynetd` 的行其 loopback 端口必须 = 8096，不再只枚举已知错值；`scripts/e2e/`·`debug/`·`tests/` 的临时端口除外）· C3 命名漂移（≠`mynet_agent_*`） | 已发生过，静态可查 |
 
@@ -212,9 +212,25 @@ operator / platform / plugin / ticket / sms / form / knowledge / conversation �
   **A4 不支持 `GUARD-OK` 行内豁免**——二进制没有「违规那一行」；被拦下的归档本就
   不该入库，正确处置是加进 `.gitignore`。实测：A4 对那次泄露的 13 个归档命中全部
   9 个敏感条目，对 gnb 主线跟踪的 2 个 author 源码 zip（各 352 条目）零误报。
+
+  ⚠️ **A3 的豁免口径与 A1/A2 不同：文件名不在任何一行里，所以「违规那一行写
+  `GUARD-OK`」对它不成立。** A3 另立一条**更严**的文件级判据，两条同时成立才降级为 ⚠：
+  ① 文件**已在 `HEAD`**（历史遗留，不是本次新入库）；② 文件内**自带一行** `GUARD-OK <理由>`
+  说明为什么必须入库。**新增的敏感名文件即使写了标注也照样硬拦** —— 拦的就是「新文件」
+  这个形态（上面 gnb 事故即是）。立这条判据的直接动因：`mynet_gui` 的 `.env`/`.env.dev`/
+  `.env.embed`/`.env.prod` 是**团队共享的前端构建期配置**（只有 API 域名与 Reverb 客户端
+  公开值，无凭据），而 Quasar 按**固定文件名**查找 env（`@quasar/app-vite/lib/utils/env.js:31`，
+  命名法里只有 `dev`/`prod`，没有 `development`/`production`），**改名即失效、必须入库**。
+  不加这条路，日常改一次 `.env.dev` 就撞一次 A3，结局就是教人用 `--no-verify`。
+  实测（`guard_test.sh` 35 用例）：四个文件加标注后降级 ⚠ 并通过、豁免进审计日志；
+  历史在库但未标注仍硬拦；新建 `.env.prod` 即使带标注仍硬拦。
 - **精确不激进**：误报过多的守护会被 `--no-verify` 绕过，反而失效。正则取窄，宁可漏报。
-- **显式豁免**：在**违规那一行**写 `GUARD-OK <原因>`，该行即豁免；每次豁免记入 `.git/guard-exempt.log` 便于审计。
+- **显式豁免**：在**违规那一行**写 `GUARD-OK <原因>`，该行即豁免；每次豁免记入 `.git/guard-exempt.log` 便于审计。`A4`（二进制归档）没有行可言、`A3`（按文件名）走上面那条文件级判据。
 - 模板在 `knowledge-base/templates/`，各 repo 复制一份（`Makefile` + `.githooks/`），`make install-hooks` 装 hook。
+  **覆盖前先 `diff` 本仓副本与模板**：`mynet_agent` 的 `B2` 是**有意加严的分叉**（提交
+  `9267ce3`「保留本仓 B1/B2 分叉」）—— 它只扫 `mynetd/` 的 **import 字符串**、要求引号
+  以免误伤注释里的包名，并额外覆盖 `shared/config` 与 `mynet/keys`。直接从模板 `cp` 会
+  **静默削掉**这条已生效的红线。
 - **自包含不跨仓依赖**——各 repo 可独立 clone / build，hook 不能断。
 - **不要用 `--no-verify` 绕过 hook**。拦下了就按红线改。
 
