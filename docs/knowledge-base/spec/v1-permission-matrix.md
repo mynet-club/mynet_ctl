@@ -69,6 +69,14 @@
 > 本节下面的分级继续保留 —— 它同时是**取证位置索引**，落码时按它找行号。
 
 1. **`❌` 用户面整组无授权判据**：`VPN/Routes/api.php:97-286` 这 **116 条路由声明**上只挂了 `auth:sanctum` + `token.binding` + throttle，没有任何 permission/role 判据。8 个 FormRequest **一个授权判据都没有** —— 6 个 `authorize()` 直接 `return true`（例：`app/Http/Requests/GetRouterKeysRequest.php:14-17`），另外 2 个只判「登录了没」（`app/Modules/VPN/Requests/Node/CreateNodeRequest.php:21-24`、`Requests/Route/CreateRouteRequest.php:19-22` 都是 `Auth::check()`）。这不是「缺 RBAC」，是**缺 R2 的最低那层：能不能碰这个资源**。
+   > **✅ 部分已落（2026-10-04，裁定 A1，`mynet_api@b3493a8`）**：属主判据层建起来了，覆盖 **5 个裸写面**
+   > （`DELETE /nodes/{id}`、`POST /nodes/{id}/operator`、`PUT|DELETE /route/{id}`、`POST /route/bulk/status`），
+   > 判据单点在 `Domain/Guards/OwnerGuard::owns()`。**这 116 条路由声明本身仍然只挂 `auth:sanctum` + `token.binding` + throttle** ——
+   > 本轮的口径是「谁的资源」在策略/服务层答，不在路由上挂 permission。
+   > ⚠️ **8 个 FormRequest 的 `authorize()` 一字未改**（6 个 `return true`、2 个 `Auth::check()`）：这是刻意的 ——
+   > 单资源归属判定已经在策略里问了一次，再在请求对象里问第二遍就是矩阵 R6 禁的「同一判据两处各写一遍」。
+   > 未被本轮覆盖的写面（`NodeConfigController` 一族、`connections`、`service_ports` 等）仍按旧状态读，
+   > 扩面时只加 `OwnerGuard::authorize()` 调用点，不要复制判据。
 2. **`❌` 跨用户写与读**：`PUT /api/v1/users/{id}` 任意登录用户可改他人 `name/email/phone` —— `UserController::update()`（`app/Modules/VPN/Controllers/Api/V1/UserController.php:210-232`）把 `$id` 直接喂给 `UserService::updateUser()`，而后者（`app/Services/UserService.php:196-213`）**完全忽略 `$updaterId`**。同组还有 `GET /users`（全站列表，`:33-52`）、`GET /users/{id}`（`:145-162`）、`/{id}/statistics|activity|nodes|tenants`。
    **消费者取证**：`mynet_gui` 只用 `/users/profile`（`src/services/api.ts:430`）与 `/users/onboarding`（`stores/onboarding.ts:432,453`）；console SPA 与 Lua 均不调这些 `/{id}` 端点 ⇒ **零消费者的管理语义端点**，与 #36 删掉的 Social 死副本控制器同类。
    > **✅ 已落（2026-10-04，裁定 A4）**：上面点名的按 id 端点**整组从用户面删净**（路由 + handler + `UserService` 三个孤儿方法 + `UserDetailResource`），OpenAPI `back.yaml` 同批改（含从未注册的 `/users/{id}/permissions` 幻影）。锁住它的是新用例 `VPN/tests/Feature/Api/UserSelfSurfaceTest.php`：路由表 users 段逐条不存在、按 id 请求回 404 而非 500、`PUT /users/profile` 只作用当前登录用户的白名单列。
@@ -175,6 +183,22 @@
      只有 `services.user_id` NOT NULL（`:176`）。所以 15 处零散 `where('user_id')` 之外，归属为空的行对任何用户都「可见」。
    - **GUI 端不是缺陷端**：`router/middleware.ts:105-108` 的 `hasNodeEditPermission()` 是恒 `true` 的 TODO 桩 ——
      按 R1 前端隐藏从来不算防线，但它现在**也没有可依据的数据源**（见 F-28）。
+   > **✅ 已落（2026-10-04，裁定 A1，`mynet_api@b3493a8`）**：判据单点在
+   > `app/Modules/VPN/Domain/Guards/OwnerGuard.php` 的 `owns()`（规则只出现一次，两条 fail-closed：无认证身份拒、
+   > 归属列 NULL/0 拒），`NodePolicy`/`RoutePolicy` 只是它的 Gate 形状，由 `app/Providers/AuthServiceProvider.php`
+   > **显式** `Gate::policy()` 注册 —— 不走命名空间约定推导：本仓模型在 `App\Modules\VPN\Models\*`，而 Gate 推导失配的
+   > 默认结果是**一律拒绝**，表现为「功能莫名 403」且不可 grep。上面那句「全仓 **0** 处」的现值为
+   > **5 处 `OwnerGuard::authorize()` 写面 + 6 处收敛到 `owns()` 的零散判据**；落码清单、接线时打出的两条真 bug
+   > （`deleteNode` 旧签名不收 `$userId`、`createRoute` 只写不存在的 `created_by` 列）、以及**仍未收敛**的读面查询级
+   > `where('user_id')` 过滤，全部见 [dev-plan.md](../dev-plan.md)「2026-10-04 逐项裁定」A1 行。
+   > 两条边界照旧守：本层**只答属主**，绝不掺入 tenant 管理员语义（用户面不表达 tenant 权限是既有裁定）；
+   > 读面仍按 `BelongsToTenant` 的租户作用域，策略里刻意不定义 `view` —— 否则会有人以为读也按属主过滤。
+   > 框架侧「出方法、下层调用、业务继承 + 扩容」的方法诉求进 G1 那份清单第 13 条，back 不改 vendor、不 fork。
+   > ⏸ **扩面已停（2026-10-04，用户指示）**：框架侧**正在实现**同名的属主判定方法 ⇒ back 不再自建第二套。
+   > 剩下的 7 处零散比对（`NodeDomainService:299,860,933,1276`、`NodeKeyDomainService:1165`、
+   > `RouteRequestDomainService:70`、`SocialDomainService:509`，其中 4 处抛裸 `\Exception` ⇒ 越权表现为 500）
+   > **不要现在顺手收敛** —— 等框架 API 落地一次接完，替换点仍是 `OwnerGuard` 一处。清单与理由见
+   > [dev-plan.md](../dev-plan.md) A1 行。
 
 ## 5. 待裁定（已进 dev-plan 决策包）
 
@@ -255,7 +279,15 @@ grep -rn "ApiTenantMiddleware\|FrontendTenantMiddleware" app routes bootstrap co
 #   0          —— 两个租户中间件：删前取证为「零注册的死码」（§4-4 末 / 错误码清单 §3-8），2026-10-04 已删
 
 grep -rn "Gate::\|Policies\|->authorize(\|canAny" app/ | grep -v vendor | wc -l
-#   0          —— §4-10：back 全仓没有任何属主判据层（Laravel Gate/Policy 一次都没用过）
+#   17（2026-10-04 A1 前是 **0**）—— 但这条数**不能当判据用**：它数到的是 import、
+#   命名空间行和注释。要看接线面跑下面这条。
+
+grep -rn "OwnerGuard::authorize(\|OwnerGuard::owns(" app/ | grep -v "Guards/OwnerGuard.php" | grep -v tests | grep -v ' \*' | wc -l
+#   13 处 = 5 个写面 authorize（`NodeDomainService:525` 删节点 /
+#        `NodeOperatorDomainService:76` 远程指令 / `RouteDomainService:117,173,526` 改·删·批量）
+#        + 6 处旧零散判据收敛（`IpPoolDomainService:390,420` + `TenantScopedServiceService:263,343,379,440`）
+#        + 2 处 Policy→owns（`NodePolicy:27` / `RoutePolicy:22`）
+#   ⇒ 规则本体仍只在 `OwnerGuard::owns()` 一处（R6）；要扩面就加 authorize 调用点，别复制判据
 
 grep -rn "where('user_id'" app/Modules/VPN/Controllers/Api/ | wc -l
 #   15         —— 唯一的「归属」实现方式：控制器里零散 where，非集中判据
