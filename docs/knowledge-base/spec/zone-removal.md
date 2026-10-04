@@ -19,13 +19,13 @@
 | 1 `ZoneListPage`/`ZoneSharingPage`/`/zones`/`ZoneSelector` | **A 改名保留** | Zone* → Tenant*，路由 `/zones` → `/tenants`，功能不减。**第 1 步（GUI 内部改名）已落**：`mynet_gui` `cf00de3`（24 文件，5 个 `git mv`）；**第 2 步（契约翻转）待做**，见「建议的切法」。 |
 | 2 `DEFAULT_GLOBAL_ZONE`（`999999999`） | **B 改指真实平台租户** | 已执行：`mynet_gui` `68b273f`，提出 `PLATFORM_TENANT_ID = 9007199254740991` 常量替掉四处魔法数，与 `mynet_api config/id.php:51 platform_tenant_id` 同源。**兜底行为按 B 保留**，没有改成 A 的显式错误态。 |
 | — 第 0 步零风险清理 | — | 已执行：API 侧 7 处「另一个 zone」注释加防误删标记、③④ 类文案清理（`mynet_api` `df6c4da`）；删 GUI 死副本 `zoneServiceApiWithCache.ts`（`mynet_gui` `44f389d`）。 |
-| 3 GUI 改名后界面叫什么 | **网络区**（2026-10-04 追加裁决） | 已执行：`mynet_gui` `61d6b86`。用户原话「我也觉得『租户』太技术腔……先叫网络区，用个变量名替代吧，这样我们后续想到好词可以替换」。 |
+| 3 GUI 改名后界面叫什么 | **网络区**（2026-10-04 追加裁决） | 已执行：`mynet_gui` `61d6b86` + 补漏 `434701b`；API 侧中文消息 `mynet_api` `8a98e3d`；节点侧 WebUI+CLI `mynet_agent` `b80c029`。用户原话「我也觉得『租户』太技术腔……先叫网络区，用个变量名替代吧，这样我们后续想到好词可以替换」，第二轮追加「都统一吧，能否也设置为变量」。 |
 
 ### 界面用词的三层分工（第 3 项裁落后固化，别再混用）
 
 | 层 | 叫什么 | 落点 |
 |---|---|---|
-| 中文界面文案 | **网络区** | `mynet_gui/src/config/terms.ts` 的 `TERM_ZONE`，**唯一真相**；`i18n/zh-CN.ts`、`router/routes.ts` 的 `meta.title`、`TipsRegistry` 的 fallback 都从它拼接。换词只改这一行。 |
+| 中文界面文案 | **网络区** | 四个面各有一个取词单点，换词四处一起改：① `mynet_gui/src/config/terms.ts` 的 `TERM_ZONE`（`i18n/zh-CN.ts`、`router/routes.ts` 的 `meta.title`、`TipsRegistry` 的 fallback 都从它拼接）② `mynet_api/config/mynet.php` 的 `terms.zone`（`term_zone()`，覆盖直接渲染到前端的校验/错误消息）③ 节点 WebUI `mynet_agent/mynetd/localapi/webui/index.html` 内联的 `TERM` ④ 节点 CLI `mynet/cmd_node.go` 的 `termZone`。 |
 | 代码标识符 | **Tenant** | 类型/文件/方法/组件名（第 1 步 `cf00de3` 已搬）。 |
 | 接口 wire 字段 | **`zone_*`**（历史遗留） | 第 2 步（任务 #14）api+gui 同批原子翻转，翻之前不许单边改。 |
 
@@ -35,6 +35,20 @@ key 解析器会把链接标记后面的中文字符一起吃进 key —— `@:t
 网络区描述/切换网络区后」这类粘连用法是多数，链接方案覆盖不到，所以走模板字符串拼接。
 打包产物可验证：`dist/spa/assets/index-*.js` 里「网络区」只出现 1 次（`const ng="网络区"`），
 其余全是 `` `切换${ng}` ``。
+
+节点侧为什么是「内联常量 + 静态字面量」两套（`mynet_agent` `b80c029`）：
+
+- WebUI 的 `TERM` 内联在 `index.html` 的 `<script>` 顶部，**没有**单开 `terms.js` ——
+  `Makefile:119` 的 dist 只 `cp index.html $out/webui.html`，多一个兄弟文件会让那个参照
+  产物 404、`TERM` 变 undefined，整页 JS 直接崩（实际服务走 `-tags embed` 的 `all:webui`，
+  不受影响）。
+- `index.html` 的静态标签（导航按钮、`<small>`、`<option>`、iframe `title`）保持原生 HTML
+  字面量：`webui-context.js` 头注释定的约定是「布局与页面结构由 index.html 原生维护」，
+  所以不做 DOM 改写去填占位符。换词检索口径 `grep -n 网络区 mynetd/localapi/webui/index.html`。
+- 原先同一概念在节点 WebUI 里有三种叫法（页名「网络空间」、卡片标签「空间」、
+  sub「租户」、DNS 来源「租户下发」），这轮一并收敛；`<small>空间</small>` 后面那个
+  只起解释作用的 `<div class="sub">租户</div>` 随改名删除。
+- CLI 也要换：linux/openwrt 形态没有 WebUI，`mynet` 的中文输出就是界面（安装形态矩阵）。
 
 未决：en-US 仍显示 "Zone"（用户只裁了中文措辞），列在本包末尾待裁决清单。
 
