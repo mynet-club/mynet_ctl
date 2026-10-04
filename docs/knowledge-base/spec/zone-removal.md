@@ -324,7 +324,10 @@ GUI 半边照着这份断言清单改读法，不靠猜。
    `delete*`、`zones.stats.*`、`fetchOverviewError` 等 —— 管理入口随裁定 6 删了，文案没跟着删。
 7. **5 个无路由孤儿页面**（原未决 ④，含 `pages/tenant/TenantSharingPage.vue`，
    它内部还有 46 处 zone 引用）、`profile.preferences` 的双语缺失措辞、
-   未跟踪文件 `mynet_api/database/sql/migrate-tenant-to-platform.sql`（124 行）处置。
+   ~~未跟踪文件 `mynet_api/database/sql/migrate-tenant-to-platform.sql`（124 行）处置~~
+   —— **该项已随裁定 E2 收口（2026-10-05）**：判一次性、不入库，从仓内移出，逐字节副本 + 出处
+   说明放在任何仓都不跟踪的 `dist-archive/one-off-sql_20261005/`（详见 dev-plan 裁定表 E2 行）。
+   **前两件（孤儿页面、`profile.preferences` 措辞）仍未处置。**
 
 ---
 
