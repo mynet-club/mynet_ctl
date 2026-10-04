@@ -19,13 +19,13 @@
 | 1 `ZoneListPage`/`ZoneSharingPage`/`/zones`/`ZoneSelector` | **A 改名保留** | Zone* → Tenant*，路由 `/zones` → `/tenants`，功能不减。**第 1 步（GUI 内部改名）已落**：`mynet_gui` `cf00de3`（24 文件，5 个 `git mv`）；**第 2 步（契约翻转）待做**，见「建议的切法」。 |
 | 2 `DEFAULT_GLOBAL_ZONE`（`999999999`） | **B 改指真实平台租户** | 已执行：`mynet_gui` `68b273f`，提出 `PLATFORM_TENANT_ID = 9007199254740991` 常量替掉四处魔法数，与 `mynet_api config/id.php:51 platform_tenant_id` 同源。**兜底行为按 B 保留**，没有改成 A 的显式错误态。 |
 | — 第 0 步零风险清理 | — | 已执行：API 侧 7 处「另一个 zone」注释加防误删标记、③④ 类文案清理（`mynet_api` `df6c4da`）；删 GUI 死副本 `zoneServiceApiWithCache.ts`（`mynet_gui` `44f389d`）。 |
-| 3 GUI 改名后界面叫什么 | **网络区**（2026-10-04 追加裁决） | 已执行：`mynet_gui` `61d6b86` + 补漏 `434701b`；API 侧中文消息 `mynet_api` `8a98e3d`；节点侧 WebUI+CLI `mynet_agent` `b80c029`。用户原话「我也觉得『租户』太技术腔……先叫网络区，用个变量名替代吧，这样我们后续想到好词可以替换」，第二轮追加「都统一吧，能否也设置为变量」。 |
+| 3 GUI 改名后界面叫什么 | **网络区**（2026-10-04 追加裁决） | 已执行：`mynet_gui` `61d6b86` + 补漏 `434701b`；API 侧中文消息 `mynet_api` `8a98e3d`；节点侧 WebUI+CLI `mynet_agent` `b80c029` + 补漏 `9223eeb`（`mynet/commands.go:usage` 的向导帮助行漏了）。产物侧已随 `v0.0.7-pkg` 出包（`make dist` 五平台 + `make pkg-darwin`，见下「出包口径」）。用户原话「我也觉得『租户』太技术腔……先叫网络区，用个变量名替代吧，这样我们后续想到好词可以替换」，第二轮追加「都统一吧，能否也设置为变量」。 |
 
 ### 界面用词的三层分工（第 3 项裁落后固化，别再混用）
 
 | 层 | 叫什么 | 落点 |
 |---|---|---|
-| 中文界面文案 | **网络区** | 四个面各有一个取词单点，换词四处一起改：① `mynet_gui/src/config/terms.ts` 的 `TERM_ZONE`（`i18n/zh-CN.ts`、`router/routes.ts` 的 `meta.title`、`TipsRegistry` 的 fallback 都从它拼接）② `mynet_api/config/mynet.php` 的 `terms.zone`（`term_zone()`，覆盖直接渲染到前端的校验/错误消息）③ 节点 WebUI `mynet_agent/mynetd/localapi/webui/index.html` 内联的 `TERM` ④ 节点 CLI `mynet/cmd_node.go` 的 `termZone`。 |
+| 中文界面文案 | **网络区** | 四个面各有一个取词单点，换词四处一起改：① `mynet_gui/src/config/terms.ts` 的 `TERM_ZONE`（`i18n/zh-CN.ts`、`router/routes.ts` 的 `meta.title`、`TipsRegistry` 的 fallback 都从它拼接）② `mynet_api/config/mynet.php` 的 `terms.zone`（`term_zone()`，覆盖直接渲染到前端的校验/错误消息）③ 节点 WebUI `mynet_agent/mynetd/localapi/webui/index.html` 内联的 `TERM` ④ 节点 CLI `mynet/cmd_node.go` 的 `termZone`（同包的 `commands.go:usage` 帮助文案也拼它）。 |
 | 代码标识符 | **Tenant** | 类型/文件/方法/组件名（第 1 步 `cf00de3` 已搬）。 |
 | 接口 wire 字段 | **`zone_*`**（历史遗留） | 第 2 步（任务 #14）api+gui 同批原子翻转，翻之前不许单边改。 |
 
@@ -49,6 +49,26 @@ key 解析器会把链接标记后面的中文字符一起吃进 key —— `@:t
   sub「租户」、DNS 来源「租户下发」），这轮一并收敛；`<small>空间</small>` 后面那个
   只起解释作用的 `<div class="sub">租户</div>` 随改名删除。
 - CLI 也要换：linux/openwrt 形态没有 WebUI，`mynet` 的中文输出就是界面（安装形态矩阵）。
+
+**出包口径（`v0.0.7-pkg`，2026-10-04）**：节点侧改动只有重跑 `make dist` +
+`make pkg-darwin` 才现网可见，所以本轮随包交付。`make pkg-darwin` 原先在 bare 化的
+`mynet_gnb` 上必然报「找不到 gnb darwin 构建」，且 `P2_SRC` 那条硬编码相对路径同样落空
+（后果是 pkg 只带 gnb 四件套、不带 p2 内容，与 v0.0.6 出厂面不一致）。本轮的出包命令：
+
+```
+cd mynet_agent && make check
+make dist VERSION=v0.0.7-pkg
+GNB_DIR=<含 gnb,gnb_ctl,gnb_es,gnb_crypto,MANIFEST 且目录名含 c411f14ee647 的目录> \
+P2_DIR=<p2-route-proxy 目录> \
+make pkg-darwin VERSION=v0.0.7-pkg
+```
+
+`GNB_DIR` 本轮复用 v0.0.6 已回归通过的 darwin/arm64 四件套（`mynet_gnb` 出包面这轮零改动，
+重编 gnb 会撞 `1.6.8-c411f14ee647` 的基线漂移坑，见「gnb 出包基线漂移」）；`P2_DIR` 指向
+`.wt/gnb-bare-leftover-20261004/packages/1.6.8-c411f14ee647/p2-route-proxy`，与 v0.0.6 pkg
+内的 p2 文件逐字节一致。验收：pkg payload 文件清单与 v0.0.6 完全一致、gnb 字节一致、
+`mynet version` 三查（baseline/patches/builder）、二进制内 `网络区` 有 / `租户`·`网络空间` 无、
+`shasum -c checksums.txt` 全 OK、dmg 内 pkg 与 `dist/pkg` 同字节。
 
 未决：en-US 仍显示 "Zone"（用户只裁了中文措辞），列在本包末尾待裁决清单。
 
