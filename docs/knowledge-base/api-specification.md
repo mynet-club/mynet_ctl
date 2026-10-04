@@ -1221,6 +1221,13 @@ Response 403:
 ```
 
 #### PUT|PATCH /route/{id}
+
+> 🚫 **2026-10-04 已下架**（`mynet_api@018a0c3`）：下面的 `destination` / `gateway` / `metric` /
+> `interface` 四列在 `routes` 表里**都不存在**（实列见 `2026_09_23_000001_create_vpn_business_tables.php:118-133`），
+> 端点返 200 但字段被静默丢弃 ⇒ 幻影端点。现在命中这条 URI 是 **405**（URI 在、方法不收）。
+> 状态开关走 `POST /route/bulk/status`，删除走 `DELETE /route/{id}`；GUI 只用后者。
+> 权威契约见 [openapi/back.yaml](../api/openapi/back.yaml)。
+
 ```
 Middleware: auth:sanctum, api.zone
 
