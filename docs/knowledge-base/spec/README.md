@@ -1,7 +1,7 @@
 # MyNet 操作契约规范（Operation Contract Spec）
 
 > **SSOT 位置**：`mynet_ctl/docs/knowledge-base/spec/`  
-> **上次更新**：2026-09-21  
+> **上次更新**：2026-10-04  
 > **适用项目**：**mynet_agent**（`mynetd`，跨端一致逻辑的唯一实现）；`mynet_ui` / `mynet_openwrt` / `mynet_desktop`（只调不改的壳）  
 > 旧线口径（`mynet_lua` / `mynet_client`）已冻结，见 [`../integration-plan-v2.md`](../integration-plan-v2.md) §2。
 
@@ -33,7 +33,9 @@
 | [driver-abstraction.md](driver-abstraction.md) | VPN Driver 抽象层：公共控制面 + 驱动专属 intent（gnb / wireguard） | 目标线 |
 | [schemas/bundle-envelope-v2.schema.json](schemas/bundle-envelope-v2.schema.json) | R2 线格式 SSOT：BundleEnvelope + NetworkIntent + GnbIntent + WireGuardIntent | 机器可读契约 |
 | [fixtures/bundle-envelope-v2/](fixtures/bundle-envelope-v2/) | R2 双端互解 fixtures（Go/PHP 共用，7 场景） | 共享测试数据 |
-| [local-api.md](local-api.md) | 本机能力面：mynetd HTTP/ubus 契约（GUI/OpenWrt 壳只调不改） | 目标线 |
+| [v1-permission-matrix.md](v1-permission-matrix.md) | **权限矩阵（P0 冻结件）**：R1–R6 边界规则 + 六表面×操作域判据 + 9 条实测洞 | 全线（back / agent / 壳） |
+| [v1-error-codes.md](v1-error-codes.md) | **稳定错误码清单（P0 冻结件）**：7 套信封现状 + 现有码注册表 + 死码与分叉 + 冻结口径 | 全线（back / agent / 壳） |
+| [local-api.md](local-api.md) | 本机能力面：mynetd HTTP/ubus 契约（GUI/OpenWrt 壳只调不改） | 目标线 ⚠️ 信封口径与代码不符，见 [v1-error-codes.md](v1-error-codes.md) §3-5 |
 | [data-models.md](data-models.md) | 所有数据结构（JSON/conf 格式，唯一定义处） | 目标线 |
 | [auth.md](auth.md) | 登录 / 登出 / Token 刷新 | ⚠️ **冻结（旧线）** |
 | [wizard.md](wizard.md) | 安装向导：首次配置、Zone/节点选择、配置同步 | ⚠️ **冻结（旧线）** |
