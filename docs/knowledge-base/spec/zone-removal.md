@@ -219,7 +219,10 @@ if (!authStore.isAuthenticated || !zoneId || !userId || isWebSocketInitialized) 
 缺 `tenant_id` 或 `user_id` 时至少留下「通知推送不可用」的痕迹，不再 fail-quiet。
 `services/websocket.ts` 的 `connected` 事件载荷也从 `{zone_id}` 改成 `{tenant_id}`。
 
-⚠️ 但**这条仍然是全站最脆的一条**：GUI 没有类型检查（见「验证」节），字段名写错不会编译失败，
+⚠️ 但**这条仍然是全站最脆的一条**：GUI 没有类型检查（见「验证」节；2026-10-05 起装了
+vue-tsc 棘轮闸 `mynet_gui e258869`，**但它是「只许降不许升」的存量基线（当前 203 条），
+不是零错门禁** —— 这三个注入点所在文件的错还在基线里，字段名写错照样不报），
+字段名写错不会编译失败，
 只会让通知静默失效。改这三个注入点之一时，用这条 grep 自查：
 `grep -rn "X-Tenant-ID" mynet_gui/src`（当前 3 个写入点在 `api.ts:61/115/140`，
 另两处走 `connect(token, String(tenantId))` 的形参）。
@@ -261,6 +264,7 @@ GUI 半边照着这份断言清单改读法，不靠猜。
   **12 条**，本批 **-2**（删掉 `api.ts` 的死 `Tenant`、`boot/auth.ts` 的死 `APP_CONFIG` 导入）、
   **新增 0**。
 - `node dev-tools/check-i18n.js`：只剩既有的 `profile.preferences` 双语缺失（第 1 步已确认与 zone 无关）。
+  *（2026-10-05：这条已消 —— `layouts/MainLayout.vue:159` 现读 `user.preferences`，两语都有该键。）*
 - `npm run build`：exit 0。
 - 字段回归靠 grep：`grep -rn "can_access\|is_active\|pivot" mynet_gui/src` ——
   租户域已无这三个名字的读取（残余 `is_active` 属 node-keys/services/mockData 的另一语义）。
@@ -272,6 +276,11 @@ GUI 半边照着这份断言清单改读法，不靠猜。
 ③ 无 `.githooks`，guard 在本仓提交上不运行；
 ④ `check-i18n` 只报「缺失」不报「未使用」，且对带插值实参的 `t()` 调用点是瞎的。
 所以界面未实测（没起 dev server 点过网络区切换/选择器），字段读对只由 grep + build 背书。
+
+*（**2026-10-05 更正本清单**：①已装闸 —— `dev-tools/check-types.js` + 棘轮基线，进 `make lint`，
+但它是存量基线（203 条）不是零错，①的「写错字段名不报错」在本文件点到的位置上**依然成立**；
+③已不成立 —— `.githooks/`（pre-commit guard / pre-push `make check`）已随任务 M0 落地；
+②④仍是现状。盲区编号以记忆「mynet_gui 验证工具的五个实测盲区」为准，别以本段的「三个」为准。）*
 
 ### 第 2 步留下的未处置项（均未自行动手，等裁决）
 
@@ -322,12 +331,28 @@ GUI 半边照着这份断言清单改读法，不靠猜。
 6. **已删功能留下的死文案 key**（`check-i18n` 不报未使用，所以留着没人发现）：
    `zones.actions.create`、`zones.dialogs.createZone`、`zones.create*` / `update*` /
    `delete*`、`zones.stats.*`、`fetchOverviewError` 等 —— 管理入口随裁定 6 删了，文案没跟着删。
+   ~~未处置~~ → **已随裁定「页面与死文案一起删」处置（2026-10-05，`mynet_gui` 本批）**：
+   zh-CN / en-US 各删 34 行，含上面全部 `zones.*` 死叶与整个 `help` 块。
+   **注意本项只清了「与已删入口/已删页面成套」的那些**；仓内仍有 ~872 个零引用 zh 键未动
+   （8 个命名空间存在拼接式动态取键，批量删会打穿运行时），已登记在 dev-plan 待办。
 7. **5 个无路由孤儿页面**（原未决 ④，含 `pages/tenant/TenantSharingPage.vue`，
    它内部还有 46 处 zone 引用）、`profile.preferences` 的双语缺失措辞、
    ~~未跟踪文件 `mynet_api/database/sql/migrate-tenant-to-platform.sql`（124 行）处置~~
    —— **该项已随裁定 E2 收口（2026-10-05）**：判一次性、不入库，从仓内移出，逐字节副本 + 出处
    说明放在任何仓都不跟踪的 `dist-archive/one-off-sql_20261005/`（详见 dev-plan 裁定表 E2 行）。
-   **前两件（孤儿页面、`profile.preferences` 措辞）仍未处置。**
+   ~~**前两件（孤儿页面、`profile.preferences` 措辞）仍未处置。**~~
+   **前两件已于 2026-10-05 处置**（裁定「页面与死文案一起删」）：5 个孤儿页面 `git rm`
+   （`pages/help/HelpPage.vue`、`pages/system/HelpPage.vue`、`pages/network/NetworkConfigTestPage.vue`、
+   `pages/system/CacheManagementPage.vue`、`pages/tenant/TenantSharingPage.vue`），
+   `MainLayout.vue:159` 改读 `user.preferences`。
+   随 `TenantSharingPage` 一起消失的还有它内部那 46 处 zone 引用 ——
+   **但本文件「第 2 步留下的未处置项」第 5 条（cluster B 命名：`services/zone/`、
+   `types/zoneService.ts`、`useZoneServices`、`components/zone/`、en-US 的
+   `zoneServices` / `zoneSharing` / `zoneFilter`）不受影响，仍等命名裁决。**
+   另：`pages/services/AnonymousServicesPage.vue` 是**第 6 个**孤儿候选，本批**没删** ——
+   它的路由在 `routes.ts:251-256` 是注释掉的，而它打的后端 `GET /api/v1/services/anonymous`
+   是**现役功能**（A5 迁移件注释里还拿它当「匿名服务访问存在」的证据）。
+   删页面等于砍掉一条已建好的UI，属于产品决定，单独挂着待裁。
 
 ---
 
