@@ -264,6 +264,18 @@ NULL 没被填 0 →回填后跑通→ `information_schema` 复核 7 列全 `NO`
 **硬口径（E1 立的一条，别在上线时忘掉）**：**DDL ≠ 现网** —— 这份 DDL 只保证
 「back 启用的 74 张」，现网那 **47 张**框架下游表不参与 mynet，本件既不建也不删它们。
 
+✅ **执行状态（2026-10-05，现网实跑）**：本栏两件里**第 2 件（A5 收紧）已执行完毕**，
+工单 B-4 一并落地（B-5 经现网核验**列已存在、无需执行**）；**第 1 件（建库 DDL）按设计未跑**（现网已有库）。执行前已全量备份
+（`/data/backup/mynet/api/pre-a5-owner-hardening-20261005-020434/mynet_back.sql.gz`）。
+逐条结果、探针（插 NULL 被 `1048` 挡下）、行数与哈希见工单
+[`dba-operations-ticket-2026-10.md`](dba-operations-ticket-2026-10.md) §F。**注意**：上面的
+「隔离临时 MySQL 8.4.8 验证」与生产引擎（MariaDB 10.11.18）**不同方言**，现网实跑是首次
+在 MariaDB 上验证同一物件的语义（结论：7 列全 `NO`、探针 `1048`，见 §F.2 上表）。
+
+⚠️ **仍是待裁、未执行的**：工单 B-3（`invitations` 相关，存量码重签未裁）**未跑**；
+另有一处**框架判据与现网数据分叉**（框架按 `tenant_id IS NULL` 认全局角色，现网 14 个全局角色
+的 `tenant_id` 非 NULL）已作 `决策包` 交主线裁决，未擅自归一化——见 §F.4。
+
 ### 8.6 上线后冒烟（三条机器做的 + 一条要人做的）
 
 ```
@@ -308,7 +320,14 @@ curl -sS  https://console.mynet.club/api/v1/console/auth/user            # 未�
 | 应用目录 | `/data/app/mynet.club/api2` 不存在（早已移除）；`api_pre_p3` 为晋升前 api 快照 |
 | 老库 `mynet` | **数据保留**，159 表；未 DROP |
 | 备份 | `/data/backup/mynet/api2-retire-20260926_010200/mynet.sql.enc`（AES-256-CBC，口令 `/etc/mynet/backup.pass`） |
-| 承接者 | `api.mynet.club`（`/data/app/mynet.club/api`，库 `mynet_api`） |
+| 承接者 | `api.mynet.club`（`/data/app/mynet.club/api`，库 **`mynet_back`**，121 表） |
+
+⚠️ **库名更正（2026-10-05，现网取证）**：本表原先记 `库 \`mynet_api\``，与现网不符——
+生产 `.env` 的 `DB_DATABASE=mynet_back`，`information_schema` 数得 121 张。旧记法照抄自
+`mynet_api` 这个**仓名/应用名**，不是库名。同一行还漏了引擎：生产实际跑
+**MariaDB 10.11.18**（`VER 15.1 Distrib 10.11.18-MariaDB-0+deb12u1`），不是文档其它处
+默认的 MySQL 8 —— 这直接影响 SQL 方言（`DELIMITER`、`ALTER … ALGORITHM` 等）能否照跑，
+执行 `database/sql/` 物件前先看这一条。详见工单 §F.1。
 | nginx | 旧站点已移除，仅保留 `api2.mynet.club.retired` 410 块 |
 
 ⚠️ MariaDB 不支持 `ALTER DATABASE … READ ONLY`；冻结方式 = nginx 410 + 无应用/无 cron 写入 + 全量备份。
