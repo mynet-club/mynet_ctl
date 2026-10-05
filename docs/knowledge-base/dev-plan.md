@@ -750,3 +750,16 @@ P0 ──┬──────────────────────�
 | ~~`mynet_api/public/console.scrm-placeholder/`~~ **已裁定并删除**（2026-10-04，用户原话「SPA 构建产物放库里没意义，直接从库里删」；`mynet_api@eebd6b1`） | 那份是**参考项目 scrm-platform 的 console 构建产物**（370 文件 / 5.5MB：`index.html` + 183 个去 hash 的 chunk，scrm 业务页为主 + 框架骨架 `ConsoleLayout`/`Login`/`Tenant*`/`module-loader`/`http`/`theme-manager` + 32 个 `el-*` 分片），G-2 装我们自己的 SPA 前从 `public/console/` 挪出来留作接口面对照。它贡献过的取证**全部已进本文**（`§缺口尺寸` 的 404 清单、12 组 `/api/v1/*` 前缀计数、F-15 的 `resources` 段大小写坑），所以副本没有剩余价值；源头那份在 `framework/scrm-platform/public/console/`（`diff -rq` 实测同名 chunk 只差 hash），要对照看那边。⚠️ **`.gitignore` 里那一条保留**（这点别再 revert）：产物目录名固定，将来再顺手拷进来时 `make guard` 的工作区语义会扫「未跟踪且未被 ignore」的文件 —— 那堆 minified 字面量（OAuth 页 `placeholder:"scrm_prod"`、四处「请粘贴私钥」textarea 的 `-----BEGIN PRIVATE KEY-----` 提示文案）会被判成 A1 硬编码凭据 + A2 私钥泄露，**这正是今天两次 push 拦截里的第一次** <!-- GUARD-OK 这是文档引述：转述 scrm 产物里 textarea 的 placeholder 提示文案，不是任何私钥材料 --> |
 | **`mynet_api/database/sql/migrate-tenant-to-platform.sql`（124 行）** | ✅ **已处置（2026-10-05，裁定 E2「一次性、不入库」）**：从仓内**移出**，逐字节副本（sha256 `6fdeeae6…7f0088`）+ 出处说明放在任何仓都不跟踪的 `dist-archive/one-off-sql_20261005/`，`mynet_api` 的 `git status` 现已干净。原先挂着的两条候选（入库走 `database/sql/` 口径 / 判一次性）取后者，理由与复用前提见 E2 行与该目录 README；`spec/zone-removal.md:327` 的未决 7 同批收口 |
 | **Feature 套件里 14 个未标 `#[Group('mysql')]` 的存量**（测试 fixture 整备，非 app 缺陷） | 根因与逐处行号都在 **F1** 行。两类已各解决一半：① `1364 tenant_user_id`（裸 `DB::table('tenant_users')->insert()` 绕过模型 `HasGlobalId`）已按裁定整备**共用测试地基**那一处（`tests/Concerns/BuildsConsoleFixtures.php:48`，一条盖住 7 个 `Console*` 文件，2026-10-05 `205a9bb` 转绿并加标记）；② 改 schema 污染同库后续用例，已加 `tearDown()` 复用迁移件 `down()`（`bd5759a`）。**剩下 14 个 `Feature/Api/` 文件**各自的裸 insert 一处未动 —— 裁定明确不扩大这条整备面。⚠️ **补的时候别走岔路**：生产 `tenant_users.tenant_user_id` 就是没有自增（`deploy/schema/mynet_back-schema.sql` 实测），**不许给测试表加自增来「修」**（那与 `personal_access_tokens.id` 那类「测试比生产松」方向相反） |
+
+---
+
+## 7. P3 自动组网 planner（2026-10-05 追加指针）
+
+`MYNET_V1_PLAYBOOK.md` §7 P3 / §10 M3 的**开发计划**已成文：**`spec/auto-mesh-planner.md`**（设计 + 决策包，未写运行时码）。
+
+- **一句话**：现网「组网」= 人工 `RouteRequest` 审批 + **隐式的「自家节点默认全互联」合成**（`NetworkSemanticsProjector.php:208-256` 现算，无闸门/快照/上限）；P3 = 把它显式化、可计数、可拒绝、可回滚，并加 `shadow` 输出。
+- **两处必须知道的现状**：① 数据面**只认 `routes`** —— `connections` 表虽新且有唯一键（`2026_09_23_000001:113`），但 bundle **不读它**（`BundleEnvelopePublisher.php:198` 恒 `[]`）；② `NodeCapabilityResolver` / `TransportPlannerDomainService` **目前零调用方**，planner 是它们的第一个消费者。
+- **待裁 D1–D5**（交主线）：planner 与 own-node 合成的关系 / shadow 载体 / 容量初值 / 并发护栏范围 / enforce 作者对象（`routes` vs `Connection`）。
+- **分步**：P3-1 shadow → P3-2 超限拒绝 → P3-3 并发护栏 → P3-4 enforce+回滚 →（可选）P3-5 两模型合一。
+
+**注意**：与本文件轨道 B 的 B-5/B-7 是两件事 —— B-5/B-7 是「领域对象与 OS 路由的契约」且已 `☑`；P3 是「谁连谁」的 planner，**尚未开码**。
