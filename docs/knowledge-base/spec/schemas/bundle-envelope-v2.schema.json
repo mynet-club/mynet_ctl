@@ -413,10 +413,6 @@
               ],
               "description": "Unified Forwarding。"
             },
-            "proxy": {
-              "type": "boolean",
-              "description": "P2 补丁能力：准出无 route 时兜底到 f 节点、准入跳过白名单。**仅当目标二进制探测到 RouteProxy 时才可为 true**；否则 agent 必须拒绝 Apply。"
-            },
             "relay_routes": {
               "type": "array",
               "items": {

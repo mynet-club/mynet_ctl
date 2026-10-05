@@ -98,4 +98,48 @@ M4 原文：**真实 peer 网关完成节点到网络、网络到网络、回程
 - 不把 `Acceleration` 当「必须有」而造一个无消费者的契约（反纸面达成 D1）。
 - 不在未取证前把「回程缺失」直接判成 bug —— 先按 D4 取证（overlay 本就双向）。
 
+---
+
+## 7. 实施记录（2026-10-05 用户裁定 + 首批落地）
+
+> 本节为**追加**记录，不改上文正文（正文的 `:474-485` 等行号是裁定前快照）。
+
+### 7.1 裁定（用户原话要点）
+
+1. **bundle 对 proxy 只表达一件事**：是否允许为对方代理（一个许可位）。其余（role / exits /
+   DNS 三选一 / split / 域名规则）全归本地节点 —— WebUI 配置 + mynet 工具生成。
+2. **`gnb.forwarding` 与 proxy 设计无关**：它是 node.conf 的 direct/standard/unified 开关组
+   （node.conf 无名为 `forwarding` 的单一键），撞词 gnb 的 `f`（forward 节点属性，在 address.conf）
+   纯属误导 —— 删其 `.proxy` 位。
+3. **`proxy on` 属独立 `proxy.conf`**（`driver/gnb/conf/<id>/proxy.conf`），**不在 node.conf**。
+
+### 7.2 已落地（A 案：只删 `.proxy` 位 + node.conf 渲染）
+
+| 位置 | 动作 |
+|---|---|
+| `mynet_agent/shared/domain/bundle_envelope.go` `GnbForwarding` | 删 `Proxy bool` 字段 |
+| `mynet_api/app/Modules/VPN/Domain/Bundle/GnbForwarding.php` | 删 `$proxy` 属性 + fromArray/toArray |
+| `mynet_agent/mynet/driver/gnb.go` `RenderGNBNodeConf` | 删 `proxy on` 渲染块 |
+| `mynet_api/.../BundleEnvelopePublisher.php` | 删 `gnb.forwarding.proxy=true` 与 forwarding 默认 `proxy:false` |
+| `mynet_agent/mynet/plugin_proxy.go` `applyProxyForwarding` | 删 `Forwarding.Proxy=true`（只留 direct-forwarding） |
+| `mynet_agent/mynet/project_active.go` | 删 `Proxy: li.Listen.Proxy` |
+| `mynet_ctl/.../spec/schemas/bundle-envelope-v2.schema.json` | 删 `gnb.forwarding.proxy` 声明（SSOT 合同） |
+| `mynet_ctl/.../spec/fixtures/bundle-envelope-v2/` | 6 个 gnb fixture 删除 `gnb.forwarding.proxy` 行并重算 `checksum`（`network.proxy` 保留不动） |
+| 测试 | agent `plugin_proxy_test.go` / `project_active_test.go` 两断言翻成**反向不变量**（node.conf 不得含 `proxy on`）；api `BundleEnvelopeV2Test` 改断言（forwarding 不再带 proxy） |
+
+**门禁**：`go build ./...` + `go test ./mynet/... ./shared/...` 全绿；api `phpunit` 441/441 全绿；
+`pint --test` / `gofmt -l` 干净。
+
+### 7.3 待裁 / 遗留
+
+- **D1 收窄**：用户倾向「bundle 只留一个许可位」⇒ 需决定 `network.proxy`（整个 `ProxyPolicy`，
+  含 role/exits/DNS/split/域名规则/ACL）与 `LocalListen.Proxy`（现已无消费者）的去留。
+- **另一条 node.conf `proxy on` 路径未动**：`config/vpn.php:96-108` 的 expert `proxy` 开关
+  （描述写「写入 node.conf 的 proxy on|off」）+ `NodeConfigController.php:399` 校验，经
+  `GnbConfigGeneratorDomainService` 仍可能渲染 node.conf `proxy on`。与裁定 3 冲突，待裁。
+- **fixture 已清净**：6 个 gnb fixture 的 `gnb.forwarding.proxy` 行删除并重算 `checksum`；
+  Go `shared/domain` 与 api `BundleEnvelopeV2Test` 双端 fixture 用例全绿。
+- **`LocalListen.Proxy` 已无消费者**（`project_active.go` 不再读），字段本体留待与 D1 一并对齐。
+- **残留 node.conf `proxy on` 路径**（见上条 expert 开关）尚未收口，属 D1 收窄的连带项。
+
 <!-- GUARD-OK 本文引述的是文件名、行号、表名与配置键，不含凭据 -->
