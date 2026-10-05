@@ -142,4 +142,30 @@ M4 原文：**真实 peer 网关完成节点到网络、网络到网络、回程
 - **`LocalListen.Proxy` 已无消费者**（`project_active.go` 不再读），字段本体留待与 D1 一并对齐。
 - **残留 node.conf `proxy on` 路径**（见上条 expert 开关）尚未收口，属 D1 收窄的连带项。
 
+### 7.4 第二轮裁定与落地（2026-10-05，追加）
+
+对 §7.3 两条待裁的用户裁定：
+
+1. **残留 node.conf `proxy on` 路径 → 改指 proxy.conf**。已落地：
+   - `mynet_api/config/vpn.php` 删除 gnb expert 的 `proxy` 字段定义；
+     `NodeConfigController.php` 删除对应 `'proxy' => 'sometimes|string|in:on,off'` 校验。
+   - node.conf 不再可能渲染 `proxy on`。gnb 代理开关归**独立 proxy.conf**，该文件由节点侧
+     （proxy 插件 / 策略投影）生成，云端不渲染（依据 `spec/proxy-conf-design.md` §5 能力矩阵
+     + §8「删 node.conf proxy」）。
+   - api 侧本就无 proxy.conf 渲染器（`ConfigBundleService` 只产出 node.conf/address.conf/
+     route.conf），故无需新增渲染；node.conf 字段消失后表单字段同步消失
+     （`ConfigFormService` 由 config/vpn.php 驱动）。
+   - 门禁：`php -l` 两文件通过；api `phpunit` 441/441 全绿。
+
+2. **D1 粒度 = 对端级 ⇒ 保 `ACL`**。`shared/domain/proxy_policy.go:31-32` 的 `ProxyACL`
+   （「出口授权：对谁开放」T11）；云端对应 `ConnectionGrant.php:29` 的 `RESOURCE_PROXY`。
+   即「许可」保留对端级表达，不塌缩为网络区级布尔。
+
+**D1 收窄的下一步（未执行，待 GO）**：bundle 的 `network.proxy` 只保留许可部分
+（`enabled` + `acl`），客户端策略（`role` / `exits` / `dns` / `split` / `domain_rules` /
+`region` / `policy` / `foreign_dns_route` / `full_tunnel` / `doh_mode` / `fwmark` / `table`）
+移出 wire，改由节点侧 Local 轨承载（`ProxyIntentState`，`proxy_unify.go`）。涉及
+Go `ProxyPolicy` / PHP `ProxyPolicy` / schema / 6 fixture / `proxy_apply.go` 的
+`planFromBundle` 与 `StampCloudIntent` 取数来源 —— 属 wire 契约变更，另列步骤表执行。
+
 <!-- GUARD-OK 本文引述的是文件名、行号、表名与配置键，不含凭据 -->
