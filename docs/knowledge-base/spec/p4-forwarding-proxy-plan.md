@@ -20,17 +20,17 @@ P4 的能力**大部分已经在跑**（GNB 转发、Proxy 策略路由/DNS/清�
 2. **转发开关**在节点配置面：`NodeConfigController.php:384-386`（`direct_forwarding`/`unified_forwarding`/`standard_forwarding` + 同块 `forward`、原生 `proxy`，`:388,404`），枚举 `Config/vpn.php:89-120`；另有每设备 `ip_forwarding` 0/1（`NodeController.php:421`）。
 3. **实体网关（LAN 接入）**是**隐式**的 —— 没有 `peer_gateway`/`lan_gateway` 模型；表达为一个带 `source:"lan"` 路由的节点。装配在 OpenWrt 侧：安装器 `mynet/cmd_install_openwrt.go:101,248,268,272`，LAN 路由合成 `mynet_openwrt/luasrc/model/mynet/node.lua:1088,1101,1143`。
 4. **Proxy 合同**：`shared/domain/proxy_policy.go:12-44`（`Enabled/Role/Policy/Split/Exits/DNS/DomainRules/ACL/Fwmark/Table`），split 矩阵 `:199-223`，DNS 三选一 `off|peer|smart|peer_smart` `:75-125`（含旧 `none|redirect|resolv|split`）。
-5. **Proxy 落地**：策略路由 fwmark/table/`ip rule`（`mynet/mynet/proxy_apply.go:65-146`）、DNS 执行 `:324-360`、**停止清理** `proxyCleanupCmds` `:394-420`（删 DNS /32、`ip rule del`、`route flush table`，全 `optional`；在 `apply_plan.go:285` 调用、`apply_plan.go:308` 刻意排除出回滚）、DNS 劫持 `proxy_dns_hijack.go`、**fail-closed ACL**（api `ProxyAuthDomainService.php:19-69`，agent `ProxyACLCmds` `proxy_apply.go:546-590`，隧道方向默认 `drop`）。
+5. **Proxy 落地**：策略路由 fwmark/table/`ip rule`（`mynet/proxy_apply.go:65-146`）、DNS 执行 `:324-360`、**停止清理** `proxyCleanupCmds` `:394-420`（删 DNS /32、`ip rule del`、`route flush table`，全 `optional`；在 `mynet/apply_plan.go:285` 调用、`mynet/apply_plan.go:308` 刻意排除出回滚）、DNS 劫持 `mynet/proxy_dns_hijack.go`、**fail-closed ACL**（api `ProxyAuthDomainService.php:19-69`，agent `ProxyACLCmds` `mynet/proxy_apply.go:546-590`，隧道方向默认 `drop`）。
 6. **ProxyPolicy 注入 bundle**：`BundleEnvelopePublisher.php:474-485`（写 `network.proxy` 并翻 `gnb.forwarding.proxy`）。
 
 **分成两条路径 / 缺位**
 7. **OpenWrt `proxy.lua` 是并行旧路径**：自读 `PROXY_ROLE_CONF`/`proxy_route.conf`（`mynet_openwrt/luasrc/model/mynet/proxy.lua:16,60,203,411,439`，bash `KEY=VALUE`），并直接改 GNB `route.conf` 标记（`:766-802`），**不消费 bundle 的 `network.proxy`** ⇒ §13 第 5 条**未达标**。
 8. **无 `Acceleration`、无 `service_policy`**：全仓 grep（`app/`、`mynet_gui/src`、`mynet_agent`）零命中。现有 `Service` 是**已发布服务目录**（`Models/Service.php:28-31`，枚举 `gnb_index,music,video,netbridge` 在 `Console/V1/ServiceController.php:56`），不是转发合同。
-9. **回程路由无实现**：全仓只有**诊断文案**（`mynet/mynet/cmd_route_doctor.go:99-102`、`cmd_gate.go:125`），无「往对端写回程」的代码。
+9. **回程路由无实现**：全仓只有**诊断文案**（`mynet/cmd_route_doctor.go:99-102`、`mynet/cmd_gate.go:125`），无「往对端写回程」的代码。
 10. **无 fail-closed / 网关离线用例**：grep 测试无命中；OpenWrt 侧**无可执行测试**（只有报告 `mynet_openwrt/docs/TEST_REPORT_PROXY_20260503.md`）。
 11. **GUI 无 service/acceleration store**（`mynet_gui/src/stores/` 仅 `auth.ts`/`onboarding.ts`）；服务页走 API（`src/services/tenant/tenantService.ts:69`）；转发字段在 `src/types/nodeConfig.ts:236-243`。
 
-**已有测试（能力面覆盖）**：Go `mynet/mynet/proxy_apply_test.go`（cleanup `:162`、server `:136`、DNS `:191`、fixture e2e `:301`、client `:59`）、`proxy_dns_hijack_test.go`、`shared/domain/proxy_policy_test.go`、`driver/gnb_conf_render_test.go:339`；PHPUnit `Console/ConsoleServicePolicyTest.php`（真 HTTP）、`Feature/Api/TenantServiceApiTest.php`、`tests/BundleEnvelopeV2Test.php:100`。
+**已有测试（能力面覆盖）**：Go `mynet/proxy_apply_test.go`（cleanup `:162`、server `:136`、DNS `:191`、fixture e2e `:301`、client `:59`）、`mynet/proxy_dns_hijack_test.go`、`shared/domain/proxy_policy_test.go`、`mynet/driver/gnb_conf_render_test.go:339`；PHPUnit `Console/ConsoleServicePolicyTest.php`（真 HTTP）、`Feature/Api/TenantServiceApiTest.php`、`tests/BundleEnvelopeV2Test.php:100`。
 
 ---
 
