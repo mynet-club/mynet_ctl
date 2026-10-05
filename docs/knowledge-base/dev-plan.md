@@ -767,3 +767,16 @@ P0 ──┬──────────────────────�
 **裁定（2026-10-05）：自己的节点自动组网、不限制（既有行为）。** ⇒ P3 的**容量闸门/超限拒绝作废**、**planner 不立项**；剩余面只剩「`routes`/`node_route_requests` 无唯一索引 → 并发/重复注册」一条真缺陷 +（可选）尺寸只读统计。详见 `spec/auto-mesh-planner.md` §8。
 
 **追加裁定（2026-10-05 同日）：该护栏保持代码层逻辑判断、不加唯一索引、不动表结构**（软删语义会使唯一键更难缠）⇒ **P3 收口，无新增运行时码**。详见 `spec/auto-mesh-planner.md` §8.1。
+
+---
+
+## 8. P4 实体网关 / 转发 / Proxy（2026-10-05 追加指针）
+
+`MYNET_V1_PLAYBOOK.md` §7 P4 / §10 M4 / §13 第 5 条的**开发计划**已成文：**`spec/p4-forwarding-proxy-plan.md`**（设计 + 决策包，未写运行时码）。
+
+- **一句话**：P4 能力**大部分已在跑**（GnbForwarding、Proxy 策略路由/DNS/清理、OpenWrt LAN 接入），但分成**两条互不相识的路径** —— 云侧 bundle 走 `GnbForwarding` + `ProxyPolicy`，而 OpenWrt `proxy.lua` **自读本地 `proxy_role.conf`/`proxy_route.conf`、不看 bundle**。
+- **三处真缺口**：① **§13 第 5 条未达标** —— OpenWrt Proxy 未接统一合同（`proxy.lua:16,60,411,439`）；② **回程路由无实现**（只有诊断文案 `cmd_route_doctor.go:99-102`）；③ **fail-closed / 网关离线无用例**、OpenWrt 无可执行测试。另 **`Acceleration`/`service_policy` 全仓零命中**（`Service` 只是已发布服务目录，非转发合同）。
+- **待裁 D1–D5**（交主线）：统一合同形状（复用现 `GnbForwarding`/`ProxyPolicy` vs 新建模型）/ OpenWrt lua 处置（改读 bundle vs 能力下沉 agent）/ `Acceleration` 是否立项 / 回程是「固有属性补证据」还是「新建注入」/ fail-closed 用例落点（Go vs PHPUnit）。
+- **分步**：P4-1 决策包 → P4-2 OpenWrt 接统一合同 → P4-3 回程证据 → P4-4 fail-closed/网关离线用例 → P4-5 脱敏复检 →（可选）P4-6 Acceleration。
+
+**注意**：与本文件轨道 B 的 B-7（`TransportPlanner`：一条连接 → OS 路由语义）不是一回事 —— 那是 L6 路由语义、已 `☑`；P4 是「实体网关 + 转发 + Proxy 的统一合同」，**尚未开码**。
