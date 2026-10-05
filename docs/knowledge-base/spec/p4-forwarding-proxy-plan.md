@@ -190,4 +190,24 @@ L6 合成）。据此 `network.proxy` 收窄为 `{enabled, acl}`，许可能力�
 **门禁**：agent `go build ./...` + `go test ./...` 全绿（19 包）；api `phpunit` 441/441 +
 `pint --test` 干净；两端 fixture 互解（Go `shared/domain` 与 api `BundleEnvelopeV2Test`）通过。
 
+### 7.6 第四轮口径裁定 + 出口授权面遗留（2026-10-05）
+
+用户第四轮裁定：**空白名单 = 组织内放开**（默认全放开），确认既有行为、无需改动。
+
+- 证据：`ProxyAuthDomainService::resolveForExit`（`ProxyAuthDomainService.php:51-54`）
+  未配置授权即返回 `MODE_OPEN`；`ProxyACL::isAllowed`（`ProxyACL.php:76-82`）
+  open/denylist 分支返回 `true`；出口侧 L6 `ProxyACLCmds`（`proxy_apply.go:554-556`）
+  在无 `allowed_cidrs` 时直接不装规则 = 不设限。三处一致，口径已锁。
+
+**遗留（登记，未执行）** —— 出口授权面两个真缺口，均需另裁：
+
+① **许可无写入面**。`ConnectionGrant(resource_type=proxy)` 目前**无任何写入路径**：
+`ConnectionDomainService::updateGrant`（`ConnectionDomainService.php:75-81`）白名单只收
+`network|node|service`，且是唯一的 `ConnectionGrant::create` 调用点（`:94`）。故
+`resolvePermission` 恒返回 `null`，`network.proxy` 实际**永不下发** —— 许可「架构上对、链上悬空」。
+
+② **节点级授权未落到包过滤**。`ProxyACL.AllowedNodeIDs`（「允许谁」，对端级）在 L6
+无任何命令消费（`ProxyACLCmds` 只吃 `AllowedCIDRs`，`proxy_apply.go:565-569`），
+目前仅在业务层 `isAllowed`/`canUse`（`ProxyAuthDomainService.php:88-93`）表达，包层不设限。
+
 <!-- GUARD-OK 本文引述的是文件名、行号、表名与配置键，不含凭据 -->
