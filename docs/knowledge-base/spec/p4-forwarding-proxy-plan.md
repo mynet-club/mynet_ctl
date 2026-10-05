@@ -210,4 +210,29 @@ L6 合成）。据此 `network.proxy` 收窄为 `{enabled, acl}`，许可能力�
 无任何命令消费（`ProxyACLCmds` 只吃 `AllowedCIDRs`，`proxy_apply.go:565-569`），
 目前仅在业务层 `isAllowed`/`canUse`（`ProxyAuthDomainService.php:88-93`）表达，包层不设限。
 
+### 7.7 出口授权写面落地（2026-10-05，第五轮裁定 + 执行）
+
+用户在第五轮就 §7.6 的两处遗留裁定：①「许可无写入面」→ **单开一个**（节点级专表，
+**不复用** `connection_grants`）；②「允许谁」口径 → **出口侧 L6 拦**（云端把消费端解算成
+overlay CIDR 下发，出口防火墙 allowlist 真正生效，非纯业务层）。
+
+**为何专表**：出口授权是节点级语义，`connection_grants` 装不下 —— `permission` 仅
+`varchar(32)`（消费端 node_id 是 bigint，一多即溢出），`connection_id` 非空又进唯一键
+`uk_grant_scope`，节点级授权没有天然连接。
+
+| 仓 | 改动 | 关键落点 |
+|---|---|---|
+| mynet_api | 新表 `proxy_exit_grants` | 迁移 `2026_10_05_000001` + `tests/Schema/VpnModule.php` + DBA `database/sql/2026_10_05_create_proxy_exit_grants.sql`（生产禁 migration，走手工 SQL） |
+| mynet_api | `ProxyExitGrant` 模型 | 节点级：`consumer_node_id` NULL = 全放开；唯一键 `(exit_node_id, consumer_node_id)` |
+| mynet_api | `ProxyAuthDomainService` 读写改向专表 | `resolvePermission`/`resolveForExit` 读专表；新增写面 `grant()`（替换语义）/`revoke()`；`resolveForExit` 把白名单消费端解算成 overlay `/32` 写进 `acl.allowed_cidrs`（喂 L6） |
+| mynet_api | 撤 `ConnectionGrant::RESOURCE_PROXY` | 专表后无用；`ConnectionGrant` 只表达 network\|node\|service |
+
+**测试**：`tests/Unit/Domain/ProxyExitGrantTest.php` 5 例（放开 / 白名单+CIDR / 替换语义 /
+撤销单个与整体 / 未授权不发许可）；api 全量 `phpunit` **446 全绿**（原 441 + 5）。
+**未改**：Go 侧 L6 `ProxyACLCmds` 本就消费 `allowed_cidrs`，无需动；wire/schema 不变。
+
+**待办**：HTTP 写面（`PUT/POST`）尚未开。console 面 write 有既有闸门
+（`Controllers/Console/V1/NodeController.php:23-24`：「写路径要带审计与操作者身份」），
+故写面落在用户面还是 console 面、审计如何接，需另裁后再开。
+
 <!-- GUARD-OK 本文引述的是文件名、行号、表名与配置键，不含凭据 -->
