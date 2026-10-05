@@ -255,7 +255,7 @@
           }
         },
         "proxy": {
-          "$ref": "#/$defs/ProxyPolicy"
+          "$ref": "#/$defs/ProxyPermission"
         }
       }
     },
@@ -701,190 +701,13 @@
         }
       }
     },
-    "ProxyIPListRef": {
+    "ProxyPermission": {
       "type": "object",
       "additionalProperties": true,
-      "description": "IP 段列表引用。节点按 URL 拉取并校验 sha256，envelope 不内嵌全量 CIDR。",
-      "properties": {
-        "source": {
-          "enum": [
-            "china",
-            "international"
-          ]
-        },
-        "url": {
-          "type": "string"
-        },
-        "sha256": {
-          "type": "string"
-        },
-        "bytes": {
-          "type": "integer",
-          "minimum": 0
-        }
-      },
-      "required": [
-        "source",
-        "url"
-      ]
-    },
-    "ProxySplit": {
-      "type": "object",
-      "additionalProperties": true,
-      "description": "Region×Policy 解算结果。list_source/match_mode 必须来自矩阵，禁止手写拼装。",
-      "properties": {
-        "list_source": {
-          "enum": [
-            "china",
-            "international"
-          ]
-        },
-        "match_mode": {
-          "enum": [
-            "normal",
-            "inverted"
-          ]
-        },
-        "ip_list": {
-          "$ref": "#/$defs/ProxyIPListRef"
-        }
-      },
-      "required": [
-        "list_source",
-        "match_mode"
-      ]
-    },
-    "ProxyDNS": {
-      "type": "object",
-      "additionalProperties": true,
-      "description": "DNS 策略（旧线 DNS_MODE）。",
-      "properties": {
-        "mode": {
-          "enum": [
-            "none",
-            "redirect",
-            "resolv",
-            "split",
-            ""
-          ]
-        },
-        "server": {
-          "type": "string"
-        },
-        "domestic_servers": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "redirect_target": {
-          "type": "string"
-        },
-        "hijack": {
-          "enum": [
-            "off",
-            "local",
-            "lan",
-            ""
-          ],
-          "description": "DNS 强劫持范围：local=仅本机；lan=网关含 LAN。与 mode 正交。"
-        }
-      }
-    },
-    "ProxyExit": {
-      "type": "object",
-      "additionalProperties": true,
-      "description": "代理出站 peer（gnb 侧标 address.conf 的 f 角色）。",
-      "properties": {
-        "node_id": {
-          "$ref": "#/$defs/NodeId"
-        },
-        "weight": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "order": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "enabled": {
-          "type": "boolean"
-        },
-        "via": {
-          "type": "string",
-          "description": "出口节点 overlay VIP（策略路由 default via）"
-        }
-      },
-      "required": [
-        "node_id"
-      ]
-    },
-    "ProxyPolicy": {
-      "type": "object",
-      "additionalProperties": true,
-      "description": "节点级代理分流意图（主线⑦）。back 解算 split 后下发；L6 落地 fwmark/ipset/DNS。",
+      "description": "出口许可（wire 上 network.proxy 的唯一语义，T11）。只答「本节点被授权作出口吗、对谁开放」。客户端分流策略（role/split/exits/dns/...）依赖本机环境，不走 wire，由节点 Local 轨承载。",
       "properties": {
         "enabled": {
           "type": "boolean"
-        },
-        "role": {
-          "enum": [
-            "client",
-            "server",
-            "both",
-            ""
-          ]
-        },
-        "region": {
-          "enum": [
-            "domestic",
-            "international",
-            ""
-          ]
-        },
-        "policy": {
-          "enum": [
-            "whitelist",
-            "blacklist",
-            ""
-          ]
-        },
-        "split": {
-          "$ref": "#/$defs/ProxySplit"
-        },
-        "exits": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/ProxyExit"
-          }
-        },
-        "dns": {
-          "$ref": "#/$defs/ProxyDNS"
-        },
-        "foreign_dns_route": {
-          "type": "boolean"
-        },
-        "fwmark": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "table": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "domain_rules": {
-          "$ref": "#/$defs/ProxyDomainRules"
-        },
-        "full_tunnel": {
-          "type": "boolean"
-        },
-        "doh_mode": {
-          "enum": [
-            "allow",
-            "block",
-            "tunnel",
-            ""
-          ]
         },
         "acl": {
           "$ref": "#/$defs/ProxyACL"
@@ -893,54 +716,6 @@
       "required": [
         "enabled"
       ]
-    },
-    "ProxyDomainRules": {
-      "type": "object",
-      "additionalProperties": true,
-      "description": "域名分流规则（T13/T15）。与 split 正交。",
-      "properties": {
-        "proxied": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "direct": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "upstream_proxied": {
-          "enum": [
-            "fast",
-            "clean",
-            "balanced",
-            ""
-          ]
-        },
-        "upstream_clean": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "upstream_direct": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "platform_dns": {
-          "type": "string"
-        },
-        "tunnel_server": {
-          "type": "string"
-        },
-        "exit_dns": {
-          "type": "string"
-        }
-      }
     },
     "ProxyACL": {
       "type": "object",

@@ -168,4 +168,26 @@ M4 原文：**真实 peer 网关完成节点到网络、网络到网络、回程
 Go `ProxyPolicy` / PHP `ProxyPolicy` / schema / 6 fixture / `proxy_apply.go` 的
 `planFromBundle` 与 `StampCloudIntent` 取数来源 —— 属 wire 契约变更，另列步骤表执行。
 
+### 7.5 D1 收窄落地（2026-10-05，第三轮，GO 后执行）
+
+用户在第三轮裁定两点：**①客户端策略「靠 WebUI 本地配置生成」**（无云端→节点迁移通道）；
+**②wire 承载方式 = 新增独立 `ProxyPermission` 类型**（Cloud 轨存许可，Local 轨存客户端策略，
+L6 合成）。据此 `network.proxy` 收窄为 `{enabled, acl}`，许可能力权威 = `ConnectionGrant
+(resource_type=proxy)`（`ProxyAuthDomainService`）。
+
+| 仓 | 改动 | 关键落点 |
+|---|---|---|
+| mynet_agent | 新增 `ProxyPermission`（`shared/domain/proxy_policy.go`）+ `NetworkIntent.Proxy` 收窄 | `AsCloudPolicy()` 把许可投影为 server 角色；`proxy_intent.go` 的 `Effective()` 由「按 revision 仲裁」改「按职责合成」（Local client ⊕ Cloud 许可） |
+| mynet_agent | 取数改向 | `StampCloudIntent(*ProxyPermission)`；`planFromBundle` 客户端策略取 Local 轨；`localapi.ApplyCloudIntent(ProxyPermission)`；`SetProxyEnabled/Exits/CustomDomains` 基座改 Local 轨 |
+| mynet_agent | 测试重建 | `proxy_intent_test.go` 合成语义用例；`proxy_apply_test.go` fixture e2e 改为「Local 轨播种客户端策略 + fixture 只带许可」 |
+| mynet_api | 新增 `Domain/Bundle/ProxyPermission.php`；`NetworkIntent::$proxy` 改 `?ProxyPermission` | 发布侧 `BundleEnvelopePublisher` 不再读 `node_configs.config.proxy`，改由 `ProxyAuthDomainService::resolvePermission(nodeId)`（无 active 授权 → 不下发 `network.proxy`） |
+| mynet_ctl | schema `network.proxy` → `$defs/ProxyPermission`；删客户端策略 `$defs`（ProxyPolicy/Split/DNS/Exit/IPListRef/DomainRules，保 ProxyACL） | 契约面与裁定一致，不留纸面字段 |
+| mynet_ctl | `gnb-proxy-split.json` 收窄为 `{enabled: true}` 并重算 `checksum`（SSOT + agent testdata 双份 **byte-identical**） | 新 checksum `sha256:de373a12…` |
+
+**未改 / 明确保留**：节点回写端点 `PUT /monitor/node/proxy-config` 仍存 `node_configs.config.proxy`
+（云端留档，**不再作为 bundle 许可来源**）；`ProxyPolicy` 类型本身保留（Local 轨与云端留档仍用）。
+
+**门禁**：agent `go build ./...` + `go test ./...` 全绿（19 包）；api `phpunit` 441/441 +
+`pint --test` 干净；两端 fixture 互解（Go `shared/domain` 与 api `BundleEnvelopeV2Test`）通过。
+
 <!-- GUARD-OK 本文引述的是文件名、行号、表名与配置键，不含凭据 -->

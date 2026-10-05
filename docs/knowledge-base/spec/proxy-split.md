@@ -298,7 +298,10 @@ PC 要域名规则时：入口**轻劫持**到 MyNet DNS（或 mynetd 内嵌 tin
 ```
 
 - `split.list_source/match_mode` **必须**由 `ResolveProxySplit(region, policy)` 解算，两端交叉校验。  
-- envelope：`BundleEnvelope.network.proxy`（schema：`schemas/bundle-envelope-v2.schema.json`）。  
+- 上面的 JSON 是**本机意图**（`conf/<source>/proxy_intent.json`）的形状。  
+- ⚠️ **2026-10-05 D1 收窄**：wire 上 `BundleEnvelope.network.proxy` **只带出口许可**
+  `{enabled, acl}`（`$defs/ProxyPermission`），不再带 role/split/exits/dns/域名规则等客户端策略
+  ——那些由节点 Local 轨承载，L6 与云端许可合成。详见 `p4-forwarding-proxy-plan.md` §7.5。  
 - 本地落盘：`conf/<source>/proxy_intent.json`（`local` / `cloud` / `status.dirty`）。
 
 ### 6.2 执行计划（L6，不回写）
