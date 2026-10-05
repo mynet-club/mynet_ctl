@@ -235,4 +235,28 @@ overlay CIDR 下发，出口防火墙 allowlist 真正生效，非纯业务层�
 （`Controllers/Console/V1/NodeController.php:23-24`：「写路径要带审计与操作者身份」），
 故写面落在用户面还是 console 面、审计如何接，需另裁后再开。
 
+→ 已落：用户面写面见 §7.8（第六轮裁定）；console 面「网络区提供 proxy 公共服务」仍是独立线，未开。
+
+### 7.8 出口授权用户面写面落地（2026-10-05，第六轮裁定 + 执行）
+
+用户在第六轮裁定：写面落**用户面**，语义 = **对朋友连接授权**（自己的节点不用授权）；
+console 面「网络区提供 proxy 公共服务、可授权出口」是**另一条线**，不在本轮。
+
+| 仓 | 改动 | 关键落点 |
+|---|---|---|
+| mynet_api | 新控制器 `ProxyExitController`（用户面 V1） | `GET/PUT/DELETE /api/v1/nodes/{id}/proxy-exit`；`{id}` 经 `OwnerGuard::authorize('update', …)` 限属主（缺失 404、非属主 403）；`PUT` 收 `friend_ids` |
+| mynet_api | 路由挂载 | `Routes/api.php` 的 `Route::prefix('nodes')` 认证组内三条 |
+| mynet_api | 写面语义 | 好友关系校验（`Friendship` + `tenant_id`，仿 `TenantScopedServiceService::shareServiceWithFriends`）；好友 user_id → 其**启用/在线**节点 → `ProxyAuthDomainService::grant()`（替换语义）；`friend_ids: []` = 清空 → 默认开放 |
+| mynet_api | 领域：自己的节点不用授权 | `ProxyAuthDomainService::resolveForExit()` 在白名单模式下并入出口属主自己名下节点（`ownerNodeIds()` = `nodes.user_id`）；否则设白名单会把属主自己挡在门外 |
+| mynet_ctl | OpenAPI `back.yaml` | 新增 `node-proxy` tag + `/nodes/{id}/proxy-exit` 三方法 |
+
+**fail-closed 两条**（写面）：① 名单含非好友 ⇒ 整体拒（不部分放行）；② 好友名下**无可连节点** ⇒ 拒。
+否则 `grant()` 收空集合会按「空白名单 = 放开」把出口**误开给全网络区** —— 授权几个好友却全放，方向最坏。
+
+**测试**：`ProxyExitApiTest` 7 例（写读闭环 / 清空回开放 / 非好友拒 / 好友无可连节点拒 / 撤销 / 非属主读写 403 / 缺失 404）
++ `ProxyExitGrantTest` 补 1 例（属主节点自动并入白名单）。api 全量 `phpunit` **454 全绿**、`pint` 干净。
+
+**未改**：Go 侧 L6 与 wire/schema 不变；`grant()`/`revoke()` 原样复用。
+
+
 <!-- GUARD-OK 本文引述的是文件名、行号、表名与配置键，不含凭据 -->

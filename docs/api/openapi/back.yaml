@@ -29,6 +29,8 @@ tags:
     description: 节点（CRUD/状态/密钥/设备信息）
   - name: node-config
     description: 节点配置（VPN 配置/config-bundle）
+  - name: node-proxy
+    description: 出口授权（把节点作为 proxy 出口，授权给好友连接）
   - name: heartbeat
     description: 心跳与节点拉取（HMAC-SHA256 认证通道）
   - name: route
@@ -2050,6 +2052,113 @@ paths:
       responses:
         "200":
           description: 网络配置更新成功
+
+  /nodes/{id}/proxy-exit:
+    get:
+      tags: [node-proxy]
+      operationId: getProxyExitGrants
+      summary: 读取出口授权（对朋友连接授权）
+      description: |
+        出口节点 `{id}` 必须是当前用户**自己的**节点（属主层判据；不是自己的 403，
+        不存在 404）。返回当前授权解算结果：`mode=open` 表示未设白名单（本网络区开放）；
+        `mode=allowlist` 时 `allowed_node_ids` **含属主自己的节点**（自己的节点不用授权，
+        自动并入），`allowed_cidrs` 是喂给出口侧 L6 防火墙的消费端 overlay 地址。
+      security:
+        - sanctum: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: 出口授权解算结果
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessResponse"
+                  - properties:
+                      data:
+                        type: object
+                        properties:
+                          mode:
+                            type: string
+                            enum: [open, allowlist, denylist]
+                          allowed_node_ids:
+                            type: array
+                            items:
+                              type: string
+                          denied_node_ids:
+                            type: array
+                            items:
+                              type: string
+                          allowed_cidrs:
+                            type: array
+                            items:
+                              type: string
+        "403":
+          description: 不是自己的节点（DOMAIN_FORBIDDEN）
+        "404":
+          description: 节点不存在
+    put:
+      tags: [node-proxy]
+      operationId: updateProxyExitGrants
+      summary: 设置出口授权（替换语义，授权给好友）
+      description: |
+        全量覆盖该出口的授权，只收**好友**（`friend_ids`）—— 自己的节点不用授权，
+        属主名下节点由服务端自动并入放行集，不写进本名单。名单里出现非好友、或好友名下
+        没有可连节点，一律 403 且**不入库**（尤其不能因空集合被误开成全网络区）。
+        `friend_ids: []` = 清除授权，回默认（本网络区开放，不是关闭）。
+      security:
+        - sanctum: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [friend_ids]
+              properties:
+                friend_ids:
+                  type: array
+                  items:
+                    type: integer
+      responses:
+        "200":
+          description: 授权已更新
+        "403":
+          description: 非属主 / 非好友 / 好友无可连节点
+        "404":
+          description: 节点不存在
+        "422":
+          description: 参数校验失败
+    delete:
+      tags: [node-proxy]
+      operationId: revokeProxyExitGrants
+      summary: 撤销出口授权（回默认：本网络区开放）
+      security:
+        - sanctum: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: 已撤销
+        "403":
+          description: 不是自己的节点
+        "404":
+          description: 节点不存在
 
   # ── Heartbeat ──
   /monitor/heartbeat:
