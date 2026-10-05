@@ -349,10 +349,18 @@ GUI 半边照着这份断言清单改读法，不靠猜。
    **但本文件「第 2 步留下的未处置项」第 5 条（cluster B 命名：`services/zone/`、
    `types/zoneService.ts`、`useZoneServices`、`components/zone/`、en-US 的
    `zoneServices` / `zoneSharing` / `zoneFilter`）不受影响，仍等命名裁决。**
-   另：`pages/services/AnonymousServicesPage.vue` 是**第 6 个**孤儿候选，本批**没删** ——
-   它的路由在 `routes.ts:251-256` 是注释掉的，而它打的后端 `GET /api/v1/services/anonymous`
-   是**现役功能**（A5 迁移件注释里还拿它当「匿名服务访问存在」的证据）。
-   删页面等于砍掉一条已建好的UI，属于产品决定，单独挂着待裁。
+   另：`pages/services/AnonymousServicesPage.vue` 是**第 6 个**孤儿候选，
+   **已于 2026-10-05 按裁定「一起删掉」删除**（`mynet_gui@f2ee1bb`）—— 连同它的注释路由块
+   （原 `routes.ts:251-256`）、注释菜单项（原 `MainLayout.vue:562-568`）、
+   `ServiceListPage.vue` / `useZoneServices.ts` 的「已移除」注释块、零调用方的
+   `zoneServiceApi.getAnonymousServices`，以及 zh/en 各 **8** 条只有它用到的键
+   （`navigation.services.anonymous*` / `zoneServices.navigation.anonymous*` /
+   `zoneServices.empty.anonymous*` / `zoneServices.categories.anonymous*`）。
+   类型基线随之 **203 → 202 / 39 文件**。
+   ⚠️ 两条边界别读错：① 后端 `GET /api/v1/services/anonymous` **保持现役**，
+   `types/zoneService.ts:52,107` 的 `'anonymous'` 联合成员也不动（删的是这条 GUI 页面，
+   不是这个功能）；② 上面那句「它打的后端端点是现役功能，删页面等于砍掉已建好的UI，
+   属产品决定」是**裁定前的论证**，保留是为了记下为什么它当初没跟那批一起删。
 
 ---
 
