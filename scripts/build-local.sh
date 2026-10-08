@@ -7,12 +7,12 @@
 #   bash scripts/build-local.sh gui      # 仅构建 GUI
 #   bash scripts/build-local.sh web      # 仅构建 Web
 #   bash scripts/build-local.sh ctl      # 仅构建 CTL 前端 + 清缓存
-#   bash scripts/build-local.sh back     # 仅清理 Back 缓存
+#   bash scripts/build-local.sh api     # 仅清理 API 缓存（api；back 为兼容别名）
 #   bash scripts/build-local.sh gui web  # 构建 GUI + Web
 # =============================================================================
 set -euo pipefail
 
-WORKSPACE="/Users/yue/Devel/WorkSpacePHP/mynet.club"
+WORKSPACE="${MYNET_WORKSPACE:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 
 CYAN='\033[0;36m'  GREEN='\033[0;32m'  YELLOW='\033[0;33m'  RED='\033[0;31m'  NC='\033[0m'
 info()  { echo -e "${CYAN}[INFO]${NC}  $*"; }
@@ -68,7 +68,7 @@ reload_nginx() {
 # ── 主逻辑 ──
 TARGETS=("$@")
 if [ ${#TARGETS[@]} -eq 0 ]; then
-    TARGETS=(back ctl gui web)
+    TARGETS=(api ctl gui web)
 fi
 
 echo ""
@@ -81,8 +81,8 @@ echo ""
 
 for target in "${TARGETS[@]}"; do
     case "$target" in
-        back)
-            laravel_clear "Back" "${WORKSPACE}/mynet_back"
+        api|back)
+            laravel_clear "API" "${WORKSPACE}/mynet_api"
             ;;
         ctl)
             build_ctl_frontend
@@ -95,7 +95,7 @@ for target in "${TARGETS[@]}"; do
             build_web
             ;;
         *)
-            warn "未知目标: $target (可选: back ctl gui web)"
+            warn "未知目标: $target (可选: api ctl gui web（back 为兼容别名）)"
             ;;
     esac
     echo ""
@@ -108,8 +108,8 @@ echo "============================================="
 echo "  构建完成！可访问:"
 echo "============================================="
 echo ""
-echo "  http://api.mynet.local       → mynet_back (API)"
-echo "  http://admin.mynet.local     → mynet_back (Admin)"
+echo "  http://api.mynet.local       → mynet_api (API)"
+echo "  http://admin.mynet.local     → mynet_api (Admin)"
 echo "  http://ctl.mynet.local       → mynet_ctl"
 echo "  http://my.mynet.local        → mynet_gui"
 echo "  http://www.mynet.local       → mynet_web"

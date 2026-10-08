@@ -7,7 +7,7 @@
 # =============================================================================
 set -euo pipefail
 
-WORKSPACE="/Users/yue/Devel/WorkSpacePHP/mynet.club"
+WORKSPACE="${MYNET_WORKSPACE:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 PID_DIR="${WORKSPACE}/mynet_ctl/storage/app/private/dev-pids"
 
 RED='\033[0;31m'  GREEN='\033[0;32m'  YELLOW='\033[0;33m'  NC='\033[0m'

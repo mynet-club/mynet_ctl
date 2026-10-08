@@ -7,7 +7,7 @@
 # =============================================================================
 set -euo pipefail
 
-WORKSPACE="/Users/yue/Devel/WorkSpacePHP/mynet.club"
+WORKSPACE="${MYNET_WORKSPACE:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CYAN='\033[0;36m'  GREEN='\033[0;32m'  RED='\033[0;31m'  NC='\033[0m'
 
@@ -181,8 +181,8 @@ echo "  (nginx + php-fpm 模式)"
 echo "============================================="
 echo ""
 echo "  浏览器直接访问（端口 80, nginx + php-fpm）:"
-echo "    http://api.mynet.local      → mynet_back API"
-echo "    http://admin.mynet.local    → mynet_back 管理后台"
+echo "    http://api.mynet.local      → mynet_api API"
+echo "    http://admin.mynet.local    → mynet_api 管理后台"
 echo "    http://ctl.mynet.local      → mynet_ctl 分发中心"
 echo ""
 echo "  前端需额外启动 Vite dev server:"
