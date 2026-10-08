@@ -1,0 +1,40 @@
+{
+    "state": "permission-vs-acl",
+    "description": "许可存在性（resolvePermission → publisher 是否写 network.proxy）与 ACL 形态（GET 的 mode）是两个正交维度。DELETE 与「无授权」同为 permission_exists=false；PUT [] 与「白名单」同为 true",
+    "matrix": [
+        {
+            "state": "no-grant",
+            "permission_exists": false,
+            "get_mode": "open",
+            "bundle_network_proxy": null
+        },
+        {
+            "state": "open",
+            "permission_exists": true,
+            "get_mode": "open",
+            "bundle_network_proxy": {
+                "enabled": true,
+                "acl_mode": "open"
+            }
+        },
+        {
+            "state": "allowlist",
+            "permission_exists": true,
+            "get_mode": "allowlist",
+            "bundle_network_proxy": {
+                "enabled": true,
+                "acl_mode": "allowlist"
+            }
+        },
+        {
+            "state": "revoked",
+            "permission_exists": false,
+            "get_mode": "open",
+            "bundle_network_proxy": null
+        }
+    ],
+    "live_check_after_delete": {
+        "resolvePermission_is_null": true,
+        "resolveForExit_mode": "open"
+    }
+}

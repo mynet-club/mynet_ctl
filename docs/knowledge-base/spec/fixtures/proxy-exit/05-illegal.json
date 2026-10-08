@@ -1,0 +1,93 @@
+{
+    "state": "illegal",
+    "description": "非属主 403 / 缺失 404 / 非好友 403 / 好友无可连节点 403 / 缺字段 422。失败不改旧授权",
+    "cases": {
+        "non_owner_get": {
+            "http_status": 403,
+            "body": {
+                "success": false,
+                "code": 403,
+                "message": "无权操作该资源",
+                "timestamp": "2026-10-08T00:00:00.000000Z",
+                "errors": {
+                    "ability": "update",
+                    "resource": "Node"
+                },
+                "error_code": "DOMAIN_FORBIDDEN"
+            }
+        },
+        "non_owner_put": {
+            "http_status": 403,
+            "body": {
+                "success": false,
+                "code": 403,
+                "message": "无权操作该资源",
+                "timestamp": "2026-10-08T00:00:00.000000Z",
+                "errors": {
+                    "ability": "update",
+                    "resource": "Node"
+                },
+                "error_code": "DOMAIN_FORBIDDEN"
+            }
+        },
+        "non_owner_delete": {
+            "http_status": 403,
+            "body": {
+                "success": false,
+                "code": 403,
+                "message": "无权操作该资源",
+                "timestamp": "2026-10-08T00:00:00.000000Z",
+                "errors": {
+                    "ability": "update",
+                    "resource": "Node"
+                },
+                "error_code": "DOMAIN_FORBIDDEN"
+            }
+        },
+        "missing_node": {
+            "http_status": 404,
+            "body": {
+                "success": false,
+                "code": 404,
+                "message": "节点不存在",
+                "timestamp": "2026-10-08T00:00:00.000000Z",
+                "error_code": "DOMAIN_NOT_FOUND"
+            }
+        },
+        "non_friend": {
+            "http_status": 403,
+            "body": {
+                "success": false,
+                "code": 403,
+                "message": "仅允许授权给已建立好友关系的用户",
+                "timestamp": "2026-10-08T00:00:00.000000Z",
+                "error_code": "DOMAIN_FORBIDDEN"
+            }
+        },
+        "friend_without_node": {
+            "http_status": 403,
+            "body": {
+                "success": false,
+                "code": 403,
+                "message": "所选好友没有可用节点，无法授权",
+                "timestamp": "2026-10-08T00:00:00.000000Z",
+                "error_code": "DOMAIN_FORBIDDEN"
+            }
+        },
+        "missing_friend_ids": {
+            "http_status": 422,
+            "body": {
+                "success": false,
+                "code": 422,
+                "message": "Validation failed",
+                "timestamp": "2026-10-08T00:00:00.000000Z",
+                "errors": {
+                    "friend_ids": [
+                        "The friend ids field must be present."
+                    ]
+                },
+                "error_code": "VALIDATION_ERROR"
+            }
+        }
+    }
+}

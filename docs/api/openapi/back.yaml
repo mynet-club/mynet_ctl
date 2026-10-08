@@ -2110,7 +2110,8 @@ paths:
         全量覆盖该出口的授权，只收**好友**（`friend_ids`）—— 自己的节点不用授权，
         属主名下节点由服务端自动并入放行集，不写进本名单。名单里出现非好友、或好友名下
         没有可连节点，一律 403 且**不入库**（尤其不能因空集合被误开成全网络区）。
-        `friend_ids: []` = 清除授权，回默认（本网络区开放，不是关闭）。
+        `friend_ids: []` = 建一行 active **开放授权**（组织内开放，许可仍在）；
+        **不等于** DELETE。要撤销出口许可请用 DELETE。
       security:
         - sanctum: []
       parameters:
@@ -2143,7 +2144,13 @@ paths:
     delete:
       tags: [node-proxy]
       operationId: revokeProxyExitGrants
-      summary: 撤销出口授权（回默认：本网络区开放）
+      summary: 撤销出口授权许可（bundle 不再下发 network.proxy）
+      description: |
+        撤销该出口的**全部 active 授权行**。撤销后 `resolvePermission()` 为 null，
+        publisher **不写** `network.proxy`，节点按未启用处理。
+        ⚠️ 撤销后 GET 仍可能显示 `mode=open`——那只是「无白名单」的 ACL 解算，
+        **不是**「出口仍开放」。`friend_ids: []`（PUT）才是组织内开放，DELETE 不是。
+        口径见 `spec/proxy-exit-contract-lock.md`。
       security:
         - sanctum: []
       parameters:

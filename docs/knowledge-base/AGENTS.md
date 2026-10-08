@@ -384,3 +384,7 @@ S 段执行 D-4 时只把 `mynet_ui` 的 `local/` 6 页搬进了 `mynet_web`，`
 **无法给出实测输出时**：记为 `<ID>a`（部分达成，如 T4-6a 合成 / T5-1a 可构建），
 **不要勾掉原 ID**。合成压测、交叉编译出包、mock 测试都属此类——
 `long-range-plan-t.md` §5 早就写过「合成压测不能替代真集群」，判据对了，勾选时必须也遵守。
+
+## 当前状态加载入口（2026-10-08）
+
+开工先读 `mynet_ctl/docs/knowledge-base/project-memory.md`（本文件在知识库内时读同级 `project-memory.md`），再读其中的小闭环 playbook 指针。后端目录为 `mynet_api`；UTC 暂时搁置。

@@ -1112,3 +1112,16 @@
 
 > 仍是 CPI-2 / CPI-4 的防复发手段：命令名写错的后果是「节点侧静默失效、back 侧看不出来」，
 > 只靠人眼迟早再漂一次。区别是现在它**每次 `make check` 都会跑**，不再依赖有人记得手动执行。
+
+## 2026-10-08 出口授权闭环取证（L1/L2）
+
+- LOOP-1：`ProxyAuthDomainService::grant` 先 bulk revoke 再逐行 save，无事务；中途异常会丢旧授权。grant/revoke 未接现有 BundleDirtySet，pull staleness 也未读授权表，旧快照可能持续有效。已补失败注入回归；grant/revoke 包事务并锁稳定节点行，提交后标 dirty；publisher 链路测试通过。并发双连接争用仍待实测。
+- LOOP-2：`StampCloudIntent(nil, revision)` 直接返回，DELETE 后 bundle 缺 proxy 段不会撤销旧 Cloud 许可，旧出口继续生效。已修：省略许可记为 Cloud 停用记录，Local 保留；先红后绿回归与真实 publisher fixture 通过。
+- LOOP-3：`proxyCleanupCmds` 只撤 DNS/策略路由，不撤 server NAT/ACL；`executeApply` 明确不回滚 Proxy。旧 nft/iptables 规则复用公共链，ACL 追加且 optional，替换/幂等/fail-closed 无完整证据。待专项修复；不得据已有 Proxy 测试绿勾 L2/L3。
+
+- LOOP-4（已修）：pull 仅用秒级 mtime 的 `>` 比较，会漏同秒 bulk 撤销。真实 API/publisher 测试先红后绿，新增许可内容比较兜底。
+- LOOP-3 验收门：`mynet_agent/scripts/check-proxy-permission-gate.sh`；两条计划生成测试真实失败（不是实机防火墙测试）：停用无 nft NAT/ACL 清理，兜底 DROP 标 optional。诊断源码单独保存于 testdata，未加入基线 make check；独立 gate 的失败仍阻止 L2/L3/M4 达成。
+
+- LOOP-3 出口规则专项已修（2026-10-08，用户授权“优化他”）：专表/专链与失败报错取代共享链追加；7 个行为测试及隔离 Linux nft/iptables 内核测试通过。旧失败诊断已换成正式回归，详见 `spec/proxy-permission-loop-playbook.md` §9。Proxy client 全局失败回滚、现存 conntrack 终止与实机流量矩阵不在本项达成范围。
+
+LOOP-3 专项提交证据：agent `3e3d464`；默认 make check 与隔离内核规则验收通过。

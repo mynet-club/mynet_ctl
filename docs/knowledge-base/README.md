@@ -13,6 +13,8 @@
 
 | 文件 | 回答的问题 | 状态 |
 |------|-----------|------|
+| [project-memory.md](project-memory.md) | **当前状态与持续约定** — UTC 搁置、API 更名、小闭环入口 | 现行 |
+| [spec/proxy-permission-loop-playbook.md](spec/proxy-permission-loop-playbook.md) | **当前小闭环** — 出口授权到应用与撤销的验收 | 现行 |
 | [AGENTS.md](AGENTS.md) | **怎么干活** — 硬约束 · 工作方法 · 安全红线 · 坑 · DoD | 现行 |
 | [mynet-overview.md](mynet-overview.md) | **为什么这么设计** — 九条主线、L1–L7、决策记录 | 现行 |
 | [repo-migration.md](repo-migration.md) | **仓库怎么建、代码怎么搬** — 9 阶段 + 搬运清单 + 隐性知识 | 现行 |

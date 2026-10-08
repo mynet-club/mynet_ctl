@@ -1,0 +1,58 @@
+{
+    "state": "allowlist",
+    "description": "PUT friend_ids:[好友]：mode=allowlist，allowed_node_ids 含好友节点与属主自家节点，allowed_cidrs 为 overlay /32",
+    "request": {
+        "method": "PUT",
+        "path": "/api/v1/nodes/{id}/proxy-exit",
+        "body": {
+            "friend_ids": [
+                5000000000000002
+            ]
+        }
+    },
+    "permission_exists": true,
+    "put_response": {
+        "http_status": 200,
+        "body": {
+            "success": true,
+            "code": 200,
+            "message": "出口授权已更新",
+            "data": {
+                "mode": "allowlist",
+                "allowed_node_ids": [
+                    "2000000000000003",
+                    "2000000000000001",
+                    "2000000000000002"
+                ],
+                "denied_node_ids": [],
+                "allowed_cidrs": [
+                    "10.30.0.2/32",
+                    "10.30.0.3/32"
+                ]
+            },
+            "timestamp": "2026-10-08T00:00:00.000000Z"
+        }
+    },
+    "get_response": {
+        "http_status": 200,
+        "body": {
+            "success": true,
+            "code": 200,
+            "message": "出口授权查询成功",
+            "data": {
+                "mode": "allowlist",
+                "allowed_node_ids": [
+                    "2000000000000003",
+                    "2000000000000001",
+                    "2000000000000002"
+                ],
+                "denied_node_ids": [],
+                "allowed_cidrs": [
+                    "10.30.0.2/32",
+                    "10.30.0.3/32"
+                ]
+            },
+            "timestamp": "2026-10-08T00:00:00.000000Z"
+        }
+    }
+}
