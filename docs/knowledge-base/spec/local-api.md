@@ -114,8 +114,8 @@
 | `success` | **每一条**响应（含 `withSecurity` 拒绝时的裸字符串 JSON，`server.go:218`/`:222`） | 唯一的成败标志 |
 | `data` | 成功路径；失败路径**也可能有**（见下） | 载荷 |
 | `message` | 失败路径；也有「成功但带说明」的变体 | 给人读的话术，直接进 UI |
-| `stage` | `config/apply`、向导切节点（`config_api.go:290,314,318,329,334,337`） | 多步流程**停在哪一步**：`setup`/`switch`/`apply`/`start`/`routes`/`running` |
-| `need_login` | 仅 `GET /api/v1/config/cloud`（`config_api.go:45`） | 是否该跳登录 |
+| `stage` | `config/connect`、`config/apply`、向导切节点（`config_api.go:290,314,318,329,334,337`） | 多步流程**停在哪一步**：`setup`/`switch`/`apply`/`start`/`routes`/`running` |
+| `need_login` | `GET /api/v1/config/cloud` 与 `POST /api/v1/config/connect` | 是否该跳登录 |
 | `warning` | 成功但部分未达成（`config_api.go:334`：节点起来了、系统路由没全应用） | **`success:true` 配 `warning` 是有意形状**，壳别只判 `success` |
 | `steps` / `started` / `driver` | `config/apply` 与各步出口（`config_api.go:400,415,428,329,337`） | 过程明细与结果态 |
 | `stdout` / `stderr` / `argv` / `error` | `/api/v1/command` 分派失败时（`handlers.go:119-131`） | 子进程细节。注释写明**必须一起回**：`exit status 1` 本身说明不了任何事 |
@@ -125,7 +125,7 @@
 1. **失败也带 `data`**。`config_api.go:318,329` 在 500 里回 `{success:false,data:m,…}` —— 前半段
    已经真改写了本机配置，壳需要 `data` 才能告诉用户「切到哪一步坏了、现在生效的是什么」。
    旧文档「失败时 `data: null`」不成立。
-2. **没有 `error.code` ⇒ 壳的分支只能靠文本与 HTTP 码**。全仓唯一的分类动作是**文本嗅探**：
+2. **部分端点提供顶层 `code`**：配置操作冲突为 `operation_in_progress`，接入会话失效为 `need_login`。旧端点仍需要结合文本与 HTTP 码：
    `config_api.go:42` 用 `strings.Contains(err.Error(), "need_login")` 把 502 改判成 401 +
    `need_login:true`；被嗅的那串字来自 CLI 的 JSON 输出（`mynet/config_cloud.go:35`、
    `mynet/cmd_config_face.go:906,926`、`mynet/config_keys_sync.go:17` 都写
@@ -221,7 +221,7 @@ HTTP/1.1 401 …   {"success":false,"message":"…","code":"…"}   // ← 这�
 | `/api/v1/metrics` | — | 分派 `mynet metrics --json` | `handlers.go:29-31` |
 | `/api/v1/command` | POST only | 通用子命令分派：body `{"argv":["detector","--json"]}`；`argv[0]` 必须在 `allowedSubcommand` 白名单（**22 项**，含向导用的 `auth`/`tenants`/`node`）否则 400 `subcommand not allowed`；`argv` 是 `service start\|stop` 时顺带记「开机期望隧道」开关（`handlers.go:52-63`）。⚠️ 成功时 `data` 是**子进程原始件** `{argv,stdout,stderr,bin}` —— 不是结构化业务对象，壳拿到的是文本（过 `sanitizeWizardOut` 脱敏） | `handlers.go:33-65,95-106,108-166` |
 | `/api/v1/command-result` | POST only | E-4：Lua / `mynet` 把执行结果回灌 mynetd，body `{id,ok,message,source}`；缺 `id` → 400。注意这里的 `ok` 是**回灌体的字段名**，与旧信封那个 `ok` 无关 | `handlers.go:67-87` |
-| `/api/v1/config/{mode,tenants,active,keys,identity,runtime,cloud,apply}`、`/api/v1/plugins` | 读走 GET；`mode`/`keys`/`active`/`apply` 的写侧 POST only（405 `GET\|POST only`） | 一律经 `opsJSON` 调 `mynet <子命令> --json`；`config/apply` 是唯一带 `stage` 推进的（§2 表）；`config/cloud` 是唯一做 `need_login` 判级的（502→401） | `config_api.go:25-33,38-68,139-…` |
+| `/api/v1/config/{mode,tenants,active,keys,identity,runtime,cloud,prepare,connect,apply}`、`/api/v1/plugins` | 读走 GET；`mode`/`keys`/`active`/`apply` 的写侧 POST only（405 `GET\|POST only`） | JSON 读取经 `opsJSON` 调执行器，配置生成与启停由 Ops 调度；`config/apply`、`config/connect` 返回阶段；`config/cloud`、`config/connect` 对会话失效返回 401（详见下节） | `config_api.go:25-33,38-68,139-…` |
 | `/api/v1/nodes` | GET | 本机**会话表**视图：`data:{focus,parallel,nodes}`（焦点 + 并行会话数 + 列表）。⚠️ 旧文档写的「平台态节点列表（经 relay）+ 本机态标记」**不是这个端点** —— 平台态列表在 relay/`config/cloud` 那一侧 | `server.go:102-114` |
 | `/api/v1/nodes/switch` | POST only | D-10/R5-1：只切 UI **焦点**（body `{node_id}`，缺 → 400 `node_id required`）；**并行会话不互踢** | `server.go:117-133` |
 | `/api/v1/plugin/proxy` | GET \| POST（其他 405） | proxy 意图态读写；标志归 back 持有的口径不变（本节顶部那张表的 proxy 行仍成立，**只有路径名不同**：`/api/v1/plugin/proxy`，不是 `/api/v1/proxy*`） | `proxy_api.go:38,70-92` |
@@ -229,6 +229,18 @@ HTTP/1.1 401 …   {"success":false,"message":"…","code":"…"}   // ← 这�
 | `/api/v1/relay?path=` | ANY | 见 §2 的 relay 语义：back 状态码 + back 响应体**原样回写、不套本机信封** | `relay.go:28-97` |
 | `/gui/`（含 `/gui/api/v1/*`） | GET | 托管 mynet_gui 产物（找不到 `dist/spa` → 404 提示设 `MYNET_GUI_DIR`）；其中 **`/gui/api/*` 在 mynetd 内部改写成 relay**（`q.Set("path", p)` 后调 `handleRelay`）⇒ GUI 的「平台态」是这条，本机侧**不注入凭据** | `gui.go:21-45` |
 | `/ui/` | GET | 内嵌 WebUI 静态资源；**未 embed 时这条根本不注册** | `server.go:93` |
+
+### `POST /api/v1/config/connect`（2026-10-09）
+
+普通本机接入入口，无需传驱动或密钥。执行器激活态必须是 online、含设备 ID，且驱动为 GNB 或 WireGuard；缺失返回 400，禁止默认猜 GNB。
+
+依序经 Ops 执行：检查/保留本机密钥 → 同步公钥并启用设备 → 下载配置 → 生成运行配置 → 启动指定驱动 → 应用系统路由。具体能力由执行器实现，localapi 不解析驱动配置或操作 OS。
+
+响应包含 `success`、`stage`、`message`、`steps:[{id,name,state}]`、`retryable`。失败停止后续步骤；启动或路由失败会调用执行器停止未完成的隧道，并将清理结果列入 steps。成功仅表示启动序列已完成，实际网络状态以 `/api/v1/node-status` 为准。响应不回显密钥。
+
+配置身份/模式/密钥/应用/接入及会改变上下文的 command 操作共享本机互斥闸门；忙碌返回 HTTP 409、`code:operation_in_progress`、`Retry-After:2`。状态等只读 command 仍允许并行。`config/{tenants,identity,runtime,cloud}` 与 `plugins` 明确 GET only。
+
+`POST /api/v1/config/prepare` 保留为只准备密钥、同步公钥并下载配置的兼容入口；完整普通接入使用 connect，避免浏览器分段请求期间切换设备。会话失效在 connect 返回 HTTP 401、`code:need_login`、`need_login:true`，并保留实际已完成步骤。
 
 ### `GET /api/v1/status` 的真实响应（旧文档的示例是假的）
 
