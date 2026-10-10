@@ -18,7 +18,7 @@
 | [AGENTS.md](AGENTS.md) | **怎么干活** — 硬约束 · 工作方法 · 安全红线 · 坑 · DoD | 现行 |
 | [mynet-overview.md](mynet-overview.md) | **为什么这么设计** — 九条主线、L1–L7、决策记录 | 现行 |
 | [repo-migration.md](repo-migration.md) | **仓库怎么建、代码怎么搬** — 9 阶段 + 搬运清单 + 隐性知识 | 现行 |
-| [dev-plan.md](dev-plan.md) | **建完做什么** — 64 项计划顺序表（S 段跟踪入口） | 现行 |
+| [dev-plan.md](dev-plan.md) | **建完做什么** — 76 项计划顺序表（S 段跟踪入口） | 现行 |
 | [long-range-plan-deep.md](long-range-plan-deep.md) | **现在真正该做什么** — V0–V5 波次 + 人工闸门 + 反纸面达成五条 | 现行 |
 | [cross-project-issues.md](cross-project-issues.md) | **欠了什么债** — CPI 台账（发现即记，修好移入已修复） | 现行 |
 | [upstream-dsplat-issues.md](upstream-dsplat-issues.md) | **哪些是框架的锅** — 上游缺陷 + 可粘贴提示词 | 现行 |
@@ -107,16 +107,40 @@
 
 ## 3. 计划与台账（执行时勾选，完成后仍可查）
 
-| 文件 | 内容 | 状态 |
-|------|------|------|
-| **[dev-plan.md](dev-plan.md)** | **S 段 64 项计划顺序表**（任务 ID 唯一标识） | 现行 |
-| **[long-range-plan-deep.md](long-range-plan-deep.md)** | **V 段（当前）** 波次编排 + 人工闸门 + D1–D5 | 现行 |
-| [long-range-plan.md](long-range-plan.md) | R 段 R0–R5 | 现行 |
-| [long-range-plan-t.md](long-range-plan-t.md) | T 段 T0–T5 | 现行 |
-| [integration-plan-v2.md](integration-plan-v2.md) | **全生态整合规划 v2（当前权威）**：五层模型、四条工作流、SSOT 归属表 | 现行 |
-| [back-upshift-design.md](back-upshift-design.md) | back 业务上移设计：状态归属矩阵、上移/下沉判据 | 现行 |
-| [cross-project-issues.md](cross-project-issues.md) | CPI 台账 | 现行 |
-| [upstream-dsplat-issues.md](upstream-dsplat-issues.md) | 上游缺陷反馈 | 现行 |
+### 3.0 规划文档导航（2026-10-10 钉死；新会话照这张表读，别问「跟哪份走」）
+
+**读三份就走得动**，其余只管口径：
+
+| 顺序 | 文件 | 回答什么 |
+|---|---|---|
+| **① 入口** | [project-memory.md](project-memory.md) | **现在什么状态** + 下一步指向。**状态快照（HEAD / 未推送 / 测试计数）的唯一权威** |
+| **② 当期** | [spec/proxy-permission-loop-playbook.md](spec/proxy-permission-loop-playbook.md) | **下一步具体做什么** —— 当前唯一在跑的线，§10 是唯一未完成清单（七项实机验收） |
+| **③ 勾选台账** | [dev-plan.md](dev-plan.md) | **任务勾选记在哪** —— §3 是 76 项计划顺序表，**任务 ID 唯一标识** |
+
+**只管口径、不跟着勾选**：
+
+- `mynet_agent/docs/MYNET_V1_PLAYBOOK.md`（v1 上位口径）—— P0–P7 工作包 + M0–M6 验证闸门 + §12 DoD，
+  回答「v1 算不算完成」。**跨仓文件**，路径写全。
+- [long-range-plan-deep.md](long-range-plan-deep.md)（V0–V5 底座线）—— V1 gateway 可执行化 → V2 交付链真跑 →
+  V3 生产落地 → V4 规模化 → V5 生态公测。**V1-8/V1-9 仍 ☐，这条线没走完。**
+
+> ⚠️ **一处真实交叠**：v1 Playbook 的 **P6（Gateway 和部署闭环）** 与 deep 的 **V1–V3** 是同一段。
+> 交叠处口径：**判据（什么算验过）认 Playbook 的闸门；条目粒度认 deep 的 V1-8/V1-9 这类编号。**
+
+### 3.1 文件清单
+
+| 文件 | 作用 | 层 | 状态 |
+|------|------|----|------|
+| [project-memory.md](project-memory.md) | 开工入口 + 状态快照唯一权威 | ① | 现行 |
+| [spec/proxy-permission-loop-playbook.md](spec/proxy-permission-loop-playbook.md) | 当期小闭环（出口授权） | ② | 现行 |
+| **[dev-plan.md](dev-plan.md)** | **S 段 76 项计划顺序表**（任务 ID 唯一标识） | ③ | 现行 |
+| [long-range-plan-deep.md](long-range-plan-deep.md) | V 段底座波次 + 人工闸门 + D1–D5 | ④ 口径 | 现行 |
+| [long-range-plan.md](long-range-plan.md) | R 段 R0–R5（条目已并入 deep） | ④ 口径 | 现行 |
+| [long-range-plan-t.md](long-range-plan-t.md) | T 段 T0–T5（条目已并入 deep） | ④ 口径 | 现行 |
+| [integration-plan-v2.md](integration-plan-v2.md) | 全生态整合 v2：五层模型、四条工作流、SSOT 归属表 | ④ 口径 | 现行 |
+| [back-upshift-design.md](back-upshift-design.md) | back 业务上移设计：状态归属矩阵、上移/下沉判据 | ④ 口径 | 现行（设计稿） |
+| [cross-project-issues.md](cross-project-issues.md) | CPI 债务台账 | 数据 | 现行 |
+| [upstream-dsplat-issues.md](upstream-dsplat-issues.md) | 上游缺陷反馈（框架侧） | 数据 | 现行 |
 
 ---
 

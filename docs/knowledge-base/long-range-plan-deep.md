@@ -1,6 +1,6 @@
 # MyNet 长程计划 · 深化编排（V 段）
 
-> 前置：`dev-plan.md`（S 段 64 项）· `long-range-plan.md`（R 段）· `long-range-plan-t.md`（T 段）。
+> 前置：`dev-plan.md`（S 段 76 项）· `long-range-plan.md`（R 段）· `long-range-plan-t.md`（T 段）。
 > **本文不取代它们，而是对其做基线校正 + 把 T3–T5 拆到可执行粒度。**
 >
 > 触发原因：T2-6 联调（2026-09-24）撞出一串「已勾但纸面」的项。随后做了三路只读实测勘察

@@ -14,14 +14,18 @@
 |---|---|---|
 | `docs/mynet-overview.md` | **为什么这么设计**（九条主线、L1–L7、决策记录） | 本文档同级 |
 | `docs/repo-migration.md` | **仓库怎么建、代码怎么搬**（9 阶段 + 搬运清单 + 隐性知识） | 同上 |
-| `docs/dev-plan.md` | **建完做什么** —— 含 **64 项计划顺序表**（S 段跟踪入口） | 同上 |
-| `docs/long-range-plan-deep.md` | **现在真正该做什么** —— 基线校正（五处假勾选）+ V0–V5 波次编排 + 人工闸门清单 + 反纸面达成五条 | 同上 |
+| `docs/project-memory.md` | **现在什么状态**（开工入口；HEAD / 未推送 / 测试计数的唯一权威） | 同上 |
+| `docs/dev-plan.md` | **建完做什么** —— 含 **76 项计划顺序表**（S 段跟踪入口） | 同上 |
+| `docs/long-range-plan-deep.md` | **底座线** —— 基线校正（五处假勾选）+ V0–V5 波次编排 + 人工闸门清单 + 反纸面达成五条 | 同上 |
 | `docs/cross-project-issues.md` | **欠了什么债** —— CPI 台账（发现即记，修好移入「已修复」） | 同上 |
 | `docs/upstream-dsplat-issues.md` | **哪些是框架的锅** —— 上游缺陷报告 + 可粘贴提示词（§1.8：不改 vendor） | 同上 |
 
+> **规划文档导航（读法钉死）**：见 `docs/README.md` §3.0 —— 入口 / 当期 / 勾选台账 三层，外加只管口径的
+> v1 Playbook（`mynet_agent/docs/MYNET_V1_PLAYBOOK.md`）与底座 V 段。**新会话按那张表读，别再逐份猜谁是「当前」。**
+
 **任务 ID 以 `docs/dev-plan.md` §3 计划顺序表为唯一标识**（S 段）；
 R/T 段见 `long-range-plan.md` / `long-range-plan-t.md`，
-**V 段（当前）见 `long-range-plan-deep.md` §4**。
+**V 段（底座线）见 `long-range-plan-deep.md` §4**。
 推进方式：按序号勾掉「状态」列；「前置」列告诉你什么时候能动它。
 
 ⚠️ **勾选前必读 §7.1 反纸面达成五条（D1–D5）**。2026-09-24 的基线校正发现
@@ -351,6 +355,8 @@ S 段执行 D-4 时只把 `mynet_ui` 的 `local/` 6 页搬进了 `mynet_web`，`
 
 ```
 读 mynet-club/AGENTS.md 与 docs/ 下三份文档（mynet-overview / repo-migration / dev-plan），
+再读 docs/project-memory.md（现在什么状态）与 docs/README.md §3.0（规划文档导航：入口/当期/台账三层）。
+当期在跑什么看 docs/spec/proxy-permission-loop-playbook.md；
 然后按 docs/dev-plan.md §3 计划顺序表推进下一个未勾选项。
 遵守 AGENTS.md 的硬约束、工作方法与安全红线。
 完成后勾选顺序表，并给出 file:line 级证据。
