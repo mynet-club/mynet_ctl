@@ -102,6 +102,8 @@ ERROR PATHS:
   - 装配中途失败 → 回滚到旧服务状态
 
 PLATFORM DIVERGENCE:
+  - OpenWrt **接口名权威**：`$MYNET_HOME/var/bundle.json` 的 `node.interface`（与 `gnb.options.ifname` 不等则**不猜、报错**）。
+    ⚠️ **安装时拿不到接口名是常态**（与 Linux 不同：Linux 可在服务启动时随时处理）——故安装期**只建对象、不带 device**，绑定留到 start。
   - OpenWrt: 安装期**建** `network.mynet`(proto=none) + firewall zone + forwarding + include 登记（**时序前置**）；**不绑 device**（无 bundle 不猜接口名）；**masq 与 include 脚本由 `firewall.mynet start`（apply/启动）创建并补偿** —— UCI 侧 `masq=1` 在防火墙重启后可能失效，故 enforcement 必须在 start 期补 nft 规则。活动接口/Cloud 许可仍待配置
   - Windows: SCM 为唯一常驻机制；老旧计划任务须在迁移中间批次收敛并移除
 ```
