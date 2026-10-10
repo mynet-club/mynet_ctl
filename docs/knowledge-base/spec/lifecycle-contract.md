@@ -152,6 +152,18 @@ mynet apply --auto | --clear
   - 不恢复已撤销的出口许可
 ```
 
+### 2.5b OpenWrt「接口依赖」脚本族 —— 时序与归口（2026-10-10）
+
+OpenWrt 上凡**依赖隧道接口**的动作，规则统一为：**安装期只建"对象"，接口相关动作一律留到 start 期执行**；接口名权威 = `$MYNET_HOME/var/bundle.json` 的 `node.interface`（冲突不猜、报错）。
+
+| 脚本 | 定位 | 新路径 | 处置 |
+|---|---|---|---|
+| `firewall.mynet` | **真实现**：install 建 `network.mynet`(proto=none)+zone+forwarding+include；start 绑 device+写 include+补 masq | init 在 start 期调它 | **保留**（新线合法组成） |
+| `route.mynet` | **薄封装**（转调 `mynet apply --auto/--clear`；`route.conf` 注入已废弃） | 新 init 直接调 `mynet apply`，不经它 | **随 `rc.mynet` 退役**，之后从 ipk 下架 |
+| `route_policy.sh` | 旧 **L6 策略路由**（`table mynet_proxy`=200 / `fwmark 0xc8` / ipset），由 Lua `proxy.start/stop` 驱动 | 配置来源改 bundle `ProxyPolicy`（`IsClientLike` 判是否装 client 侧策略路由） | **归口到执行器**后，与 `.182` 升级窗口同批切换 |
+
+> 分层归属（合同 §1 E 层）：MyNet **自有** route/fw 的唯一写入者是 `mynet apply`；`route_policy.sh` 写的策略路由同属自有 route，故应收敛到执行器侧。
+
 ### 2.6 OPERATION: update / driver upgrade
 
 ```
