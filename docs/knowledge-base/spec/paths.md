@@ -84,6 +84,8 @@ $MYNET_HOME/                         # Store Root（真相对源）
 
 **收敛目标**：每机只剩一个 Store Root，其余改名 `*.legacy-YYYYMMDD` 或移入 backup。
 
+> **install 写入的路径与服务登记名**（B 层目标矩阵、服务名一致性）见 [`lifecycle-contract.md`](lifecycle-contract.md) §3；安装/卸载/升级的动作合同见其 §2。
+
 ---
 
 ## 4. 运行根解析（Subject Locator）

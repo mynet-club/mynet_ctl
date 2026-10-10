@@ -14,6 +14,7 @@
 | 文件 | 回答的问题 | 状态 |
 |------|-----------|------|
 | [project-memory.md](project-memory.md) | **当前状态与持续约定** — UTC 搁置、API 更名、小闭环入口 | 现行 |
+| [workspace-review-20261010.md](workspace-review-20261010.md) · [spec/platform-lifecycle-build-playbook.md](spec/platform-lifecycle-build-playbook.md) | **跨平台当前审查与规划** — 安装/接口/运行/更新分层、条件编译、发行合同；含公司 .178 与家庭 .182 身份澄清 | 规划，运行时未实施 |
 | [spec/proxy-permission-loop-playbook.md](spec/proxy-permission-loop-playbook.md) | **当前小闭环** — 出口授权到应用与撤销的验收 | 现行 |
 | [AGENTS.md](AGENTS.md) | **怎么干活** — 硬约束 · 工作方法 · 安全红线 · 坑 · DoD | 现行 |
 | [mynet-overview.md](mynet-overview.md) | **为什么这么设计** — 九条主线、L1–L7、决策记录 | 现行 |
@@ -49,6 +50,7 @@
 | [spec/control-plane.md](spec/control-plane.md) | 控制面与传输 | 现行 |
 | [spec/node-keying.md](spec/node-keying.md) | 节点密钥与鉴权 | 现行 |
 | [spec/driver-abstraction.md](spec/driver-abstraction.md) | VPN driver 抽象层：抽象 bundle、驱动接口、gnb↔wg 映射 | 现行 |
+| [spec/lifecycle-contract.md](spec/lifecycle-contract.md) | **生命周期合同（H0）** — 安装/卸载/服务/应用/升级的 A–F 分层、默认路径/服务名、原生包与归档矩阵 | 现行 |
 | [spec/local-api.md](spec/local-api.md) | 本机能力面（local-api） | 现行 |
 | [spec/paths.md](spec/paths.md) | **路径 SSOT** — 存储 / 运行 / 投影 / 运行态 | 现行 |
 | [spec/data-models.md](spec/data-models.md) | 所有 JSON/conf 数据结构（唯一定义处） | 现行 |

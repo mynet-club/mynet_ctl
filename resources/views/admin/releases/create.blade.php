@@ -13,8 +13,8 @@
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">产品 <span class="text-red-500">*</span></label>
                     <select name="product" required class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
-                        @foreach(['tui' => 'tui (MyNet Client)', 'gnb' => 'gnb (GNB)', 'utc' => 'utc (UTC)', 'client' => 'client (新版)'] as $val => $lbl)
-                        <option value="{{ $val }}" {{ old('product') === $val ? 'selected' : '' }}>{{ $lbl }}</option>
+                        @foreach($products as $key => $meta)
+                        <option value="{{ $key }}" {{ old('product') === $key ? 'selected' : '' }}>{{ $key }} ({{ $meta['name'] }})</option>
                         @endforeach
                     </select>
                 </div>
@@ -29,8 +29,8 @@
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">平台 <span class="text-red-500">*</span></label>
                     <select name="platform" required class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
-                        @foreach(['linux', 'openwrt', 'darwin', 'windows', 'freebsd', 'openbsd'] as $p)
-                        <option value="{{ $p }}" {{ old('platform') === $p ? 'selected' : '' }}>{{ $p }}</option>
+                        @foreach($platforms as $key => $meta)
+                        <option value="{{ $key }}" {{ old('platform') === $key ? 'selected' : '' }}>{{ $key }}</option>
                         @endforeach
                     </select>
                 </div>

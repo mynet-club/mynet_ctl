@@ -25,6 +25,8 @@ LuCI / mynet_openwrt 壳
 
 ## 现状提醒
 
+2026-10-10 的平台现状与实施工作包见 [OpenWrt Agent 接入实施规划](../../../../mynet_openwrt/docs/AGENT_INTEGRATION_PLAYBOOK.md)。正本位于平台仓；已核对真实 Lua/Go 分派、init 与发行配方，运行时迁移尚未实施。旧 E 台账勾选不能代替当前 ubus、接入、资源和发行行为证据。
+
 当前树仍大量保留 `mynet_lua` 业务实现——**迁移源，不是终态**。
 `docs/` 与 `mynet_agent/openwrt/docs/` 曾双份同步（2026-10-01 盘点：16 份 MD5 全同），
 正本以本仓 `docs/` 为准。

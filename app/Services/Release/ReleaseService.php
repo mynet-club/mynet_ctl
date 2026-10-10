@@ -29,13 +29,21 @@ class ReleaseService
         $arch = $data['arch'];
         $variant = $data['variant'] ?? '';
 
-        $filename = $this->domain->generateFilename($product, $platform, $arch, $version, $variant);
+        // ⚠️ variant **不是**文件扩展名：它是并入 arch 的限定符
+        // （ManifestService 输出 `{arch}-{variant}`，如 mipsel-softfp）。
+        // 扩展名由平台默认值决定（generateFilename 的 ext 传空即取默认）。
+        // 把 variant 当 ext 传会让文件名变成 `..._v1.0.0.softfp` —— 既不在
+        // parseFilename 白名单里（下载 URL 落到 fallback），也篡改了容器格式语义。
+        $filename = $this->domain->generateFilename($product, $platform, $arch, $version);
+
+        // 产物类型：登记时按扩展名映射一次并落库（读取端不再运行时推断）
+        $kind = $this->domain->artifactKindForExt(pathinfo($filename, PATHINFO_EXTENSION));
         $path = "releases/{$product}/{$version}/{$filename}";
 
         $sha256 = hash_file('sha256', $file->getRealPath());
         $size = $file->getSize();
 
-        DB::transaction(function () use ($data, $file, $filename, $path, $sha256, $size, $product, $version, $platform, $arch, $variant, &$release) {
+        DB::transaction(function () use ($data, $file, $filename, $path, $sha256, $size, $product, $version, $platform, $arch, $variant, $kind, &$release) {
             Storage::disk('local')->putFileAs(
                 "releases/{$product}/{$version}",
                 $file,
@@ -51,6 +59,7 @@ class ReleaseService
                 'platform' => $platform,
                 'arch' => $arch,
                 'variant' => $variant,
+                'kind' => $kind,
                 'filename' => $filename,
                 'file_path' => $path,
                 'file_size' => $size,

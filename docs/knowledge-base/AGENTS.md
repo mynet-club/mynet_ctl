@@ -130,7 +130,7 @@ operator / platform / plugin / ticket / sms / form / knowledge / conversation �
 |---|---|---|
 | **开发** | `-tags dev` | 从 `MYNET_WEBUI_DIR`（或 `mynetd/localapi/webui`）**读盘**，改前端不重编 |
 | **发布** | `-tags embed` | WebUI **打进二进制**（`make pack` / release 固定此标签） |
-| **OpenWrt / 瘦** | 无标签 | WebUI 不进包，UI 由 LuCI 托管 |
+| **OpenWrt / 瘦** | `-tags openwrt`（不含 embed） | WebUI 不进包，UI 由 LuCI 托管；procd/UCI 后端 |
 
 **硬规矩**：
 
@@ -206,7 +206,7 @@ operator / platform / plugin / ticket / sms / form / knowledge / conversation �
   于是「src/ 只读」在 gnb 上从未生效过。写红线时先问「新的错法会不会漏」。
 
   ⚠️ **A4 的由来（2026-10-04 真实事故，别再让 A2/A3 单独值班）**：`mynet_gnb` 的
-  `packages/*/itest/backup-*/` 把生产节点 `10.182.236.180` 与公司整网网关 `192.168.0.2`
+  `packages/*/itest/backup-*/` 把生产节点 `10.182.236.180` 与旁路网关 `192.168.0.2`
   的 `*.private`、`credential.json` 打进 `.tgz` 提交并推到了 GitHub。A2/A3 双双漏报，
   因为 **A2 只匹配 PEM 文本** `BEGIN … PRIVATE KEY`，而 GNB 私钥是裸 32 字节 ed25519
   二进制（§1.1：`clamp(SHA512(seed))`），**没有 PEM 头**；**A3 只匹配入库文件名**，
@@ -223,7 +223,11 @@ operator / platform / plugin / ticket / sms / form / knowledge / conversation �
   无尾斜杠的模式同时匹配目录，写 `/mynet` 会把同名**源码目录**下的新文件静默挡掉
   （实测 `git add` 报 `already up to date`、rc=0，不报错）。所以只能由 guard 用魔数拦。
   和 A4 一样**不支持 `GUARD-OK` 行内豁免**，确需入库的非产物二进制走 `C4_ALLOW`
-  （空格分隔的路径前缀，如 `assets/`）并在提交说明里写明理由。已跟踪的合法二进制资产
+  （空格分隔的路径前缀，如 `assets/`）并在提交说明里写明理由。
+  ⚠️ **要随包长期分发的依赖二进制**（如安装器的 `wintun.dll`）用**仓内持久白名单**
+  `.guard-c4-allow`（每行一个路径前缀）—— 环境变量只在当次提交有效，不能替代它；
+  入库件必须同步其 provenance/SHA（见 `spec/lifecycle-contract.md` §4.3）。
+  已跟踪的合法二进制资产
   （png/ico 图标）不在魔数表里，不会误伤 —— 误报的直接后果就是教人用 `--no-verify`。
   ⚠️ A4 与 C4 对归档**同时响**（一个查内容、一个查该不该入库），因此自测里 A4 那组
   一律传 `C4_ALLOW` 隔离：否则退出码无法归因，C4 单方面坏掉也能顶着「A4 用例全绿」。

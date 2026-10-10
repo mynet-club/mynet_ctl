@@ -11,7 +11,7 @@ class Release extends Model
     protected $primaryKey = 'id';
 
     protected $fillable = [
-        'release_id', 'product', 'version', 'platform', 'arch', 'variant',
+        'release_id', 'product', 'version', 'platform', 'arch', 'variant', 'kind',
         'filename', 'file_path', 'file_size', 'sha256', 'download_url',
         'changelog', 'is_stable', 'is_latest', 'download_cnt',
         'uploaded_by', 'status',

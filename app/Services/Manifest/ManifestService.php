@@ -277,6 +277,7 @@ class ManifestService
                     'file' => $release->filename,
                     'url' => $url,
                     'ext' => $ext,
+                    'kind' => $release->kind ?: (new ReleaseDomainService)->artifactKindForExt($ext),
                     'size' => (int) $release->file_size,
                     'sha256' => $release->sha256,
                 ];

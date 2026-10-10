@@ -4,6 +4,8 @@
 > 冻结策略见 [`../integration-plan-v2.md`](../integration-plan-v2.md) §2.2；
 > 本目录（`spec/README.md`）声明的唯一实现是 **`mynet_agent`（`mynetd`）**。
 > **目标线对应**：目标线把启停/重载**收敛到驱动层**（[`driver-abstraction.md`](driver-abstraction.md) 的 `VPNDriver.Reload()` 等），本机只表达意图（[`local-api.md`](local-api.md) §3 service 域、§4 热重启语义）。下述「三层模型 / preStart hooks / PID 文件」等步骤是旧线的做法
+>
+> **现行合同**：跨平台启停/安装/卸载/应用/升级的**目标合同**见 [`lifecycle-contract.md`](lifecycle-contract.md)（H0）§2.4 —— 精确停、归属可验证、禁 PPID=1 判据；本文件仅作旧线对照。
 
 
 > 更新：2026-05 | 适用：mynet_lua / mynet_client

@@ -31,6 +31,9 @@
 | [node-keying.md](node-keying.md) | **节点密钥与鉴权**：GNB ed25519 密钥派生 / `ed25519_key_exchange` DH / 心跳 HMAC 现状 / gateway 鉴权方案 | 目标线 |
 | [unified-platform-architecture.md](unified-platform-architecture.md) | 统一平台架构 L1~L7 与实施计划（业务与驱动分层） | 目标线 |
 | [driver-abstraction.md](driver-abstraction.md) | VPN Driver 抽象层：公共控制面 + 驱动专属 intent（gnb / wireguard） | 目标线 |
+| [lifecycle-contract.md](lifecycle-contract.md) | **生命周期合同（H0）**：安装/卸载/服务/应用/升级的 A–F 分层、默认路径/服务名、原生包与归档矩阵、现状差距表 | **现行**（目标合同） |
+| [node-upgrade-plan-180-182.md](node-upgrade-plan-180-182.md) | **现网升级部署计划（H6）**：`.180`(proxy server)/`.182`(proxy client) 的取证、产物、步骤、验证、回滚、Go-NoGo、待裁定 | **计划，未执行**（2026-10-10） |
+| [node-upgrade-runbook-180-182.md](node-upgrade-runbook-180-182.md) | **今晚升级 Runbook（H6）**：开工前决策、commit 锚点、出包/取证/备份/步骤/验证/回滚/Go-NoGo/记录表 | **可执行清单，未执行**（2026-10-10 夜） |
 | [schemas/bundle-envelope-v2.schema.json](schemas/bundle-envelope-v2.schema.json) | R2 线格式 SSOT：BundleEnvelope + NetworkIntent + GnbIntent + WireGuardIntent | 机器可读契约 |
 | [fixtures/bundle-envelope-v2/](fixtures/bundle-envelope-v2/) | R2 双端互解 fixtures（Go/PHP 共用，7 场景） | 共享测试数据 |
 | [v1-permission-matrix.md](v1-permission-matrix.md) | **权限矩阵（P0 冻结件）**：R1–R6 边界规则 + 六表面×操作域判据 + 9 条实测洞 | 全线（back / agent / 壳） |

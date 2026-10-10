@@ -165,4 +165,69 @@ class ReleaseFilenameTest extends TestCase
             'mynet_agent 不应有别名（有别名会让文件名前缀变样）'
         );
     }
+
+    /**
+     * 原生安装器扩展名（exe/dmg/pkg）必须能反解析。
+     * 它们与自更新归档（tgz/zip）是不同 artifact kind，都要进白名单；
+     * 否则 buildDownloadUrl 落到无前缀 fallback、分发出错。
+     */
+    public function test_parses_native_installer_extensions(): void
+    {
+        foreach (['exe' => 'windows', 'pkg' => 'darwin', 'dmg' => 'darwin'] as $ext => $platform) {
+            $filename = "mynet_agent_{$platform}_amd64_v1.0.0.{$ext}";
+            $got = $this->svc->parseFilename($filename);
+            $this->assertNotNull($got, "应解析: {$filename}");
+            $this->assertSame($ext, $got['ext']);
+            $this->assertSame($platform, $got['platform']);
+            $this->assertSame('v1.0.0', $got['version']);
+        }
+        // 不在白名单的容器仍必须拒绝
+        $this->assertNull($this->svc->parseFilename('mynet_agent_windows_amd64_v1.0.0.rar'));
+    }
+
+    /**
+     * 上传白名单取自 domain SSOT（控制器不再硬编码）：PRODUCTS / PLATFORMS 的
+     * **每个键**都必须通过各自的 validate*。任一条被 domain 加了却又校验不过，
+     * 就等于「清单里点得到、提交却 422」。
+     */
+    public function test_domain_whitelists_are_self_consistent(): void
+    {
+        foreach (array_keys(ReleaseDomainService::PRODUCTS) as $product) {
+            $this->assertTrue($this->svc->validateProduct($product), "产品应可上传: {$product}");
+        }
+        foreach (array_keys(ReleaseDomainService::PLATFORMS) as $platform) {
+            $this->assertTrue($this->svc->validatePlatform($platform), "平台应可上传: {$platform}");
+        }
+        // 发布面必须点得到 mynet_agent 与 openwrt-sdk（曾因控制器硬编码清单漏掉）
+        $this->assertContains('mynet_agent', array_keys(ReleaseDomainService::PRODUCTS));
+        $this->assertContains('openwrt-sdk', array_keys(ReleaseDomainService::PLATFORMS));
+    }
+
+    /**
+     * 产物类型（artifact kind，§4.3）：原生安装包 vs 自更新归档必须**显式**区分，
+     * 不从扩展名运行时猜 —— 登记时按本表映射一次并落库。
+     */
+    public function test_artifact_kind_maps_installer_vs_archive(): void
+    {
+        foreach (['exe', 'dmg', 'pkg', 'ipk'] as $ext) {
+            $this->assertSame('installer', $this->svc->artifactKindForExt($ext), "{$ext} 应为 installer");
+        }
+        foreach (['tgz', 'zip', 'tar.gz'] as $ext) {
+            $this->assertSame('archive', $this->svc->artifactKindForExt($ext), "{$ext} 应为 archive");
+        }
+        // 未登记扩展名不得瞎归类
+        $this->assertSame('', $this->svc->artifactKindForExt('rar'));
+        $this->assertSame('', $this->svc->artifactKindForExt(''));
+    }
+
+    /** parseFilename 必须一并给出 kind（windows 的 zip 归档 vs exe 安装器同名同版本也要分得开）。 */
+    public function test_parse_filename_returns_kind(): void
+    {
+        $exe = $this->svc->parseFilename('mynet_agent_windows_amd64_v1.0.0.exe');
+        $this->assertSame('installer', $exe['kind']);
+        $zip = $this->svc->parseFilename('mynet_agent_windows_amd64_v1.0.0.zip');
+        $this->assertSame('archive', $zip['kind']);
+        $ipk = $this->svc->parseFilename('mynet_agent_openwrt_mipsel_v1.0.0.ipk');
+        $this->assertSame('installer', $ipk['kind']);
+    }
 }

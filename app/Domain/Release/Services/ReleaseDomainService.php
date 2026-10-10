@@ -47,6 +47,16 @@ class ReleaseDomainService
     //   2. soft-float 才加 -softfp: armv7-softfp, arm64-softfp, mipsel-softfp
     //   3. 所有组件统一使用同一个 arch 标识
     // ═══════════════════════════════════════════════════════════════════════
+    // ═══════════════════════════════════════════════════════════════════════
+    // 产物类型（artifact kind）—— §4.3：原生安装包与自更新归档各自有 kind，
+    // 不只按扩展名猜。这里是**声明表**（唯一 SSOT）；登记时按扩展名映射一次并落库，
+    // 读取端用落库值，不再运行时推断。
+    // ═══════════════════════════════════════════════════════════════════════
+    const ARTIFACT_KINDS = [
+        'installer' => ['exe', 'dmg', 'pkg', 'ipk'],
+        'archive' => ['tgz', 'zip', 'tar.gz'],
+    ];
+
     const ARCHITECTURES = [
         // x86
         'amd64' => ['family' => 'x86',   'bits' => 64, 'goarch' => 'amd64',   'goarm' => null, 'label' => 'x86 64-bit'],
@@ -131,6 +141,20 @@ class ReleaseDomainService
         return array_key_exists($product, self::PRODUCTS);
     }
 
+    /** 扩展名 → 产物类型（未登记则 ''）。登记时调用一次并落库。 */
+    public function artifactKindForExt(string $ext): string
+    {
+        $ext = strtolower(ltrim($ext, '.'));
+
+        foreach (self::ARTIFACT_KINDS as $kind => $exts) {
+            if (in_array($ext, $exts, true)) {
+                return $kind;
+            }
+        }
+
+        return '';
+    }
+
     public function validatePlatform(string $platform): bool
     {
         return array_key_exists($platform, self::PLATFORMS);
@@ -195,7 +219,11 @@ class ReleaseDomainService
         // `[a-z][a-z0-9-]*`，正则要靠回溯猜「name 到哪结束、platform 从哪开始」，
         // 可能把 `mynet_agent` 切成 name=mynet + platform=agent。
         // 枚举后切分唯一。注意 openwrt-sdk 必须排在 openwrt 之前。
-        if (! preg_match('/^([a-z0-9_]+)_(linux|openwrt-sdk|openwrt|darwin|windows|freebsd|openbsd)_([a-z0-9\-]+)_(v[0-9a-z.\-]+)\.(tgz|zip|tar\.gz|ipk)$/i', $filename, $m)) {
+        //
+        // 扩展名白名单含**原生安装器**（exe/dmg/pkg）：desktop 侧的 Windows 安装器、
+        // macOS pkg/dmg 与自更新归档（tgz/zip）是不同 artifact kind，都要能反解析
+        // （否则 buildDownloadUrl 落到无前缀 fallback）。
+        if (! preg_match('/^([a-z0-9_]+)_(linux|openwrt-sdk|openwrt|darwin|windows|freebsd|openbsd)_([a-z0-9\-]+)_(v[0-9a-z.\-]+)\.(tgz|zip|tar\.gz|ipk|exe|dmg|pkg)$/i', $filename, $m)) {
             return null;
         }
 
@@ -214,7 +242,9 @@ class ReleaseDomainService
             }
         }
 
-        return compact('product', 'name', 'platform', 'arch', 'version', 'ext');
+        $kind = $this->artifactKindForExt($ext);
+
+        return compact('product', 'name', 'platform', 'arch', 'version', 'ext', 'kind');
     }
 
     /**

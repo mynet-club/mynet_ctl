@@ -7,6 +7,25 @@
 
 ## 待修复（按优先级排序）
 
+### 2026-10-10 跨平台 review 新登记（未修复）
+
+逐项源码证据、静态/复现边界及本轮测试见 [workspace 审查报告](workspace-review-20261010.md)；执行边界见 [跨平台规划](spec/platform-lifecycle-build-playbook.md)。本批不据已有测试绿勾选平台完成。
+
+| ID | 优先级 | 问题与报告项 | 归属 |
+|---|---|---|---|
+| CPI-71 | P1 | OpenWrt实际Lua Ops不满足新config/connect/apply合同（R1） | agent/OpenWrt，O1/H1–H2 |
+| CPI-72 | P1 | UCI兜底首次zone配置失败、已有forwarding重跑重复（R2，隔离输出fixture复现） | agent，H2 |
+| CPI-73 | P1 | Windows安装器计划任务与CLI SCM/home分叉（R3） | desktop/agent，H2 |
+| CPI-74 | P1 | macOS pkg与CLI label/prefix/home分叉（R4） | desktop/agent，H2 |
+| CPI-75 | P1 | desktop Linux单元用户/env/权限未装配，与agent节点单元冲突（R5） | desktop/agent，H2 |
+| CPI-76 | P1 | update不识别exe，OpenWrt仍选Linux裸更新路径（R6） | agent/ctl，H4 |
+| CPI-77 | P1 | desktop CI缺GUI embed输入、macOS补编缺源码、ref浮动fallback（R7） | desktop/agent/GUI，H4 |
+| CPI-78 | P1 | ctl解析拒绝exe/pkg/dmg，variant/ext上传语义混用（R8，纯domain复现） | ctl/desktop/OpenWrt，H4 |
+| CPI-79 | P1 | OpenWrt init仅PPID=1也清理gnb_es，不能证明实例归属（R9） | agent/OpenWrt，H3 |
+| CPI-80 | P1 | GNB Wintun初始化失败分支调用未初始化函数指针（R10，静态确认、真Windows未验） | GNB补丁包/上游，H3 |
+| CPI-81 | P2 | installer平台实现全编入三平台，_win不构成Go约束（R11，go list实证） | agent，H1 |
+| CPI-82 | P1 | install在解析--home前requireHome，参数无法满足路径要求（R12，dry-run复现） | agent，H0/H2 |
+
 
 ### 🟠 P1 — 影响安全性
 
