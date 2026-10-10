@@ -114,6 +114,12 @@ PlatformDescriptor 最少区分：goos/goarch、发行平台（linux/openwrt/win
 >
 > **H3 进度（部分，2026-10-10）**：**G-9 关闭** —— OpenWrt `stop_gnb_instance` 改**可验证归属**（本实例 gnb pid ← cmdline 含 confdir；只清 exe+父进程都指向本实例的 gnb_es；不可证者不杀只记），删除 PPID=1 判据；fixture 已加。**H3 剩余（G-10）**：用户裁定**不改 gnb `src/`**（原拟补丁已撤回）。改为**安装器侧**并已落地：Windows 安装器 payload 带 `wintun.dll` 到 gnb.exe 同目录、缺 DLL 编译即失败；`scripts/fetch-wintun.sh` 按钉死 SHA 取件；provenance = WireGuard LLC 官方签名 amd64 件。**剩**：CI 取件来源（ctl 托管 / 直链）待定。
 >
+> **O2 进度（2026-10-11）**：本地管理桥已交付并**设备实证**（`.182` ImmortalWrt x86_64）。rpcd ucode 桥（`/usr/share/rpcd/ucode/mynet.uc`，标准脚本 + `return {mynet:...}`；固定方法表 16 项，argv 逐动作写死，不 relaying/不开放 system.json/不回私钥）；ACL 读 10/写 6。**收口实测**：① 入参类型显示 `String` = rpcd ucode 标准渲染（`ddns.uc`/`luci.wireguard` 同此），非缺陷；② 会话态 ACL 正/负测试通过（`session access`：16 方法 `access=true`，未授权方法 `false`；警示 `ubus` CLI 以 uid0 直连**绕过** ACL，须走 `session access`）；③ 静态门禁 `scripts/tools/check_bridge_acl.sh`（桥⇄ACL 逐项对齐；不用 GNU sed 扩展——BSD sed 的 `\?` 会静默零匹配）已挂 `mynet_openwrt` 的 `make -f Makefile.guard test`。方法映射冻结表见 [`../../../../mynet_openwrt/docs/O2-BRIDGE-METHOD-MAP.md`](../../../../mynet_openwrt/docs/O2-BRIDGE-METHOD-MAP.md)。
+>
+> **O3 进度（2026-10-11）**：**执行器「成功却回 exit 1」已修** —— `luci/model/mynet/util.lua:M.exec_status` 此前要求 marker 在输出**末尾**，而 init 在 post-start 后台输出写在 marker 之后 → 判 -1 假失败；改为取**最后一次** marker。设备实测通过。
+>
+> **O4 进度（部分，2026-10-11）**：核心机制**已存在**（非新写）：双轨意图 `ProxyIntentState`（Cloud=出口许可 / Local=客户端分流，`Effective()` 按职责合成，见 `shared/domain/proxy_intent.go`）；单调门禁 `ApplyCloud`（旧 generation 拒绝、同代改写拒绝，`proxy_intent_test.go` 覆盖）；云端许可只来自统一 bundle（`StampCloudIntent` ← `bundle.network.proxy`）；`proxy_unify.go` 把 Effective 投影到插件壳。**本轮补的缺口**：旧 Lua 权威 `conf/proxy/proxy_role.conf`（Go 侧此前**零引用**）→ 统一 Local 意图的**单向折叠迁移** `mynet/proxy_migrate.go`（幂等 marker + 源 sha256、Local 非空不覆盖、**未知键 fail-closed 不猜**、dry-run 零写），挂 `mynet proxy migrate [--dry-run]` 且随 `mynet install` best-effort 跑一次；6 项测试过。**O4 剩余**：LuCI 页面（`luci/model/mynet/proxy.lua`）仍自持 `proxy_role.conf` 第二权威，退役它属 **O5**（页面改走桥）。
+>
 > **H6 进度（2026-10-10，仅计划）**：用户要求为 `.180`(api.mynet.club / proxy server) 与 `.182`(192.168.0.2 / 旁路网关 / proxy client) 制定升级部署计划 → 已落 [`node-upgrade-plan-180-182.md`](node-upgrade-plan-180-182.md)（身份/取证、产物、步骤、验证、回滚、Go-NoGo、待裁定 D1–D5）。**仍未执行、未连节点**。关键缺口：dist 缺 **openwrt/amd64** 腿（`.182` 是 x86_64）、ipk 未进 ctl、`mynet update` 选不到 openwrt 包。
 
 ## 6. 验收、数据与回滚
