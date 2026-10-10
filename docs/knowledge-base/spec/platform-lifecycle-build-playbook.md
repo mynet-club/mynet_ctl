@@ -120,6 +120,10 @@ PlatformDescriptor 最少区分：goos/goarch、发行平台（linux/openwrt/win
 >
 > **O4 进度（部分，2026-10-11）**：核心机制**已存在**（非新写）：双轨意图 `ProxyIntentState`（Cloud=出口许可 / Local=客户端分流，`Effective()` 按职责合成，见 `shared/domain/proxy_intent.go`）；单调门禁 `ApplyCloud`（旧 generation 拒绝、同代改写拒绝，`proxy_intent_test.go` 覆盖）；云端许可只来自统一 bundle（`StampCloudIntent` ← `bundle.network.proxy`）；`proxy_unify.go` 把 Effective 投影到插件壳。**本轮补的缺口**：旧 Lua 权威 `conf/proxy/proxy_role.conf`（Go 侧此前**零引用**）→ 统一 Local 意图的**单向折叠迁移** `mynet/proxy_migrate.go`（幂等 marker + 源 sha256、Local 非空不覆盖、**未知键 fail-closed 不猜**、dry-run 零写），挂 `mynet proxy migrate [--dry-run]` 且随 `mynet install` best-effort 跑一次；6 项测试过。**O4 剩余**：LuCI 页面（`luci/model/mynet/proxy.lua`）仍自持 `proxy_role.conf` 第二权威，退役它属 **O5**（页面改走桥）。
 >
+> **O5 进度（首片，2026-10-11）**：新增 LuCI 侧桥客户端 `luasrc/model/mynet/bridge.lua`（页面**唯一**的本地读写入口，方法表冻结为与桥/ACL 同一份 16 项，未知方法客户端先拒）；首个消费点 = `controller/mynet.lua:api_get_status` 附加 `bridge` 字段（独立 pcall，不回归旧字段）。**设备实证**（`.182`, Lua 5.1.5）：模块 `status()`→`daemon=mynetd`；端点 `/api/status` 旧字段不变、新增 bridge。`check_bridge_acl.sh` 扩为**三方**一致（桥 `.uc` ⇄ ACL ⇄ `bridge.lua`）挂 `make test`。**O5 剩余**：`index/node/service/proxy/guest` 等页面逐页改走桥（需浏览器验证 + 依 O0 操作全量表定取舍），完成后退役 Lua `rc.mynet`/`route.mynet` 直连（解锁 O1-③）。
+>
+> **O6 进度（骨架，2026-10-11）**：`build_openwrt.yml` 修 `checkout` 私有仓名 `mynet_openwrt-V2 → mynet_openwrt`（2026-10 已去迁移期后缀）并加 `openwrt_ref` 输入（workflow_dispatch 可锁 SHA，禁浮动 HEAD）；`mynet_desktop/.github/workflows/release.yml` 的 `AGENT_REPO` 去 `-V2`（与已确认的 `GUI_REPO` 对齐）、发布说明链接改裸名。**O6 剩余（需 CI 分钟 + 已搁置决策）**：指定 SHA 从 SDK 真出 ipk → ctl 索引/下载 → opkg 安装/升级/卸载的闭环；`mynet_openwrt/.github/workflows/release.yml` 仍是**手搓 ipk**（非 SDK），归 O6 收口。
+
 > **H6 进度（2026-10-10，仅计划）**：用户要求为 `.180`(api.mynet.club / proxy server) 与 `.182`(192.168.0.2 / 旁路网关 / proxy client) 制定升级部署计划 → 已落 [`node-upgrade-plan-180-182.md`](node-upgrade-plan-180-182.md)（身份/取证、产物、步骤、验证、回滚、Go-NoGo、待裁定 D1–D5）。**仍未执行、未连节点**。关键缺口：dist 缺 **openwrt/amd64** 腿（`.182` 是 x86_64）、ipk 未进 ctl、`mynet update` 选不到 openwrt 包。
 
 ## 6. 验收、数据与回滚
