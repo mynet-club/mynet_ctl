@@ -619,7 +619,7 @@ P0 ──┬──────────────────────�
 | 13 | | F-6 | `system.json` 机制（`mynet detector` 产出 + 双端消费 + 指纹重跑） | F-1 | ☑ |
 | 14 | | S2-1 | `mynet metrics`（心跳数据源：系统指标 + VPN/peer 状态） | S1-2 | ☑ |
 | 15 | | F-2 | 写入移到 `mynet apply`（OS 路由/防火墙，从 shell/Lua 迁） | F-6 | ☑ |
-| 16 | | F-4 | 平台实现（linux / darwin / windows / openwrt） | F-2 | ⚠️ 部分 |
+| 16 | | F-4 | 平台实现（linux / darwin / windows / openwrt） | F-2 | ⚠️ 部分 ※「Windows 是纸面」已过期，见 §3 后「2026-10-10 对齐注」 |
 | 17 | | F-5 | 多写者收敛（唯一写入者 = `mynet apply`） | F-2 | ☑ |
 | 18 | | D-7 | `mynet` 子命令收口 | S2-1 | ☑ |
 | 19 | **S3 纯通信 mynetd** | D-11 | mynetd 默认瘦（只留 `embed` 开关） | S1-2 | ☑ |
@@ -633,7 +633,7 @@ P0 ──┬──────────────────────�
 | 27 | | C-5 | 推送 / presence 只按状态路由 | C-4 | ☑ |
 | 28 | | C-8 | relay 白名单细粒度（放行 auth 会话 5 条，删 3 个 fragment） | — | ☑ |
 | 29 | | C-7 | gateway 加用户面 HTTPS 入口 `/v1/relay` | C-8 | ☑ |
-| 30 | | C-6 | presence 走 Redis pub/sub | C-4 | ☐ **撤勾** |
+| 30 | | C-6 | presence 走 Redis pub/sub | C-4 | ☐ **撤勾** ※ 撤勾依据已过期（gateway 已存在），见 §3 后「2026-10-10 对齐注」 |
 | 31 | **S5 back 业务层** | B-1 | create migration 全套 + baseline 策略 | S1-1 | ☑ |
 | 32 | | B-2 | `node_keys` 加 `algorithm`/`key_version`/`status` | B-1 | ☑ |
 | 33 | | B-3 | 公钥编码统一 hex | B-2 | ☑ |
@@ -681,7 +681,7 @@ P0 ──┬──────────────────────�
 | 73 | | G-7b | GUI 同批翻转：`invitation`→框架 `invite_code`、邀请页三卡（我的码/凭码入区/归因）、补 `password_confirmation` | G-7 | ☑ 2026-10-04（`mynet_gui@072ac70`；build/lint/check-i18n 绿 + 注册页浏览器实测，登录态页面未实测） |
 | 74 | | G-8b | `invitations` **表**下架：独立迁移 + 删前现网行数取证 + 可选把存量码重铸成框架码 | G-8 | ☑ 2026-10-04（迁移 + DBA 手工 SQL + 测试 schema 同步；守卫用「回滚→插行→拒删→带 env 才删」往返验过，`gen-schema.sh` 从零建库通过，350/3459 绿）。⚠️ **现网行数取证没做**（本机够不到现网 MySQL），DBA 执行 `database/sql/2026_10_04_drop_invitations_table.sql` 前须自己跑那三条 SELECT；交付 DDL 与生成器面不一致另入 **F-13**。**2026-10-05：那三条前置 SELECT 已排进 [`dba-operations-ticket-2026-10.md`](dba-operations-ticket-2026-10.md) 的 A-3 → B-3**，「没做」这件事现在有一个可指的位置，不再只是本行的警告 |
 | | | | **▶ M5 console 租户后台可用** | | |
-| 75 | **S11 v1 领域合同冻结**（= playbook §7 P0 的真实缺口） | V1-1 | **权限矩阵**与**稳定错误码清单**两份冻结件成文：`spec/v1-permission-matrix.md`（R1–R6 + 六表面×操作域矩阵 + 10 条洞）、`spec/v1-error-codes.md`（7 套信封 + 现有码注册表 + 死码 9 条 + 冻结口径 C1–C6）；顺带修 back 侧 13 处实参槽错位（`NodeConfigController` 11 处把数组当 `$statusCode`、两个 Monitor service 的 `DomainException` 把 `0` 喂给 `array $context`） | P0-4 | ◐ 2026-10-04 两份冻结件成文 + 13 处实参槽修正 + **删两个零注册的租户中间件**（`ApiTenantMiddleware`/`FrontendTenantMiddleware`，后者实现的「URL 参数 > 表单 > 会话 > 用户默认」正好是 R4/R6 的反向取向）+ 改写 `ModuleServiceProvider.php:43-54` 的假记载。`make check` 全绿：guard PASS、pint 325 files、369 tests / 3559 assertions。**待裁定：F-22 / F-23 / F-24 / F-27 / F-28（权限面）、F-25 / F-26（信封面）** ⇒ **2026-10-04 七条全部已裁**（→ A4 / B4 / B3 / A2+A3 / A1+C1 / B2 / B1，见上面「逐项裁定」表）；仍缺 GNB 已落地版本的兼容基线登记、`BundleEnvelope` 密钥脱敏测试。<br>**2026-10-05 追加实施记录（B 批 / 先B后A）**：① **密钥脱敏测试 ✅ 已落** —— `BundleEnvelope::redactSecrets()`（`mynet_api/app/Modules/VPN/Domain/Bundle/BundleEnvelope.php:127`，按**键名**递归、只换非空 `private_key`/`preshared_key` 为 `[redacted]`）+ `mynet_api/tests/BundleEnvelopeV2Test.php:131,145,167` 三例（结构断言 + gnb fixture 字符串缺席断言；WG 两份 fixture 的私钥与公钥本就是同一串 ⇒ 只做结构断言、不改 fixture）；`deploy/diag-bundle.php:78-80` 诊断面同批走脱敏。② **GNB 兼容基线 ⏸ 决策包** —— 全仓无承载物：`parity.go` 的 `fallback` 只登记部署 peer 能力位（不含 gnb 版本），`Makefile` 的 `GNB_BASELINE` 是 `-ldflags` 构建期字符串；写入面至少两条合法路径，back/agent 不擅自选 ⇒ **决策包已成文**：[`spec/gnb-compat-baseline.md`](spec/gnb-compat-baseline.md)（四个碎片逐条 `file:line` + 待裁 D1 载体/D2 形状/D3 消费者/D4 清单来源 + 建议默认「先落文字表、不动运行时」）。验证：`mynet_api` `make check` 全绿（pint 337 files、**437 tests / 4563 assertions**）。<br>**2026-10-05 B1 裁定并落（D1-A + D2-E2 + D3-iv + D4）**：冻结基线表（三档：`1.6.8-c411f14ee647` / `v1.6.0.a` / 无 Features 行的旧 p2 构建）+ 只读取证工单见该文档 §6，**运行时一行未动**；现网实际版本待用户/运维跑 `mynet version` 回填 ⇒ **P0 两件全部收口** |
+| 75 | **S11 v1 领域合同冻结**（= playbook §7 P0 的真实缺口） | V1-1 | **权限矩阵**与**稳定错误码清单**两份冻结件成文：`spec/v1-permission-matrix.md`（R1–R6 + 六表面×操作域矩阵 + 10 条洞）、`spec/v1-error-codes.md`（7 套信封 + 现有码注册表 + 死码 9 条 + 冻结口径 C1–C6）；顺带修 back 侧 13 处实参槽错位（`NodeConfigController` 11 处把数组当 `$statusCode`、两个 Monitor service 的 `DomainException` 把 `0` 喂给 `array $context`） | P0-4 | ☑ 2026-10-04 两份冻结件成文 + 13 处实参槽修正 + **删两个零注册的租户中间件**（`ApiTenantMiddleware`/`FrontendTenantMiddleware`，后者实现的「URL 参数 > 表单 > 会话 > 用户默认」正好是 R4/R6 的反向取向）+ 改写 `ModuleServiceProvider.php:43-54` 的假记载。`make check` 全绿：guard PASS、pint 325 files、369 tests / 3559 assertions。**待裁定：F-22 / F-23 / F-24 / F-27 / F-28（权限面）、F-25 / F-26（信封面）** ⇒ **2026-10-04 七条全部已裁**（→ A4 / B4 / B3 / A2+A3 / A1+C1 / B2 / B1，见上面「逐项裁定」表）；仍缺 GNB 已落地版本的兼容基线登记、`BundleEnvelope` 密钥脱敏测试。<br>**2026-10-05 追加实施记录（B 批 / 先B后A）**：① **密钥脱敏测试 ✅ 已落** —— `BundleEnvelope::redactSecrets()`（`mynet_api/app/Modules/VPN/Domain/Bundle/BundleEnvelope.php:127`，按**键名**递归、只换非空 `private_key`/`preshared_key` 为 `[redacted]`）+ `mynet_api/tests/BundleEnvelopeV2Test.php:131,145,167` 三例（结构断言 + gnb fixture 字符串缺席断言；WG 两份 fixture 的私钥与公钥本就是同一串 ⇒ 只做结构断言、不改 fixture）；`deploy/diag-bundle.php:78-80` 诊断面同批走脱敏。② **GNB 兼容基线 ⏸ 决策包** —— 全仓无承载物：`parity.go` 的 `fallback` 只登记部署 peer 能力位（不含 gnb 版本），`Makefile` 的 `GNB_BASELINE` 是 `-ldflags` 构建期字符串；写入面至少两条合法路径，back/agent 不擅自选 ⇒ **决策包已成文**：[`spec/gnb-compat-baseline.md`](spec/gnb-compat-baseline.md)（四个碎片逐条 `file:line` + 待裁 D1 载体/D2 形状/D3 消费者/D4 清单来源 + 建议默认「先落文字表、不动运行时」）。验证：`mynet_api` `make check` 全绿（pint 337 files、**437 tests / 4563 assertions**）。<br>**2026-10-05 B1 裁定并落（D1-A + D2-E2 + D3-iv + D4）**：冻结基线表（三档：`1.6.8-c411f14ee647` / `v1.6.0.a` / 无 Features 行的旧 p2 构建）+ 只读取证工单见该文档 §6，**运行时一行未动**；现网实际版本待用户/运维跑 `mynet version` 回填 ⇒ **P0 两件全部收口** |
 | 76 | **S12 现网数据面执行**（工单落地） | DBA-1 | DBA/运维工单五件落地：A 栏只读取证 + B 栏写动作（B-1 回填 → B-2 A5 收紧 → B-3 drop invitations → B-4 邀请码补齐 → B-5 加列，顺序即依赖） | #45,#63 | ◐ **A 栏已取证、B-1/B-2/B-4/B-5 已执行、B-3 未执行**（2026-10-05，用户授权「你先备份, 你直接执行」，前置于 `/data/backup/mynet/api/pre-a5-owner-hardening-20261005-020434/mynet_back.sql.gz`，sha256 `4a3d2571…`）。逐条结果、探针（插 NULL 被 `1048`）、hashes 全在 [`dba-operations-ticket-2026-10.md`](dba-operations-ticket-2026-10.md) **§F 执行记录**。**执行打出的现网事实两处**：引擎是 **MariaDB 10.11.18**（非文档默认的 MySQL 8）、库名 **`mynet_back`**（registry `:311` 原记 `mynet_api` 已更正）。**未执行/待裁两条**：B-3（`invitations` 1 行，存量码重签未裁）、框架 `whereNull('tenant_id')` 认全局角色的判据与现网 14 个全局角色（`tenant_id` 非 NULL）分叉 ⇒ §F.4 **决策包**，back 未擅自归一化 |
 
 **里程碑对照**：M0 = #4–11 · M1 = #12–49 · M2 = #25–30 + #46–47 · M3 = #50–54 · M4 = #55–64 · M5 = #65–74（新增 #73 GUI 同批、#74 表下架）。
@@ -699,6 +699,37 @@ P0 ──┬──────────────────────�
 >   无 `firewall_win.go`/`service_win.go`；`cmd_install.go:55-64` 的 `unitPath` 只有 linux/darwin。
 >   darwin 仅能构建（`metrics_system.go:55-60` 读了就丢 → **macOS 指标全 0**）。
 >   真跑过的只有 linux（U1 三机）与 openwrt（VM）。重做见 **V5-1/V5-2**。
+
+> **2026-10-10 对齐注（与 HEAD 对齐；三份文档都曾落后于代码）。**
+>
+> 本次刷新时各仓 HEAD：`mynet_agent db398d2` · `mynet_api 76e1214` · `mynet_ctl 8fc5e6e` ·
+> `mynet_gui 26d8562` · `mynet_desktop 4ed21f2` · `mynet_openwrt f7c956e` · `mynet_gnb 8734260`。
+> 工作树全干净、无 stash；**除 openwrt（10 条未推）与 gnb（2 条未推）外全部已推送**，
+> 那两条线的分叉点分别是 `de765cf`（09-30）与 `3991970`（10-04），自 10-04 起未再动。
+>
+> **两处状态列的依据已过期，"不按旧记号读"：**
+>
+> - **#30 C-6（撤勾）**：撤勾依据是「全是死代码 + **gateway 二进制不存在**」。实测已不成立 ——
+>   `mynet_agent/cmd/mynet_gateway/main.go` 存在，`NewRedisPresence` 被它 `:90` 真接线
+>   （读 `MYNET_GATEWAY_REDIS_PASSWORD`），并有跨实例测试 `gateway/cross_instance_test.go`。
+>   **不据此翻勾**：能否勾取决于实机多实例 presence 是否真共享，需实测。
+> - **#16 F-4（⚠️ 部分）**：原判据「Windows 是纸面」（无 win 文件、不在 dist 矩阵）**已失效** ——
+>   windows 平台实现齐全（`cmd/mynetd/service_windows.go`、`mynet/metrics_windows.go`、
+>   `mynet/dns_system_windows.go`、`mynet/driver/gnb_platform_windows.go`、`mynet/driver/spawn_windows.go`…），
+>   且 `mynet_agent/Makefile:76` 的 `DIST_MATRIX` 含 `windows:amd64:amd64`。
+>   **仍保留「部分」**：实现存在 ≠ Windows 真机跑过。
+> - **#75（V1-1）状态列 ◐ → ☑**：该格正文早已写「P0 两件全部收口 ✅」，是标记忘了跟。
+>
+> **测试口径（2026-10-10 本机）**：api `make test`（=`--testsuite Default`）**471 tests / 4690
+> assertions / 1 skip**（skip = sqlite 并发，需 MySQL 双连接）、`make test-mysql` **172 passed /
+> 765 assertions**；agent `go build ./...` + `go test ./...` 19 包全绿；ctl 54 tests / 426 assertions /
+> 1 skip；gui vitest 20 passed。
+> ⚠️ 裸跑 `vendor/bin/phpunit`（不带 `--testsuite`）只出 **454** —— `phpunit.xml` 的套件定义有
+> 重叠目录且默认套件才是 `make test` 用的那个，**计数一律以 `make test` 为准**，别再拿裸跑数对账。
+>
+> **仍未收口（本次不变）**：M4/M6 不勾；OpenWrt 未接统一 Proxy 合同、回程缺口、离线与错误出口
+> 证据不足、console 公共出口线未开；上线前七项实机验收见 `spec/proxy-permission-loop-playbook.md` §10。
+> 逐条落地内容另见 `project-memory.md` 的同日段与 `mynet_agent/docs/MYNET_V1_PLAYBOOK.md` §7 P4。
 
 ## 4. 已知坑的应对（开发前必读）
 
