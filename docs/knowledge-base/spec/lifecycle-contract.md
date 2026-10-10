@@ -33,7 +33,7 @@
 | 层 | 唯一职责 owner | OpenWrt | Windows | Linux / macOS |
 |---|---|---|---|---|
 | **A 文件与依赖交付** | 平台包管理器 / 安装包 | ipk 落 mynet/mynetd/runtime/LuCI；声明 `kmod-tun`、工具及适用驱动依赖 | 安装器落 exe、GNB 配套文件、匹配架构的签名 Wintun DLL；独立驱动安装由安装器执行其官方事务 | 包/解压交付工具与驱动；系统已有 TUN/utun；缺依赖按平台方案处理 |
-| **B 主机准备与服务登记** | `mynet install` 的平台实现 | 建配置/状态目录、env/procd；按固定归属登记 netifd 逻辑网络对象。无节点配置时不猜 device，不开 forwarding/NAT | 写机器服务配置、SCM 与用户托盘登记；检查 Wintun 依赖与权限。不预建虚构节点 adapter | systemd/launchd、目录/权限/日志/可选托盘；检查平台隧道能力 |
+| **B 主机准备与服务登记** | `mynet install` 的平台实现 | 建配置/状态目录、env/procd；**按固定归属登记** netifd 逻辑对象（`network.mynet` proto=none）+ firewall zone + forwarding + include —— 这是给 **fw4/procd 的时序前置**（reload/start/hotplug 回放时必须有对象可挂），**必须建在安装期**。**不猜 device**（无 bundle 不绑接口名）；**masq 不在安装期启用**（由 apply/start 补） | 写机器服务配置、SCM 与用户托盘登记；检查 Wintun 依赖与权限。不预建虚构节点 adapter | systemd/launchd、目录/权限/日志/可选托盘；检查平台隧道能力 |
 | **C 节点身份与配置** | `mynet setup/auth/node/config` | 绑定节点、密钥与配置；**尚不改变** LAN/WAN 角色 | 同左 | 同左 |
 | **D 隧道生命周期** | `mynet service` → 平台/驱动适配 | procd 唯一控制 GNB；GNB 创建 TUN；WG 走明确内核接口/netifd 适配 | 驱动启动时创建/打开 adapter；已有 GNB 的 `WintunCreateAdapter` 负责运行时创建 | GNB/WG/utun 按平台驱动生命周期创建与关闭 |
 | **E 系统策略应用** | `mynet apply --auto/--clear` → 平台网络后端 | 按有效节点/许可绑定实际 device，写 MyNet 自有 route/fw/NAT；netifd/fw4 参与持久化与事件回放 | 解析实际 adapter identity/LUID 后应用路由/平台策略 | 按实际接口与能力应用 route/PF/nft |
@@ -102,7 +102,7 @@ ERROR PATHS:
   - 装配中途失败 → 回滚到旧服务状态
 
 PLATFORM DIVERGENCE:
-  - OpenWrt: 仅创建 proto none 的自有逻辑登记；活动接口/Cloud 许可/forwarding/masq 在无配置安装阶段不决定
+  - OpenWrt: 安装期**建** `network.mynet`(proto=none) + firewall zone + forwarding + include 登记（**时序前置**）；**不绑 device**（无 bundle 不猜接口名）；**masq 与 include 脚本由 `firewall.mynet start`（apply/启动）创建并补偿** —— UCI 侧 `masq=1` 在防火墙重启后可能失效，故 enforcement 必须在 start 期补 nft 规则。活动接口/Cloud 许可仍待配置
   - Windows: SCM 为唯一常驻机制；老旧计划任务须在迁移中间批次收敛并移除
 ```
 
