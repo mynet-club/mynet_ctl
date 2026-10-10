@@ -27,11 +27,14 @@ for r in mynet_agent mynet_desktop mynet_ctl; do printf '%s %s\n' "$r" "$(git -C
 
 **锚点表（执行时填）**
 
-| 仓 | HEAD（提交后） | 说明 |
+| 仓 | HEAD（2026-10-10 晚已提交并推送） | 说明 |
 |---|---|---|
-| mynet_agent | `__________` | 出 `.180` tar 与 `.182` ipk 的源 |
-| mynet_desktop | `__________` | 安装器 / 发行编排 |
-| mynet_ctl | `__________` | 分发 / artifact kind / 迁移 |
+| mynet_agent | `186066f` | 出 `.180` tar 与 `.182` ipk 的源（**CI 已由该 push 自动触发**） |
+| mynet_desktop | `df06e0f` | 安装器 / 发行编排 |
+| mynet_ctl | `a3fbae5`（+ 本条 runbook 后续提交） | 分发 / artifact kind / 迁移 |
+| mynet_api | `6114850` | 仅措辞订正，与本次升级无关 |
+
+> 四仓 pre-push `make check` 均通过；远端 head 已核对一致。桌面 `release.yml` **不会被 main push 触发**（仅 tag / 手动）。
 
 ### 1.1 待提交清单（截至 2026-10-10 晚）
 
