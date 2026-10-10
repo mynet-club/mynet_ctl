@@ -62,6 +62,13 @@ for r in mynet_agent mynet_desktop mynet_ctl; do printf '%s %s\n' "$r" "$(git -C
 | `.180` | `mynet_agent` → `build-agent` | `mynet_agent_linux_amd64`（内含 `mynet_agent_linux_amd64_<ver>.tgz`） |
 | `.182` | `mynet_agent` → `build-openwrt-sdk` | `openwrt-ipk-amd64`（`mynet-agent_*_amd64.ipk` + `luci-app-mynet_*.ipk`） |
 
+**⚠️ 投递方式（2026-10-11 真机踩出）**：OpenWrt 上 **`scp` 默认走 SFTP 会失败**（无 `/usr/libexec/sftp-server`，报 `Connection closed`）。用 stdin 管道或 `scp -O`：
+```bash
+ssh -i $KEY root@<target> 'cat > /tmp/upgrade/mynet'  < mynet
+ssh -i $KEY root@<target> 'cat > /tmp/upgrade/mynetd' < mynetd
+# 或：scp -O -i $KEY mynet root@<target>:/tmp/upgrade/
+```
+
 **落盘后必校**：
 ```bash
 file  mynet mynetd            # 期望 ELF x86-64
