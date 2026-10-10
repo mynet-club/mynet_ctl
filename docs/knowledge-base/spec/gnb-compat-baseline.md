@@ -35,7 +35,7 @@
 
 ## 2. 缺口：为什么这不是「照抄某处」能了事的
 
-1. **没有一份东西同时回答「哪些 gnb 版本算已落地 / 各自什么能力」**。已落地的版本散落在旧文档（`integration-plan.md:760`、`api-contracts.md:195` 都是 `v1.6.0.a`；`mynet-overview.md:36` 是 `1.6.8 + 本地补丁`），**知识库无一处冻结现网各节点的 gnb 实际版本**（已 grep 确认：只有 ctl 的样例文件名与 upgrade 测试出现 `1.6.0.a`）。
+1. **没有一份东西同时回答「哪些 gnb 版本算已落地 / 各自什么能力」**。已落地的版本散落在旧文档（`archive/2026-10/integration-plan.md:760`、`archive/2026-10/api-contracts.md:195` 都是 `v1.6.0.a`；`mynet-overview.md:36` 是 `1.6.8 + 本地补丁`），**知识库无一处冻结现网各节点的 gnb 实际版本**（已 grep 确认：只有 ctl 的样例文件名与 upgrade 测试出现 `1.6.0.a`）。
 2. **能力问题今天是用「嗅探」回答的，不是用「版本」回答的**（`plugin_proxy.go`）。嗅探对**没有 Features 行的旧构建**只能靠行为串兜底 —— 这正是「没有兼容基线」的直接代价。
 3. **消费者尚未被点名**。「写入基线」写完之后**谁读它、读了做什么**（驱动能力判定 / 升级资格 / parity 提示 / bundle 版本门）没有裁定，而它决定写入面的**形状**。
 
@@ -99,7 +99,7 @@
 | 版本 | Features 行 | 补丁栈 | 状态 | 平台 | 来源 |
 |---|---|---|---|---|---|
 | `1.6.8-c411f14ee647` | 有（含 `proxy`） | `p1-hot-restart-v2,p2-route-proxy` | **构建基线**（当前注入值） | 全部构建目标 | `mynet_agent/Makefile:59-60`；`mynet/plugin_proxy.go:103` |
-| `v1.6.0.a` | 无（无 proxy） | 无 | 现网已知（.184） | Linux（待核） | 旧文档 `integration-plan.md:760`、`api-contracts.md:195`；现网取证待补 |
+| `v1.6.0.a` | 无（无 proxy） | 无 | 现网已知（.184） | Linux（待核） | 旧文档 `archive/2026-10/integration-plan.md:760`、`archive/2026-10/api-contracts.md:195`；现网取证待补 |
 | `1.6.0.a` 之前的旧 p2 构建 | **无 Features 行**（靠 `proxy.conf` 行为串兜底） | `p2-route-proxy` | 现网已知（.180/.182） | Linux / OpenWrt（待核） | `mynet/plugin_proxy.go:40-75` 兜底分支；现网取证待补 |
 
 > 状态列：`构建基线` = 我们当前编译发行的那一版（`Makefile` 注入值）；`现网已知` = 实测在某台机器上见过；`待核/待补` = 尚未逐台取证。

@@ -1,7 +1,7 @@
 # MyNet 全生态整合规划 v2
 
 > **版本**：v2.0 · 2026-09-21
-> **取代**：`integration-plan.md` v1.0（2026-03-20，旧线口径；保留作 ADR/历史参考，见文首横幅）
+> **取代**：`integration-plan.md` v1.0（2026-03-20，旧线口径；保留作 ADR/历史参考，2026-10-10 移入 `archive/2026-10/`）
 > **适用范围**：**目标线 + 服务层**（本文件全面适用）；旧线仅冻结归档（§2）
 > **目标读者**：各子项目开发者、架构决策者
 > **SSOT 落点**：本文件 + 同目录 `spec/`、`../api/`、`conventions.md`
@@ -230,7 +230,7 @@ flowchart TB
 mynet_ctl/docs/
 ├── knowledge-base/
 │   ├── integration-plan-v2.md      ← 本文件（规划主文档）
-│   ├── integration-plan.md         ← v1，已加「被取代」横幅
+│   ├── integration-plan.md         ← v1，已加「被取代」横幅（2026-10-10 移入 archive/2026-10/）
 │   ├── back-upshift-design.md      ← W4
 │   ├── ecosystem.md                ← 按 §1 分层修订
 │   └── spec/

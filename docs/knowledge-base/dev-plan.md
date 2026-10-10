@@ -702,10 +702,8 @@ P0 ──┬──────────────────────�
 
 > **2026-10-10 对齐注（与 HEAD 对齐；三份文档都曾落后于代码）。**
 >
-> 本次刷新时各仓 HEAD：`mynet_agent db398d2` · `mynet_api 76e1214` · `mynet_ctl 8fc5e6e` ·
-> `mynet_gui 26d8562` · `mynet_desktop 4ed21f2` · `mynet_openwrt f7c956e` · `mynet_gnb 8734260`。
-> 工作树全干净、无 stash；**除 openwrt（10 条未推）与 gnb（2 条未推）外全部已推送**，
-> 那两条线的分叉点分别是 `de765cf`（09-30）与 `3991970`（10-04），自 10-04 起未再动。
+> **状态快照（HEAD / 未推送 / 测试计数）的唯一权威是 [`project-memory.md`](project-memory.md)「当前基线」表，本处不复述。**
+> 本注只记两条与 §3 勾选直接相关的判据修正：
 >
 > **两处状态列的依据已过期，"不按旧记号读"：**
 >
@@ -720,12 +718,9 @@ P0 ──┬──────────────────────�
 >   **仍保留「部分」**：实现存在 ≠ Windows 真机跑过。
 > - **#75（V1-1）状态列 ◐ → ☑**：该格正文早已写「P0 两件全部收口 ✅」，是标记忘了跟。
 >
-> **测试口径（2026-10-10 本机）**：api `make test`（=`--testsuite Default`）**471 tests / 4690
-> assertions / 1 skip**（skip = sqlite 并发，需 MySQL 双连接）、`make test-mysql` **172 passed /
-> 765 assertions**；agent `go build ./...` + `go test ./...` 19 包全绿；ctl 54 tests / 426 assertions /
-> 1 skip；gui vitest 20 passed。
-> ⚠️ 裸跑 `vendor/bin/phpunit`（不带 `--testsuite`）只出 **454** —— `phpunit.xml` 的套件定义有
-> 重叠目录且默认套件才是 `make test` 用的那个，**计数一律以 `make test` 为准**，别再拿裸跑数对账。
+> **测试口径（2026-10-10）**：具体计数见 `project-memory.md`，此处只立规矩 —— **一律以 `make test`
+> （=`--testsuite Default`）为准**；裸跑 `vendor/bin/phpunit`（不带 `--testsuite`）会少算（套件定义有
+> 重叠目录），别拿它对账。勾选仍按 §7.1 D4 附实测输出。
 >
 > **仍未收口（本次不变）**：M4/M6 不勾；OpenWrt 未接统一 Proxy 合同、回程缺口、离线与错误出口
 > 证据不足、console 公共出口线未开；上线前七项实机验收见 `spec/proxy-permission-loop-playbook.md` §10。

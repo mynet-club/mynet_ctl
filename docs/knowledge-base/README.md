@@ -5,7 +5,7 @@
 > 
 > **状态列**：`现行` = 以它为准 ｜ `冻结` = 不再改，仍可查 ｜ `已被取代` = 有后继 ｜ `归档` = 过程记录，不再改
 > 
-> 目录级完整盘点见 [docs-census-20261001.md](docs-census-20261001.md)。
+> 目录级完整盘点见 [archive/2026-10/docs-census-20261001.md](archive/2026-10/docs-census-20261001.md)（2026-10-10 归档）。
 
 ---
 
@@ -81,7 +81,6 @@
 
 | 文件 | 内容 | 状态 |
 |------|------|------|
-| [api-contracts.md](api-contracts.md) | 升级 API 契约：config-bundle、心跳、apps.json、插件分发 | 现行 |
 | [api-specification.md](api-specification.md) | 生态系统 API 完整规范（1800+ 行总目录） | 现行 |
 | [../api/references/alignment-backlog.md](../api/references/alignment-backlog.md) | **API 偏差待办清单**（integration-plan-v2 §3 W3 唯一执行清单） | 现行 |
 | [../api/README.md](../api/README.md) | API 目录导航（routes / endpoints / diff matrix） | 现行 |
@@ -115,20 +114,15 @@
 | [long-range-plan.md](long-range-plan.md) | R 段 R0–R5 | 现行 |
 | [long-range-plan-t.md](long-range-plan-t.md) | T 段 T0–T5 | 现行 |
 | [integration-plan-v2.md](integration-plan-v2.md) | **全生态整合规划 v2（当前权威）**：五层模型、四条工作流、SSOT 归属表 | 现行 |
-| [v2-upgrade-plan.md](v2-upgrade-plan.md) | V2 升级计划：API 迁移、URL 统一、时间线 | 现行 |
 | [back-upshift-design.md](back-upshift-design.md) | back 业务上移设计：状态归属矩阵、上移/下沉判据 | 现行 |
 | [cross-project-issues.md](cross-project-issues.md) | CPI 台账 | 现行 |
 | [upstream-dsplat-issues.md](upstream-dsplat-issues.md) | 上游缺陷反馈 | 现行 |
-| [upstream-defect-report.md](upstream-defect-report.md) | 框架缺陷报告（下游使用方提交） | 现行 |
-| [mynet-back-namespace-drift.md](mynet-back-namespace-drift.md) | mynet_api 命名空间漂移映射（T31a） | 现行 |
-| [integration-plan.md](integration-plan.md) | v1 集成计划：瓶颈分析、里程碑、ADR | **已被取代** → v2 |
-| [client-migration-plan.md](client-migration-plan.md) | 客户端迁移计划（旧线 TUI→Client） | **已被取代** → agent 线 |
 
 ---
 
 ## 4. 过程报告（归档，不再改）
 
-带日期的一次性执行记录，在 [`archive/2026-09/`](archive/2026-09/)。
+带日期的一次性执行记录，在 [`archive/2026-09/`](archive/2026-09/) 与 [`archive/2026-10/`](archive/2026-10/)。
 **结论要看这里的证据；不要再往里追加进度。** 索引见 [archive/2026-09/README.md](archive/2026-09/README.md)。
 
 | 文件 | 记录 |
@@ -143,7 +137,7 @@
 | [archive/2026-09/overnight-u1-plan.md](archive/2026-09/overnight-u1-plan.md) | 过夜计划 U1 |
 | [archive/2026-09/overnight-u1-report.md](archive/2026-09/overnight-u1-report.md) | 过夜报告 U1 |
 | [archive/2026-09/audit-2026-05.md](archive/2026-09/audit-2026-05.md) | 2026-05 全站审计总报告 |
-| [docs-census-20261001.md](docs-census-20261001.md) | 2026-10-01 文档盘点与梳理 |
+| [archive/2026-10/](archive/2026-10/README.md) | **2026-10-10 文档收编**：3 份已自声明被取代（integration-plan / client-migration-plan / v2-upgrade-plan）+ 4 份一次性快照（census / namespace-drift / upstream-defect-report / api-contracts），索引见其 README |
 
 ---
 

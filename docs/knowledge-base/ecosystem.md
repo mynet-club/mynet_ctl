@@ -140,4 +140,4 @@ mynetd（心跳组装 · WS）
 - **mynet_ctl**: `/api/v2/`（历史路由前缀）— 配置/分发 API
 - **mynet_agent localapi**: `127.0.0.1:8096` — 本机能力面，见 [`spec/local-api.md`](spec/local-api.md)
 
-> 完整 API 规范 SSOT：[api-specification.md](api-specification.md) · 契约：[api-contracts.md](api-contracts.md)
+> 完整 API 规范 SSOT：[api-specification.md](api-specification.md) · 旧线升级契约（已归档）：[archive/2026-10/api-contracts.md](archive/2026-10/api-contracts.md)
