@@ -319,7 +319,7 @@ IP 列表 URL+sha256 下发，节点拉取校验后灌 set，**envelope 不内�
 | 双控合并 | `shared/domain/proxy_intent.go` | ✅ |
 | Op 面 `plugin.proxy.*` | `mynetd/commands` | ✅ |
 | 回写 | `PUT /api/v1/monitor/node/proxy-config` | ✅ |
-| L6 策略路由 / DNS 文件 | `mynet/proxy_apply.go` · `proxy_dns.go` · `proxy_iplist.go` | ✅ 命令生成；真机 apply 待验 |
+| L6 策略路由 / DNS 文件 | `mynet/proxy_apply.go` · `proxy_dns.go` · `proxy_iplist.go` | ✅ 命令生成 + **真机 apply（2026-10-11）** |
 | WebUI 代理分流 | `mynetd/localapi/webui/index.html` | ✅ 面板 |
 | **DNS 强劫持** | — | **T12** |
 | **域名规则 + dnsmasq split** | — | **T13** |
@@ -408,7 +408,7 @@ IP 列表 URL+sha256 下发，节点拉取校验后灌 set，**envelope 不内�
 | L6 | `mynet/proxy_apply.go` `proxy_dns*.go` `proxy_iplist.go` | ✅ 命令生成 |
 | 云端 | `ProxySplitResolver` `ProxyACL` `ProxyAuthDomainService` `saveProxyConfig` | ✅ |
 | WebUI | `mynetd/localapi/webui/index.html` 代理分流 | ✅ |
-| 真机 apply | — | ⚠️ 未验 |
+| 真机 apply | `.182`（OpenWrt client） | ✅ 2026-10-11 端到端：`.5` 加路由经 `.182` 转发 → `curl https://1.1.1.1/cdn-cgi/trace` = `ip=52.221.22.241`（= `.180` 出口） |
 | dns.mynet.club | — | ⚠️ 未建 |
 | WG 出口 | — | 后置 |
 
@@ -741,3 +741,17 @@ nameserver 顺序：[peer VIP, smart IP]
   对应 §10.3 的「WG 出口 —— 后置」。
 - **Lua `dns_split.sh`** 与 agent `proxy dns-split` 重叠（同一"两个 writer"病），按同标准退役。
 - **`proxy.lua` 死码清理**（`enable/disable/start/stop/reload`、firewall-include 注册等已不可达）。
+
+### 15.4 铁律：本机自身不可代理（Linux / OpenWrt 同理）
+
+**本地发出（OUTPUT）的包，FIB 路由查找发生在 netfilter OUTPUT hook 之前** ⇒ 在 OUTPUT
+里 `meta mark set` 改不了这一包的路由 ⇒ `ip rule fwmark` 对**本机自身**流量**不生效**。
+
+- **打标只挂 `PREROUTING`**（转发流量 = LAN 客户端）；**不挂 `OUTPUT`**。
+- 2026-10-11 真机实证：强制 `curl --interface gnb_tun_16` 出网**成功**（`ip=52.221.22.241`），
+  而依赖 OUTPUT 打标的本机自发路径**必然失败**。旧版「本机 App（消费者=入口）打 OUTPUT」
+  已删 —— 它既违这条铁律、又把真实失败掩盖成「配置看起来齐全」。
+- 历史上用**主表 `/32` 钉扎**把本机流量送进隧道（外部 DNS 那批）也是同一目的；该层已于同日
+  按裁决下线（见 §15.1），因为它连**节点自身**的解析流量一起卷进了隧道。
+- 推论：**验证代理必须走「转发」路径**（LAN 客户端 / 造一个转发源），
+  **不能**由口机自己 curl 出去当验收 —— 那测的不是客户端路径。
