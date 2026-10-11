@@ -31,14 +31,18 @@
 | **崩溃→procd 恢复** | `kill -9 mynetd` → **1s 内新 PID**，≈2s localapi 200 | 同，≈0.5s localapi 200 | ✅ **procd 唯一控制者生效**，无需 Lua 兜底 |
 | 桥读方法（ubus） | `mynet.status`/`runtime` 真实 data | — | ✅ |
 | **fw4 reload 回放** | — | `/etc/init.d/firewall reload` 后：zone `mynet` 保留、include 重新应用、nft `forward` mynet 行在、tun 路由保留、gnb 在、SSH 会话未断 | ✅ **回放不丢自身规则** |
+| **O1 修复（arm64 复核）** | — | 升级前 `config/runtime` = 旧 Lua 桩（`{interface,node_id,running,vpn_type}`）→ 装新 mynetd 后 = **真实 Go 形状**（`address_conf`/`gnb_conf`/…） | ✅ **config 委派在 arm64 同样生效** |
+| **升级 → 回滚（二进制级）** | — | arm64 VM：装新 `mynet/mynetd`（+新 init/env）→ 验证 → 回滚旧件 → md5 复原、`nodeid=3764021915150630`/`ifname=gnb_tun`/`listen=9002` **不变**、`gnb_tun` UP | ✅ **身份/接口不因换件漂移** |
 | 会话态 ACL 正/负 | 16 方法 `access=true`；越权 `-32002` | — | ✅（O2 记录） |
 | 浏览器 UI 走桥 | Dashboard + Restart→「VPN restarted」 | — | ✅（O5 记录） |
+
+**踩坑**：OpenWrt 上覆盖**正在运行**的可执行文件会 `Text file busy`（ETXTBSY）。升级/回滚要**写临时文件再 `mv`**（换 inode），不能 `cat >` 原地覆盖 —— 与本包 `mynet install`/opkg 的落盘路径需同口径。
 
 ## 3. 未做（O7 剩余，需更多时间/窗口/实机）
 
 - **数据面允许/拒绝**：授权流量走隧道、未授权拒绝、**撤销后 fail-closed**（不赖回滚旧 bundle 重开）—— 需出口侧（`.180`，生产 proxy server）配合
 - **并发**：LuCI 写 + CLI + 后台配置通知 + 启动恢复同时进行的护序
-- **升级回滚**：装新 ipk → opkg 回滚旧 ipk 后身份/接口/对等参数不变
+- **升级回滚（opkg 级）**：装**新 ipk** → `opkg` 回滚旧 ipk（本轮只到**二进制级**，未过 opkg 事务）
 - **WG 独立验收**（借 GNB 通过不算）
 - **MIPS 实机资源证据**（本轮搁置）
 
