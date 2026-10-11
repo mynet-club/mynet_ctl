@@ -328,7 +328,8 @@ IP 列表 URL+sha256 下发，节点拉取校验后灌 set，**envelope 不内�
 | **DoH 兜底** | 部分（/32） | **T16** |
 | **同机 OUTPUT 打标 + 自环豁免** | `proxySelfExemptCmds` / `proxyMarkCmds` | **T17 ✅ 命令生成** |
 | 授权「对谁开放」 | — | T11 |
-| WG 出口 AllowedIPs | — | 后置 |
+| WG 出口 AllowedIPs | `mynet/proxy_wg_projection.go`（`ProjectProxyToWG`） | ✅ 2026-10-11 |
+| PC（mac/win）域名 → /32 钉隧道 | `mynet/proxy_pc_pin.go`（`ApplyPCPin`） | ✅ 2026-10-11 |
 
 ---
 
@@ -718,7 +719,7 @@ nameserver 顺序：[peer VIP, smart IP]
 | 层 | 是什么 | 归属 | 现状 |
 |---|---|---|---|
 | **参数（意图）** | `ProxyPolicy`（`DNS`/`DomainRules`/`Split`/`Exits`…），双控 Cloud+Local | proxy 单元（`proxy_intent.json`） | ✅ |
-| **驱动侧放行**（目的→出口，**按驱动方言**） | gnb：`proxy.conf`（`proxy on` + `[default] exit` + `[group] target <cidr> exit`）；wg：出口 peer 的 `AllowedIPs` | 驱动投影（agent 按方言写） | gnb ✅ / **wg ⚠️ 缺（TODO）** |
+| **驱动侧放行**（目的→出口，**按驱动方言**） | gnb：`proxy.conf`（`proxy on` + `[default] exit` + `[group] target <cidr> exit`）；wg：出口 peer 的 `AllowedIPs`（并集目的集 + `Table = off`） | 驱动投影（agent 按方言写） | gnb ✅ / wg ✅（2026-10-11） |
 | **OS 侧打标**（把流量推进驱动） | nft 集合 + `mark 0xc8` → `table 200` → 隧道 | L6 `mynet apply`（**驱动无关**） | ✅ |
 
 - **只放行不打标** → 流量进不了隧道；**只打标不放行** → 进了也丢（wg 的 cryptokey routing 尤甚）。
@@ -736,9 +737,13 @@ nameserver 顺序：[peer VIP, smart IP]
 
 ### 15.3 待办
 
-- **wg 侧放行投影**：把 proxy 出口目的集**并集**进出口 peer 的 `AllowedIPs`（幂等、不覆盖 bundle
-  原有网段）+ 一条 fail-loud（投影后 proxy 目的集 ⊄ 各 peer `AllowedIPs` 并集即报错，防静默丢包）。
-  对应 §10.3 的「WG 出口 —— 后置」。
+- ~~**wg 侧放行投影**~~（2026-10-11 已落）：`ProjectProxyToWG` 把 proxy 出口目的集**并集**进
+  出口 peer 的 `AllowedIPs`（幂等去重），并置 `Routing.Mode=off` → `RenderWGConfig` 出
+  `Table = off`（禁 wg-quick 把目的集写进主表 —— 那是 §15.4 已下线的 /32 钉扎病）。
+  fail-loud：投影后「目的集 ⊄ 所有 peer AllowedIPs 并集」即报错、不写盘（出口选点对不上
+  wg peer 的静默丢包）。目的集解算：normal→列表 CIDR；inverted/FullTunnel→`0.0.0.0/0`
+  （wg 表达不了补集，取安全超集，Table=off 下不劫持主表）。落点
+  `mynet/proxy_wg_projection.go`，挂在 `writeWgProjection`。
 - **Lua `dns_split.sh`** 与 agent `proxy dns-split` 重叠（同一"两个 writer"病），按同标准退役。
 - **`proxy.lua` 死码清理**（`enable/disable/start/stop/reload`、firewall-include 注册等已不可达）。
 
@@ -755,3 +760,19 @@ nameserver 顺序：[peer VIP, smart IP]
   按裁决下线（见 §15.1），因为它连**节点自身**的解析流量一起卷进了隧道。
 - 推论：**验证代理必须走「转发」路径**（LAN 客户端 / 造一个转发源），
   **不能**由口机自己 curl 出去当验收 —— 那测的不是客户端路径。
+
+### 15.5 PC 形态（mac/win）自出口：域名驱动，例外于 §15.4
+
+**§15.4 的铁律只管「Linux/OpenWrt **节点**」**（路由器，自身是转发平面的旁路）。
+PC（mac/win）上**用户自己就是端点**，没有 LAN 转发可打标、也没有 fwmark 策略表 ——
+唯一能把本机流量送进隧道的机制就是**主表目的路由**。这不是「节点代理自己」的违规，
+而是 PC 形态的正当路径。
+
+- 目的集**不固定**（用户想代理啥就配啥域名），所以**不装全量 CIDR**；只把
+  **指定域名**解析出的 IP 按 `/32` 钉进隧道（用户裁决 2026-10-11：「可以维护一个小集」）。
+- 落点 `mynet/proxy_pc_pin.go`：`ResolvePCProxyPinIPs`（域名 → A 记录，`EffectiveProxied`∪
+  `UpstreamClean`，去重封顶 512）+ `PCProxyPinCmds`/`PCProxyPinDelCmds`（PC 方言，
+  darwin replace=删+加）+ `ApplyPCPin`（对账：撤失效、钉当前，清单落
+  `var/proxy/pc-pin.json`）。挂在 `executeApply`（proxy 激活分支；禁用分支撤销）。
+- **跨平台分流**：Linux/OpenWrt 走 nft 打标 + 策略表（§15.1 三层），PC 走域名 `/32` 主表
+  钉扎 —— 同一份 `ProxyPolicy`，两种落地方言，`isPCProxyForm` 分派。
