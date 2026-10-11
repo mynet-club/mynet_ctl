@@ -31,10 +31,14 @@ class ReleaseService
 
         // ⚠️ variant **不是**文件扩展名：它是并入 arch 的限定符
         // （ManifestService 输出 `{arch}-{variant}`，如 mipsel-softfp）。
-        // 扩展名由平台默认值决定（generateFilename 的 ext 传空即取默认）。
         // 把 variant 当 ext 传会让文件名变成 `..._v1.0.0.softfp` —— 既不在
         // parseFilename 白名单里（下载 URL 落到 fallback），也篡改了容器格式语义。
-        $filename = $this->domain->generateFilename($product, $platform, $arch, $version);
+        //
+        // ⚠️ 扩展名以**上传件**为准，不是平台默认：OpenWrt 的平台默认 ext=tgz，
+        // 但运行包是 **.ipk**（原生安装包）—— 重算会把它写成 tgz（O6「显式 ipk
+        // 扩展名」实测踩过）。上传件无扩展名时才回落平台默认。
+        $ext = strtolower((string) $file->getClientOriginalExtension());
+        $filename = $this->domain->generateFilename($product, $platform, $arch, $version, $ext);
 
         // 产物类型：登记时按扩展名映射一次并落库（读取端不再运行时推断）
         $kind = $this->domain->artifactKindForExt(pathinfo($filename, PATHINFO_EXTENSION));
