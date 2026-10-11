@@ -37,7 +37,7 @@
 | 会话态 ACL 正/负 | 16 方法 `access=true`；越权 `-32002` | — | ✅（O2 记录） |
 | 浏览器 UI 走桥 | Dashboard + Restart→「VPN restarted」 | — | ✅（O5 记录） |
 | **WG 数据面（独立于 gnb）** | — | arm64 VM：`ip link add … type wireguard` ×2（环回对端，51920/51921）→ **双向握手完成**（`latest-handshakes`>0）+ **加密字节互通**（a0 rx92/tx532 ↔ a1 rx532/tx92） | ✅ **内核 WG 数据面可用**（不借 gnb） |
-| **WG 真链路端到端（`.180` ⇄ `.182`）** | — | `.180`（公网 52.221.22.241，`wg-quick`）/ `.182`（NAT 后，**无 wg-quick ⇒ 走 init 的 ip+wg 兜底**）：双向 ping **3/3、rtt 84 ms**、握手完成、`.180` 学到对端 endpoint `221.216.138.69:51831`、双向 rx/tx 在涨 | ✅ **跨机真 peer 打通**；地址由 conf 的 `Address=` 带上口（`10.77.0.1/24` ⇄ `10.77.0.2/24`） |
+| **WG 真链路端到端（`.180` ⇄ `.182`）** | — | `.180`（公网 52.221.22.241，`wg-quick`）/ `.182`（NAT 后，**无 wg-quick ⇒ 走 init 的 ip+wg 兜底**）：双向 ping **3/3、rtt 84 ms**、握手完成、`.180` 学到对端 endpoint `221.216.138.69:51831`、双向 rx/tx 在涨 | ✅ **跨机真 peer 打通**；地址由 conf 的 `Address=` 带上口（`10.77.0.1/24` ⇄ `10.77.0.2/24`）；**已持久化**：`.180` `wg-quick@wg_home` enabled、`.182` 一个 S99 的 `/etc/init.d/wg_home`（同一套剥键→setconf→addr→up→AllowedIPs 路由） |
 | **WG 驱动路径（OpenWrt）** | — | VM 实测 `mynet service start wireguard` → `exec: "wg-quick": executable file not found`（OpenWrt 的 `wireguard-tools` 不带 wg-quick） | ⚠️ **缺口**，见下 §2 尾 |
 | **opkg 事务下配置/身份不漂移** | — | arm64 VM：`opkg install --force-reinstall mynet_agent_openwrt_arm64_v0.0.0-6537ac7.c495ff6.ipk`（走 prerm `mynet uninstall` → postinst `mynet install`）→ `/etc/mynet/conf/config.json` sha256 **前后一致**（`79c14f2e…`）、`confdir`/nodeid `3764021915150630` 不变 | ✅ **opkg 事务不改节点身份/配置**（conffiles 生效） |
 | **gnb 就位检查误报（已修）** | — | 每次 install/opkg 升级都报 `/usr/local/bin/gnb 不存在 —— mynet 服务会起不来`，而 ipk 的 gnb 在 `$home/driver/gnb/bin`；改为 `gnbPresentOpenWrt`（同 init 解析序）→ `mynet_agent 4a85820` | ✅ 修复（假告警，非功能故障） |
