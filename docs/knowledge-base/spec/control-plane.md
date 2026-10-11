@@ -3,7 +3,8 @@
 > 更新：2026-09-21
 > 适用：`mynet_agent`（`mynetd` + `mynet_gateway`）、`mynet_api`、`mynet_gui` / `mynet_ui`
 > 依赖：[`node-keying.md`](node-keying.md)、[`driver-abstraction.md`](driver-abstraction.md)、[`local-api.md`](local-api.md)、[`unified-platform-architecture.md`](unified-platform-architecture.md)
-> 状态：**设计稿**（gateway 未实现；本文档是实现前的契约 SSOT）
+> 状态：**已落地**（`mynet_gateway` 已在 `mynet_agent/cmd/mynet_gateway` 实现并端到端跑通；
+> 本文档为传输面契约 SSOT。§6.3 记录了各项的落地状态。）
 
 ---
 
@@ -12,7 +13,7 @@
 **节点面唯一入口是 `mynet-gateway`；`mynet_api` 退到内网；GUI 只跟本机 `mynetd` 说话。**
 
 ```
-浏览器 ──> 127.0.0.1:8008 (mynetd httpd) ──> gateway ──> back ──> mysql
+浏览器 ──> 127.0.0.1:8096 (mynetd httpd) ──> gateway ──> back ──> mysql
 mynetd ═══════ WebSocket ═══════> gateway ── 内网 HTTP ──> back
 ```
 
@@ -311,7 +312,7 @@ mynetd 的 gateway 列表把 overlay 地址排在公网地址之后：
 **GUI 只跟本机 mynetd 说话**（`local-api.md`）。浏览器不持有 back 凭据，不直连 back/gateway。
 
 ```
-浏览器 ──> 127.0.0.1:8008/api/v1/... ──> mynetd
+浏览器 ──> 127.0.0.1:8096/api/v1/... ──> mynetd
 ```
 
 ### 5.2 两类查询

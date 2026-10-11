@@ -385,7 +385,7 @@ mynet_agent
 ### 8.1 目标态（`control-plane.md` 定义的权威模型）
 
 ```
-浏览器 ──> 127.0.0.1:8008 (mynetd httpd) ──> gateway ──> back ──> mysql
+浏览器 ──> 127.0.0.1:8096 (mynetd httpd) ──> gateway ──> back ──> mysql
 mynetd ═══════ WebSocket ═══════> gateway ── 内网 HTTP ──> back
 ```
 

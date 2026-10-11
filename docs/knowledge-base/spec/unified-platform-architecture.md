@@ -72,6 +72,20 @@ mynetd ══WebSocket══> mynet-gateway ──内网 HTTP──> mynet_api
 
 多 gateway 就近接入、以及「公网被封时借 node 的 overlay 访问 gateway」的韧性设计，见 `control-plane.md` §3–§4。
 
+### 0.2 实现现状（本文档名字 ←→ 代码落点）
+
+本文档是**设计稿**，部分名字与代码不同名/未建，查代码时按下表对应：
+
+| 本文档 | 代码实况 |
+|---|---|
+| L1/L2/L3 归 `mynet_api` | 已落地：`app/Modules/VPN/Domain/Services/` 的 `BundleEnvelopePublisher`、`TransportPlannerDomainService`、`NodeCapabilityResolver` 等 |
+| L4 `coordinator` 包（`BundleFetcher`/`BundleValidator`/`BundleApplier`） | **无该包**（`package coordinator` 零命中）；拉取在 `mynet_agent/cmd/mynetd/bundle.go`，校验/apply/rollback 在 `mynet_agent/mynet/apply_plan.go` |
+| L4「checksum 校验失败 → 拒绝 Apply」 | **未落地**：fetch 侧只查 `checksum` 非空、**不验值**（`cmd/mynetd/bundle.go` 的 `validateEnvelope`，注释声明「验值属 mynet apply 职责」）；而 apply 侧（`mynet/apply_plan.go`）无任何 checksum 处理 —— 即该职责目前**两侧都没接**。校验能力本身已具备：`shared/domain/bundle_envelope.go` 的 `ComputeBundleChecksum`/`VerifyBundleChecksum`（fixtures 往返已冻结），只是未被生产路径调用 |
+| L5 `ConfigDriver` 接口 | **无该接口**；实为 `shared/domain/vpn_driver.go` 的 `VPNDriver`（只读）+ `vpn_lifecycle_driver.go` 的 `VPNLifecycleDriver`（写入/生命周期） |
+| L5 WG Driver | 已落地：`mynet/driver/wireguard.go` |
+| L6 `NetworkBackend` | 无同名接口；OS 状态唯一写入者是 `mynet/apply_plan.go`（`executeApply`，含 `routeCmds`/`firewallArgv`），proxy 分流另在 `mynet/proxy_apply.go` |
+| L7 `ObservedState`/`FailoverStateMachine` | **未建**（`observability` 零命中）；现有只有指标采集（`metrics_*.go`）。`auto` 模式的 direct→proxy 故障切换因此尚未生效 |
+
 ---
 
 ## 1. L1 业务域层
