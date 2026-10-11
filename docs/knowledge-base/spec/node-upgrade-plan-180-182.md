@@ -51,7 +51,7 @@ DNS：       .182: uci show dhcp | grep -i smartdns ; ps | grep smartdns
 | 节点 | 产物（CI artifact 名） | 产出工作流 | 备注 |
 |---|---|---|---|
 | `.180` | `mynet_agent_linux_amd64`（内含 `mynet_agent_linux_amd64_<ver>.tgz`：`mynet` + `mynetd`(embed) + `webui.html` + `INSTALL.md`） | `mynet_agent/.github/workflows/build.yml` | gnb 已于 2026-09-30 升级，本次**不重升 gnb**，除非 S0 发现版本落后 |
-| `.182` | `openwrt-ipk-amd64`（内含 `mynet-agent_*_amd64.ipk` + `luci-app-mynet_*.ipk`） | `mynet_agent/.github/workflows/build_openwrt.yml`（SDK 24.10，矩阵含 `x86/64`，注释即“192.168.0.2 = ImmortalWrt 24.10 x86_64”） | **必须 `-tags openwrt`**：通用 linux 包已拒绝在 OpenWrt 装配；ipk 路径由 SDK 出，无需 dist 的 openwrt 腿 |
+| `.182` | ctl 分发（`build-openwrt-sdk` 出包后发布；内含 `mynet_agent_openwrt_amd64_<ver>.ipk` + `lua_openwrt_all_<ver>.ipk`（O6 冻结点名，从 ctl 下载）） | `mynet_agent/.github/workflows/build_openwrt.yml`（SDK 24.10，矩阵含 `x86/64`，注释即“192.168.0.2 = ImmortalWrt 24.10 x86_64”） | **必须 `-tags openwrt`**：通用 linux 包已拒绝在 OpenWrt 装配；ipk 路径由 SDK 出，无需 dist 的 openwrt 腿 |
 
 **取件**：GitHub Actions → 对应 run → 下载 artifact → `scp` 到节点 `/tmp/`；落盘后 `sha256sum` 与 artifact 清单比对（不经 ctl 分发面）。
 
@@ -110,7 +110,7 @@ Phase 2 dry-run（VM 或节点，只打印）
 Phase 3 维护窗（D5：已非活路径，压力低）
    1) 确认 Phase 0 完整
    2) 停旧服务（procd_kill 精确停；**禁** pkill）；摘 cron */5 mynet-heartbeat（防双心跳）
-   3) opkg install /tmp/mynet-agent_*_amd64.ipk /tmp/luci-app-mynet_*.ipk
+   3) opkg install /tmp/mynet_agent_openwrt_amd64_<ver>.ipk /tmp/lua_openwrt_all_<ver>.ipk
       → 记录 opkg 输出；检查 /usr/sbin/{mynet,mynetd}、/etc/init.d/{mynet,mynetd}
    4) mynet install --home /etc/mynet --gateways wss://…（UCI 首装 / zone / env）
    5) 起 mynetd；/etc/init.d/mynet start（procd 拉起 gnb）

@@ -82,6 +82,8 @@ class ReleaseDomainService
         'mips-sf' => ['family' => 'mips',  'bits' => 32, 'goarch' => 'mips',    'goarm' => null, 'label' => 'MIPS 32-bit BE (soft-float, GNB SDK)'],
         // RISC-V
         'riscv64' => ['family' => 'riscv', 'bits' => 64, 'goarch' => 'riscv64', 'goarm' => null, 'label' => 'RISC-V 64-bit'],
+        // 架构无关（纯脚本/LuCI 壳包，opkg 的 arch=all）
+        'all' => ['family' => 'any',   'bits' => 0,  'goarch' => '',        'goarm' => null, 'label' => '架构无关 (all)'],
     ];
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -89,7 +91,7 @@ class ReleaseDomainService
     // ═══════════════════════════════════════════════════════════════════════
     const VALID_COMBINATIONS = [
         'linux' => ['amd64', 'arm64', 'armv7', 'armv7-hardfp', 'armv7-softfp', 'armv6-softfp', 'i386', 'mips', 'mips64', 'mipsel', 'mips64el', 'mips-softfp', 'mipsel-softfp', 'arm64-softfp', 'riscv64'],
-        'openwrt' => ['amd64', 'arm64', 'armv7', 'armv7-hardfp', 'armv7-softfp', 'armv6-softfp', 'i386', 'mips', 'mips64', 'mipsel', 'mips64el', 'mips-softfp', 'mipsel-softfp', 'mipsel-muslsf', 'arm64-softfp', 'riscv64'],
+        'openwrt' => ['amd64', 'arm64', 'armv7', 'armv7-hardfp', 'armv7-softfp', 'armv6-softfp', 'i386', 'mips', 'mips64', 'mipsel', 'mips64el', 'mips-softfp', 'mipsel-softfp', 'mipsel-muslsf', 'arm64-softfp', 'riscv64', 'all'],
         'openwrt-sdk' => ['amd64', 'arm64', 'armv7', 'mips', 'mips-sf', 'mipsel', 'mipsel-sf'],
         'darwin' => ['amd64', 'arm64'],
         'windows' => ['amd64', 'arm64'],

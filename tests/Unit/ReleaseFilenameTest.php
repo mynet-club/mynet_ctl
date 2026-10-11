@@ -230,4 +230,36 @@ class ReleaseFilenameTest extends TestCase
         $ipk = $this->svc->parseFilename('mynet_agent_openwrt_mipsel_v1.0.0.ipk');
         $this->assertSame('installer', $ipk['kind']);
     }
+
+    /**
+     * O6 冻结：OpenWrt ipk 的外部文件名（SDK 产出的 `mynet-agent_*.ipk` /
+     * `luci-app-mynet_*.ipk` 不在 ctl 枚举里 → 必须在出包侧改名成本形态）。
+     *    runtime  = mynet_agent_openwrt_<arch>_<ver>.ipk（架构相关）
+     *    LuCI 壳  = lua_openwrt_all_<ver>.ipk（opkg arch=all）
+     */
+    public function test_openwrt_ipk_frozen_names(): void
+    {
+        $this->assertSame(
+            'mynet_agent_openwrt_amd64_v1.0.0.ipk',
+            $this->svc->generateFilename('mynet_agent', 'openwrt', 'amd64', 'v1.0.0', 'ipk')
+        );
+        $this->assertSame(
+            'lua_openwrt_all_v1.0.0.ipk',
+            $this->svc->generateFilename('lua', 'openwrt', 'all', 'v1.0.0', 'ipk')
+        );
+
+        // 反解析回 product/platform/arch/kind，且组合有效
+        $rt = $this->svc->parseFilename('mynet_agent_openwrt_amd64_v1.0.0.ipk');
+        $this->assertSame('mynet_agent', $rt['product']);
+        $this->assertSame('openwrt', $rt['platform']);
+        $this->assertSame('amd64', $rt['arch']);
+        $this->assertSame('installer', $rt['kind']);
+
+        $luci = $this->svc->parseFilename('lua_openwrt_all_v1.0.0.ipk');
+        $this->assertSame('lua', $luci['product']);
+        $this->assertSame('all', $luci['arch']);
+
+        $this->assertTrue($this->svc->validateCombination('openwrt', 'all'), 'openwrt 需接受 arch=all（LuCI 壳）');
+        $this->assertTrue($this->svc->validateArch('all'));
+    }
 }

@@ -55,12 +55,30 @@ for r in mynet_agent mynet_desktop mynet_ctl; do printf '%s %s\n' "$r" "$(git -C
 
 ---
 
-## 2. 出包（CI，push 之后）
+## 2. 出包与分发（O6：走 ctl，不走 GitHub artifact）
 
-| 节点 | 工作流 | 取哪个 artifact |
+**触发**：`build_openwrt.yml` / `build.yml` 已**不跟 push:main**（GitHub artifact 配额耗尽，push 触发的运行编译通过却卡在上传）。出包用 **tag 或手动**：
+
+```bash
+gh workflow run build-openwrt-sdk -R mynet-club/mynet_agent            # 手动
+# 或打 tag：git tag vX.Y.Z && git push origin vX.Y.Z
+```
+
+**冻结点名（ctl SSOT `{product}_{platform}_{arch}_{ver}.{ext}`）**：CI 出包后把 SDK 原生名改名为——
+
+| 包 | 冻结名 |
+|---|---|
+| runtime（mynet-agent） | `mynet_agent_openwrt_amd64_<ver>.ipk` |
+| LuCI 壳（luci-app-mynet） | `lua_openwrt_all_<ver>.ipk` |
+
+两包随 `POST {CTL_URL}/api/v2/releases` 发布（见 workflow `Publish to ctl` 步；需 repo secret `CTL_URL` + `CTL_RELEASE_TOKEN`（scope `release:upload`））。
+
+**取件**：从 ctl 下载（`GET {CTL_URL}/api/v2/releases` 索引 → `.../download/{filename}`），不再从 Actions artifact 取：
+
+| 节点 | 包 | 取法 |
 |---|---|---|
-| `.180` | `mynet_agent` → `build-agent` | `mynet_agent_linux_amd64`（内含 `mynet_agent_linux_amd64_<ver>.tgz`） |
-| `.182` | `mynet_agent` → `build-openwrt-sdk` | `openwrt-ipk-amd64`（`mynet-agent_*_amd64.ipk` + `luci-app-mynet_*.ipk`） |
+| `.180` | `mynet_agent_linux_amd64_<ver>.tgz` | ctl 索引 → download |
+| `.182` | `mynet_agent_openwrt_amd64_<ver>.ipk` + `lua_openwrt_all_<ver>.ipk` | ctl 索引 → download |
 
 **⚠️ 投递方式（2026-10-11 真机踩出）**：OpenWrt 上 **`scp` 默认走 SFTP 会失败**（无 `/usr/libexec/sftp-server`，报 `Connection closed`）。用 stdin 管道或 `scp -O`：
 ```bash
@@ -152,8 +170,8 @@ ssh -i $KEY root@52.221.22.241 '
 ## 6. `.182` 升级（维护窗；**LuCI 不验**）
 
 ```bash
-# Phase 1 投递 ipk
-scp -i $KEY 'mynet-agent_*_amd64.ipk' 'luci-app-mynet_*.ipk' root@192.168.0.2:/tmp/
+# Phase 1 投递 ipk（从 ctl 下载后；OpenWrt 上 scp 走 SFTP 会失败 → 用管道）
+scp -O -i $KEY 'mynet_agent_openwrt_amd64_<ver>.ipk' 'lua_openwrt_all_<ver>.ipk' root@192.168.0.2:/tmp/
 # Phase 2 dry-run（节点或 VM）
 ssh -i $KEY root@192.168.0.2 '/usr/sbin/mynet install --dry-run --home /etc/mynet --gateways wss://gw.mynet.club/v1/node/connect'
 # Phase 3
@@ -161,7 +179,7 @@ ssh -i $KEY root@192.168.0.2 '
   set -e
   /etc/init.d/mynet stop 2>/dev/null || true        # procd 精确停；禁 pkill
   crontab -l | grep -v mynet-heartbeat | crontab -  # 摘旧 cron 心跳（防双心跳）
-  opkg install /tmp/mynet-agent_*_amd64.ipk /tmp/luci-app-mynet_*.ipk
+  opkg install /tmp/mynet_agent_openwrt_amd64_<ver>.ipk /tmp/lua_openwrt_all_<ver>.ipk
   mynet install --home /etc/mynet --gateways wss://gw.mynet.club/v1/node/connect
   /etc/init.d/mynetd start ; /etc/init.d/mynet start'
 ```
