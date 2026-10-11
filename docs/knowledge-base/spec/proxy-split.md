@@ -702,3 +702,42 @@ nameserver 顺序：[peer VIP, smart IP]
 > **DNS 用户三选一：① 隧道节点 DNS（走加密隧道，安全）② 智能 DNS（兜底）③ 不加速（默认）。**
 > **①+② 可叠加：peer 优先，智能兜底。指 peer 隧道 VIP 而非公网 DNS。**
 > **WebUI 只做 client 模式（Win/Mac）；网关不劫持，只配上游。**
+
+---
+
+## 15. 落地分层与归属（2026-10-11 定案）
+
+> 起因：client 分流曾有两个 writer（Go 的 apply 计划 与 Lua 的 `proxy.lua`+`route_policy.sh`），
+> 共用 `fwmark 0xc8` / `table 200`；apply 的「proxy 已禁用」清理会删这套对象，正好把 Lua 那份拆掉
+> → 页面开关"看起来生效、实际时通时断"。
+> 定案：**proxy 是一个整体单元，归 Go**（跨平台：Linux/mac/Win 当 client 同样需要这份分流，
+> 与 UCI 那次同一条线）；**Lua 退成 UI/触发器**。
+
+### 15.1 三层（缺一不通）
+
+| 层 | 是什么 | 归属 | 现状 |
+|---|---|---|---|
+| **参数（意图）** | `ProxyPolicy`（`DNS`/`DomainRules`/`Split`/`Exits`…），双控 Cloud+Local | proxy 单元（`proxy_intent.json`） | ✅ |
+| **驱动侧放行**（目的→出口，**按驱动方言**） | gnb：`proxy.conf`（`proxy on` + `[default] exit` + `[group] target <cidr> exit`）；wg：出口 peer 的 `AllowedIPs` | 驱动投影（agent 按方言写） | gnb ✅ / **wg ⚠️ 缺（TODO）** |
+| **OS 侧打标**（把流量推进驱动） | nft 集合 + `mark 0xc8` → `table 200` → 隧道 | L6 `mynet apply`（**驱动无关**） | ✅ |
+
+- **只放行不打标** → 流量进不了隧道；**只打标不放行** → 进了也丢（wg 的 cryptokey routing 尤甚）。
+- DNS 的**参数**属本单元（`ProxyPolicy.DNS`，`shared/domain/proxy_policy.go`）；DNS 的**落地机制**
+  （dnsmasq 片段 / resolv：`mynet proxy dns-split`/`resolv`）属 **agent**，**两处都不碰 gnb|wg**。
+
+### 15.2 入口与单一写入者（防重复实施）
+
+- **唯一写面**：`localapi POST /api/v1/plugin/proxy` —— 写意图（`proxy_intent.json`）+ 投影驱动
+  （`plugin apply proxy`）+ 派发 **`mynet proxy apply`**（只刷 proxy 段：nft/ip rule/table/DNS，
+  **不碰 OS 路由/防火墙/接口/默认网关**）+ 回写云端。
+- **驱动投影唯一入口**：`mynet plugin apply proxy`（gnb → `driver/gnb/conf/<id>/proxy.conf`；wg → 待补）。
+- **Lua 侧已退役**：`scripts/proxy/{proxy.sh,route_policy.sh}` 与 plugin 钩子删除；控制器 proxy
+  端点只走桥、**无 Lua 回退**（回退会成第二个 writer）。
+
+### 15.3 待办
+
+- **wg 侧放行投影**：把 proxy 出口目的集**并集**进出口 peer 的 `AllowedIPs`（幂等、不覆盖 bundle
+  原有网段）+ 一条 fail-loud（投影后 proxy 目的集 ⊄ 各 peer `AllowedIPs` 并集即报错，防静默丢包）。
+  对应 §10.3 的「WG 出口 —— 后置」。
+- **Lua `dns_split.sh`** 与 agent `proxy dns-split` 重叠（同一"两个 writer"病），按同标准退役。
+- **`proxy.lua` 死码清理**（`enable/disable/start/stop/reload`、firewall-include 注册等已不可达）。
