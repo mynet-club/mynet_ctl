@@ -737,13 +737,20 @@ nameserver 顺序：[peer VIP, smart IP]
 
 ### 15.3 待办
 
-- ~~**wg 侧放行投影**~~（2026-10-11 已落）：`ProjectProxyToWG` 把 proxy 出口目的集**并集**进
-  出口 peer 的 `AllowedIPs`（幂等去重），并置 `Routing.Mode=off` → `RenderWGConfig` 出
-  `Table = off`（禁 wg-quick 把目的集写进主表 —— 那是 §15.4 已下线的 /32 钉扎病）。
+- ~~**wg 侧放行投影**~~（2026-10-11 已落，**产品口径**）：目的集**不由 split 列表枚举**。
+  `AllowedIPs` 是 wg 的**双向 cryptokey 路由**（选 peer + 反欺骗），**不是**分流选择器 ——
+  分流选择在 OS 层（nft 集合 + `mark 0xc8` + `table 200`，§15.1 第三层，驱动无关）。
+  故投影只表达「哪条隧道承载哪些分组出口」：
+  - **默认出口** → `0.0.0.0/0`（安全超集；`Table = off` 下不劫持主表，见 §15.4 已下线的
+    /32 钉扎病）。
+  - **分组出口** → 该分组 `targets`（多出口按分组的 destination 映射到各自 exit 的 peer）。
+  - 无出口的分组 = DROP（不投影）。
+  `ProjectProxyToWG` 把目的集**并集**进**匹配出口** peer 的 `AllowedIPs`（幂等去重），并置
+  `Routing.Mode=off` → `RenderWGConfig` 出 `Table = off`。
   fail-loud：投影后「目的集 ⊄ 所有 peer AllowedIPs 并集」即报错、不写盘（出口选点对不上
-  wg peer 的静默丢包）。目的集解算：normal→列表 CIDR；inverted/FullTunnel→`0.0.0.0/0`
-  （wg 表达不了补集，取安全超集，Table=off 下不劫持主表）。落点
-  `mynet/proxy_wg_projection.go`，挂在 `writeWgProjection`。
+  wg peer 的静默丢包）。落点 `mynet/proxy_wg_projection.go`，两个入口：
+  `WGExitDestinations(loadPluginProxyConfig())`（出口→目的集映射）+ `ProjectProxyToWG`，
+  挂在 `writeWgProjection`。
 - **Lua `dns_split.sh`** 与 agent `proxy dns-split` 重叠（同一"两个 writer"病），按同标准退役。
 - **`proxy.lua` 死码清理**（`enable/disable/start/stop/reload`、firewall-include 注册等已不可达）。
 
