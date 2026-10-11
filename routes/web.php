@@ -53,8 +53,11 @@ Route::prefix('d')->group(function () {
         ->where('name', '[a-z0-9_\-]+\.(sh|bash|py)');
 
     // 二进制文件下载（按文件名解析 product/platform/arch/version）
+    // ⚠️ filename 约束必须与 parseFilename/artifactKindForExt 的扩展名白名单**同步**：
+    // 这里漏掉的原生安装器（exe/dmg/pkg）会被路由层 404 —— 与 H4 给 parseFilename 加的
+    // 那三种不一致（2026-10-11 desktop 首次发布实测：件登记成功、下载面 404）。
     Route::get('/{product}/{filename}', [ManifestController::class, 'downloadRelease'])
-        ->where(['product' => '[a-z0-9_\-]+', 'filename' => '.+\.(tgz|zip|tar\.gz|ipk)']);
+        ->where(['product' => '[a-z0-9_\-]+', 'filename' => '.+\.(tgz|zip|tar\.gz|ipk|exe|dmg|pkg)']);
 });
 
 // ── Admin 登录（无需中间件） ──────────────────────────────
