@@ -36,6 +36,8 @@
 | **并发护序（localapi 写面）** | 两个写请求**同时**打 `/api/v1/config/apply` → 一个 **200**、一个 **409** `operation_in_progress` | arm64 VM：慢写（`service start`）进行中 → `config/apply` 写=**409**；**`plugin/proxy` 写（修复前）=500（照跑，未加锁）→ 修复后 =409**，同刻 proxy **读=200** | ✅ **全部写面已归一到 `configMutation`**（进程内；跨进程事务未被证明） |
 | 会话态 ACL 正/负 | 16 方法 `access=true`；越权 `-32002` | — | ✅（O2 记录） |
 | 浏览器 UI 走桥 | Dashboard + Restart→「VPN restarted」 | — | ✅（O5 记录） |
+| **WG 数据面（独立于 gnb）** | — | arm64 VM：`ip link add … type wireguard` ×2（环回对端，51920/51921）→ **双向握手完成**（`latest-handshakes`>0）+ **加密字节互通**（a0 rx92/tx532 ↔ a1 rx532/tx92） | ✅ **内核 WG 数据面可用**（不借 gnb） |
+| **WG 驱动路径（OpenWrt）** | — | VM 实测 `mynet service start wireguard` → `exec: "wg-quick": executable file not found`（OpenWrt 的 `wireguard-tools` 不带 wg-quick） | ⚠️ **缺口**，见下 §2 尾 |
 | **opkg 事务下配置/身份不漂移** | — | arm64 VM：`opkg install --force-reinstall mynet_agent_openwrt_arm64_v0.0.0-6537ac7.c495ff6.ipk`（走 prerm `mynet uninstall` → postinst `mynet install`）→ `/etc/mynet/conf/config.json` sha256 **前后一致**（`79c14f2e…`）、`confdir`/nodeid `3764021915150630` 不变 | ✅ **opkg 事务不改节点身份/配置**（conffiles 生效） |
 | **gnb 就位检查误报（已修）** | — | 每次 install/opkg 升级都报 `/usr/local/bin/gnb 不存在 —— mynet 服务会起不来`，而 ipk 的 gnb 在 `$home/driver/gnb/bin`；改为 `gnbPresentOpenWrt`（同 init 解析序）→ `mynet_agent 4a85820` | ✅ 修复（假告警，非功能故障） |
 
@@ -43,11 +45,13 @@
 
 **并发护序审计（2026-10-11，`mynet_agent a5ba1d0`）**：逐端点核过全部写面 —— `config/*`（mode/active/keys/connect/prepare/apply）、`nodes/switch`、`plugin/proxy` 走 `withConfigMutation`；`/api/v1/command`（CLI/LuCI 经桥）走 `dispatch` 的 `isContextMutation`。**发现并修两处漏网**：① `POST /api/v1/plugin/proxy` 直调 `s.Ops`（不经 dispatch），此前**完全未加锁** —— VM 实测慢写进行中它照跑（`500`）；改 `withConfigMutation` 后 =`409`。② **启动隧道恢复**（`cmd/mynetd restoreTunnelIfNeeded` 拉起 gnb|wg）未加锁，与用户写并发会同抢驱动 → 新增 `Server.TryRunExclusive`（`TryLock`，拿不到即跳过、以用户操作为准）纳入互斥。回归测试 `TestPluginProxyPostSharesConfigMutationLock`（已反向验证会失败）/`TestTryRunExclusiveSkipsWhenMutationInFlight`。**注**：设备证据来自本机交叉编译的 arm64 件（未发布提交），验后 VM 已用 ipk 还原到 r175（`mynetd` sha `a2538371…` 与 ctl 件一致）。
 
+**WG 验收发现（2026-10-11）**：① **OpenWrt 的 `wireguard-tools` 不装 `wg-quick`**（只装 `wg` + netifd proto）；`WireGuardDriver.Start/Stop` 直接 exec `wg-quick` ⇒ **在 OpenWrt 上 `mynet service start|stop wireguard`（Go 驱动路径）必失败**（VM 实测：`exec: "wg-quick": executable file not found`）。可用的只有 init 的 `start_wg_interface` 兜底（`ip link add type wireguard` + `wg setconf` + `ip addr`）。**待裁决**：OpenWrt 上该让 Go 驱动委托 init，还是补 wg-quick 等价实现（与「跨平台归 Go、平台专属归平台」取向相关）。② init 兜底从 conf 读 `Address=`，而 `RenderWGConfig` **不产 `Address`**（地址归 NetworkIntent/L6）—— 纯 wg 路径不会自带地址，需 L6 补。**本轮未做**：跨机真 peer 握手、wg 代理放行（AllowedIPs ∪ 目的集 + `Table=off`）的端到端（该投影只有单测/交叉编译，未过真机）。
+
 ## 3. 未做（O7 剩余，需更多时间/窗口/实机）
 
 - **数据面允许/拒绝**：授权流量走隧道、未授权拒绝、**撤销后 fail-closed**（不赖回滚旧 bundle 重开）—— 需出口侧（`.180`，生产 proxy server）配合
 - **升级回滚（opkg 级）**：装**新 ipk** → `opkg` 回滚旧 ipk。**现状**：opkg **事务**面已验（reinstall 下 config/身份不漂移，见 §2）；**纯降级回滚**（装旧版本 ipk 回到旧件）仍缺 —— 现网无「旧版本 arm64 ipk」可直接装（VM 原为 `-dirty` 本机构建，ctl 上无对应件）。
-- **WG 独立验收**（借 GNB 通过不算）
+- **WG 独立验收**（借 GNB 通过不算）：**平台数据面已验**（见 §2）；**驱动路径在 OpenWrt 有缺口**（无 wg-quick，见 §2 尾）—— 完整验收需裁决该缺口后补。
 - **MIPS 实机资源证据**（本轮搁置）
 - ~~并发护序~~（2026-10-11 完成，见 §2 + 审计）
 
