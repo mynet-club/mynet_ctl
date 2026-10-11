@@ -33,7 +33,7 @@
 | **fw4 reload 回放** | — | `/etc/init.d/firewall reload` 后：zone `mynet` 保留、include 重新应用、nft `forward` mynet 行在、tun 路由保留、gnb 在、SSH 会话未断 | ✅ **回放不丢自身规则** |
 | **O1 修复（arm64 复核）** | — | 升级前 `config/runtime` = 旧 Lua 桩（`{interface,node_id,running,vpn_type}`）→ 装新 mynetd 后 = **真实 Go 形状**（`address_conf`/`gnb_conf`/…） | ✅ **config 委派在 arm64 同样生效** |
 | **升级 → 回滚（二进制级）** | — | arm64 VM：装新 `mynet/mynetd`（+新 init/env）→ 验证 → 回滚旧件 → md5 复原、`nodeid=3764021915150630`/`ifname=gnb_tun`/`listen=9002` **不变**、`gnb_tun` UP | ✅ **身份/接口不因换件漂移** |
-| **并发护序（localapi）** | 两个写请求**同时**打 `/api/v1/config/apply` → 一个 **200**、一个 **409** `operation_in_progress` | — | ✅ **进程内 configMutation 挡得住**（注：仅进程内；跨进程事务未被证明） |
+| **并发护序（localapi 写面）** | 两个写请求**同时**打 `/api/v1/config/apply` → 一个 **200**、一个 **409** `operation_in_progress` | arm64 VM：慢写（`service start`）进行中 → `config/apply` 写=**409**；**`plugin/proxy` 写（修复前）=500（照跑，未加锁）→ 修复后 =409**，同刻 proxy **读=200** | ✅ **全部写面已归一到 `configMutation`**（进程内；跨进程事务未被证明） |
 | 会话态 ACL 正/负 | 16 方法 `access=true`；越权 `-32002` | — | ✅（O2 记录） |
 | 浏览器 UI 走桥 | Dashboard + Restart→「VPN restarted」 | — | ✅（O5 记录） |
 | **opkg 事务下配置/身份不漂移** | — | arm64 VM：`opkg install --force-reinstall mynet_agent_openwrt_arm64_v0.0.0-6537ac7.c495ff6.ipk`（走 prerm `mynet uninstall` → postinst `mynet install`）→ `/etc/mynet/conf/config.json` sha256 **前后一致**（`79c14f2e…`）、`confdir`/nodeid `3764021915150630` 不变 | ✅ **opkg 事务不改节点身份/配置**（conffiles 生效） |
@@ -41,12 +41,14 @@
 
 **踩坑**：OpenWrt 上覆盖**正在运行**的可执行文件会 `Text file busy`（ETXTBSY）。升级/回滚要**写临时文件再 `mv`**（换 inode），不能 `cat >` 原地覆盖 —— 与本包 `mynet install`/opkg 的落盘路径需同口径。
 
+**并发护序审计（2026-10-11，`mynet_agent a5ba1d0`）**：逐端点核过全部写面 —— `config/*`（mode/active/keys/connect/prepare/apply）、`nodes/switch`、`plugin/proxy` 走 `withConfigMutation`；`/api/v1/command`（CLI/LuCI 经桥）走 `dispatch` 的 `isContextMutation`。**发现并修两处漏网**：① `POST /api/v1/plugin/proxy` 直调 `s.Ops`（不经 dispatch），此前**完全未加锁** —— VM 实测慢写进行中它照跑（`500`）；改 `withConfigMutation` 后 =`409`。② **启动隧道恢复**（`cmd/mynetd restoreTunnelIfNeeded` 拉起 gnb|wg）未加锁，与用户写并发会同抢驱动 → 新增 `Server.TryRunExclusive`（`TryLock`，拿不到即跳过、以用户操作为准）纳入互斥。回归测试 `TestPluginProxyPostSharesConfigMutationLock`（已反向验证会失败）/`TestTryRunExclusiveSkipsWhenMutationInFlight`。**注**：设备证据来自本机交叉编译的 arm64 件（未发布提交），验后 VM 已用 ipk 还原到 r175（`mynetd` sha `a2538371…` 与 ctl 件一致）。
+
 ## 3. 未做（O7 剩余，需更多时间/窗口/实机）
 
 - **数据面允许/拒绝**：授权流量走隧道、未授权拒绝、**撤销后 fail-closed**（不赖回滚旧 bundle 重开）—— 需出口侧（`.180`，生产 proxy server）配合
-- **并发**：LuCI 写 + CLI + 后台配置通知 + 启动恢复同时进行的护序
 - **升级回滚（opkg 级）**：装**新 ipk** → `opkg` 回滚旧 ipk。**现状**：opkg **事务**面已验（reinstall 下 config/身份不漂移，见 §2）；**纯降级回滚**（装旧版本 ipk 回到旧件）仍缺 —— 现网无「旧版本 arm64 ipk」可直接装（VM 原为 `-dirty` 本机构建，ctl 上无对应件）。
 - **WG 独立验收**（借 GNB 通过不算）
 - **MIPS 实机资源证据**（本轮搁置）
+- ~~并发护序~~（2026-10-11 完成，见 §2 + 审计）
 
 > O7 门禁要求：以上每项须有**实际证据**，不能用「ping 通 / 服务 running / 规则里搜到字符串」代替（playbook §7 G3）。
