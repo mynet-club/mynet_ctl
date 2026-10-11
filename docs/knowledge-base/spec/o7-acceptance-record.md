@@ -36,6 +36,8 @@
 | **并发护序（localapi）** | 两个写请求**同时**打 `/api/v1/config/apply` → 一个 **200**、一个 **409** `operation_in_progress` | — | ✅ **进程内 configMutation 挡得住**（注：仅进程内；跨进程事务未被证明） |
 | 会话态 ACL 正/负 | 16 方法 `access=true`；越权 `-32002` | — | ✅（O2 记录） |
 | 浏览器 UI 走桥 | Dashboard + Restart→「VPN restarted」 | — | ✅（O5 记录） |
+| **opkg 事务下配置/身份不漂移** | — | arm64 VM：`opkg install --force-reinstall mynet_agent_openwrt_arm64_v0.0.0-6537ac7.c495ff6.ipk`（走 prerm `mynet uninstall` → postinst `mynet install`）→ `/etc/mynet/conf/config.json` sha256 **前后一致**（`79c14f2e…`）、`confdir`/nodeid `3764021915150630` 不变 | ✅ **opkg 事务不改节点身份/配置**（conffiles 生效） |
+| **gnb 就位检查误报（已修）** | — | 每次 install/opkg 升级都报 `/usr/local/bin/gnb 不存在 —— mynet 服务会起不来`，而 ipk 的 gnb 在 `$home/driver/gnb/bin`；改为 `gnbPresentOpenWrt`（同 init 解析序）→ `mynet_agent 4a85820` | ✅ 修复（假告警，非功能故障） |
 
 **踩坑**：OpenWrt 上覆盖**正在运行**的可执行文件会 `Text file busy`（ETXTBSY）。升级/回滚要**写临时文件再 `mv`**（换 inode），不能 `cat >` 原地覆盖 —— 与本包 `mynet install`/opkg 的落盘路径需同口径。
 
@@ -43,7 +45,7 @@
 
 - **数据面允许/拒绝**：授权流量走隧道、未授权拒绝、**撤销后 fail-closed**（不赖回滚旧 bundle 重开）—— 需出口侧（`.180`，生产 proxy server）配合
 - **并发**：LuCI 写 + CLI + 后台配置通知 + 启动恢复同时进行的护序
-- **升级回滚（opkg 级）**：装**新 ipk** → `opkg` 回滚旧 ipk（本轮只到**二进制级**，未过 opkg 事务）
+- **升级回滚（opkg 级）**：装**新 ipk** → `opkg` 回滚旧 ipk。**现状**：opkg **事务**面已验（reinstall 下 config/身份不漂移，见 §2）；**纯降级回滚**（装旧版本 ipk 回到旧件）仍缺 —— 现网无「旧版本 arm64 ipk」可直接装（VM 原为 `-dirty` 本机构建，ctl 上无对应件）。
 - **WG 独立验收**（借 GNB 通过不算）
 - **MIPS 实机资源证据**（本轮搁置）
 
