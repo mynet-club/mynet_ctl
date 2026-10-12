@@ -27,20 +27,27 @@
 
 ## 2. 目录布局（`$MYNET_HOME` = Store Root）
 
+> **定稿（2026-10-12 用户裁定）——三面职责，一个可手改面**：
+> · **`conf/` 是人/云端写意图与身份的唯一面**（`mode.json` 也在这里），格式 JSON（**密钥材料除外**，驱动要裸 hex）。
+> · **`driver/` 是投影层**：agent 的 apply 链（mynetd 触发 → `mynet apply`）落盘，**手改会被覆盖**。
+> · **`var/` 是运行态**：同样由 agent 落盘（bundle 拉取 / detector / tunnel 状态），**不进备份、手改无意义**。
+> · **不再有 `mynetd.env`**：`MYNET_HOME` 由**服务单元的启动命令**给出（见 §2.1）。
+
 ```text
-$MYNET_HOME/                         # Store Root（真相对源）
-├── mode.json                        # 激活谁（local|online + tenant/node/driver）★真相
-├── conf/                            # ★真相源，进备份
-│   ├── local/                       # 本地模式
-│   │   ├── intent.json              #   抽象意图（无 gnb/wg 术语）
-│   │   ├── nodes/<id>/keys/         #   节点密钥（私钥 0600）
-│   │   └── plugins/<name>.json      #   插件配置
-│   └── online/<tenant>/             # 联网模式
-│       ├── profile.json             #   租户身份面（无密钥）
-│       ├── bundle.json              #   上游 envelope 落盘
-│       ├── nodes/<id>/keys/         #   节点密钥
+$MYNET_HOME/                         # Store Root（真相源根；由服务单元启动命令给出）
+├── conf/                            # ★唯一可手改面（意图 + 身份），进备份
+│   ├── mode.json                    #   激活谁（local|online + tenant/node/driver）
+│   ├── gateways.json                #   网关列表（原 mynetd.env 的 MYNET_GATEWAYS）
+│   ├── local/                       #   本地模式
+│   │   ├── intent.json              #     抽象意图（无 gnb/wg 术语）
+│   │   ├── proxy_intent.json        #     代理意图（双轨合一后的 Local 轨）
+│   │   ├── nodes/<id>/keys/         #     节点密钥（裸材料，非 JSON；私钥 0600）
+│   │   └── plugins/<name>.json      #     插件配置
+│   └── online/<tenant>/             #   联网模式
+│       ├── profile.json             #     租户身份面（无密钥）
+│       ├── nodes/<id>/keys/
 │       └── plugins/<name>.json
-├── driver/                          # ★投影层，Apply 写出，禁手改
+├── driver/                          # ★投影层：agent apply 写出，禁手改（改了会被覆盖）
 │   ├── gnb/
 │   │   ├── bin/                     #   gnb gnb_ctl gnb_es gnb_crypto（同套件！）
 │   │   └── conf/<nodeId>/           #   node.conf route.conf address.conf proxy.conf
@@ -50,9 +57,10 @@ $MYNET_HOME/                         # Store Root（真相对源）
 │   │       └── gnb.pid
 │   └── wireguard/<nodeId>/wg0.conf
 ├── plugins/                         # 插件包体（可重装）
-├── var/                             # ★运行态，不进备份
+├── var/                             # ★运行态，不进备份（agent 落盘）
 │   ├── system.json                  # detector 结果
-│   ├── bundle.json                  # 拉取缓存
+│   ├── bundle.json (+ .etag)        # 云端 envelope 拉取落盘（唯一一份，勿在 conf/ 再放）
+│   ├── tunnel-state.json
 │   ├── subject.json                 # subject 解析缓存（见 §4）
 │   ├── run/local-api.token
 │   └── log/
@@ -61,16 +69,32 @@ $MYNET_HOME/                         # Store Root（真相对源）
 └── backups/                         # config export/import 与升级备份
 ```
 
-### 环境变量
+### 2.1 启动期取值（原 `mynetd.env` 的归宿）
+
+**`mynetd.env` 已退役**。服务单元（systemd `Environment=` / procd init / launchd plist）在启动命令里给
+`MYNET_HOME`；其余运行参数从 `conf/` 读：
+
+| 原 env 项 | 现在从哪来 |
+|---|---|
+| `MYNET_HOME` | **服务单元启动命令**（进程起来前就要知道，无法从 conf/ 里取 —— 先有 home 才有 conf/） |
+| `MYNET_GATEWAYS` | `conf/gateways.json` |
+| `MYNET_BIN` | 由 `MYNET_HOME` + 前缀推出（OpenWrt `/usr/sbin`） |
+| `MYNET_EXECUTOR` | 平台默认（OpenWrt `lua`），可 `conf/` 覆盖 |
+
+调试用的 env 覆盖（`MYNET_CONFIG_HOME` / `MYNET_DATA_HOME` / `MYNET_LOG_DIR` / `MYNET_GNB_BIN`）仍可用，
+但**不是配置面**、不写进任何持久文件。
+
+### 2.2 环境变量（覆盖用，非配置面）
 
 | 变量 | 作用 | 缺失时 |
 |---|---|---|
-| `MYNET_HOME` | Store Root | **拒绝启动**（install/service/executor） |
+| `MYNET_HOME` | Store Root | **拒绝启动**（install/service/executor）——由服务单元给 |
 | `MYNET_CONFIG_HOME` | 覆盖 `conf/` 位置 | 用 `$MYNET_HOME/conf` |
 | `MYNET_DATA_HOME` | 覆盖 `var/` 位置 | 用 `$MYNET_HOME/var` |
 | `MYNET_GNB_BIN` | 显式 gnb 可执行文件 | 按 §4 解析 |
-| `MYNET_GATEWAYS` | 心跳/WS 网关 | 心跳**不起**，须指因（不静默） |
 | `MYNET_LOG_DIR` | 日志目录 | `$MYNET_HOME/var/log` |
+
+> ⚠️ `MYNET_GATEWAYS` 从本表移除：它是**配置**，归 `conf/gateways.json`；env 里给只作一次性覆盖（调试）。
 
 ---
 
@@ -122,10 +146,10 @@ $MYNET_HOME/                         # Store Root（真相对源）
 
 | | **mynet 自己** | **驱动 gnb / wg** |
 |---|---|---|
-| 位置 | `conf/**` + `mode.json` | `driver/**` |
-| 格式 | JSON schema v2 | gnb 文本 / wg INI |
+| 位置 | `conf/**`（含 `conf/mode.json`） | `driver/**` |
+| 格式 | JSON schema v2（密钥材料除外） | gnb 文本 / wg INI |
 | 写入者 | 用户 / back / wizard | **仅 `driver.Apply`** |
-| 手改 | 可 | **禁** |
+| 手改 | 可 | **禁**（会被 apply 覆盖） |
 | 真相 | 是 | 否（产物） |
 
 **proxy 两层命名（易混）**：
@@ -139,12 +163,12 @@ $MYNET_HOME/                         # Store Root（真相对源）
 
 | 进备份 | 不进备份 |
 |---|---|
-| `conf/**`、`mode.json` | `var/**`（运行态） |
+| `conf/**`（含 `conf/mode.json`） | `var/**`（运行态，agent 落盘） |
 | `state/last-good/` | `driver/**`（可再生；需要时单独打） |
 | `backups/` | `plugins/**` 包体（可重装） |
 | 密钥 `nodes/*/keys/` | `gnb.map` / `gnb.pid` / logs |
 
-私钥备份**必须**含 Store Root 下的 `nodes/*/keys/` 或 `driver/gnb/conf/<id>/security/`（以运行根为准）。
+私钥备份**必须**含 `conf/**/nodes/*/keys/` 或 `driver/gnb/conf/<id>/security/`（以运行根为准）。
 
 ---
 
