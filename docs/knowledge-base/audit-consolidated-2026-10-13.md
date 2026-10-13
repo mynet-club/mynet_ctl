@@ -154,9 +154,9 @@
 | ID / 严重度 | 合并问题 | 来源 | 当前状态 | 工作包 | 证据或下一步 |
 |---|---|---|---|---|---|
 | C1-01 / S1 | 私钥经 argv 进执行器并回显到本机 API 响应 | [C1-01](audit-2026-10-13/C1-mynet-agent.md) L9 | 已提交待复验 | G0 | 9525391：私钥 stdin/argv 遮蔽；handlers/wizard 又有未提交修改，集成后复验 |
-| C1-02 / S2 | mynetd 二进制链入整个执行器包（纯通信层失守，链接层面） | [C1-02](audit-2026-10-13/C1-mynet-agent.md) L11 | 待修复 | G3 | 原分册证据保留；本次未取得该项完整销账证据，实施前复核现状/消费者 |
-| C1-03 / S2 | mynetd/localapi 行为越界：gnb_ctl 解析、OS 路由查询、主机指标/进程探测 | [C1-03](audit-2026-10-13/C1-mynet-agent.md) L13<br>[C1-13](audit-2026-10-13/C1-mynet-agent.md) L33 | 待修复 | G3 | 原分册证据保留；本次未取得该项完整销账证据，实施前复核现状/消费者 |
-| C1-04 / S2 | guard B2 守护面缺口，上述越界全部静默通过 | [C1-04](audit-2026-10-13/C1-mynet-agent.md) L15 | 待修复 | G3 | 原分册证据保留；本次未取得该项完整销账证据，实施前复核现状/消费者 |
+| C1-02 / S2 | mynetd 二进制链入整个执行器包 | [C1-02](audit-2026-10-13/C1-mynet-agent.md) L11 | 已验证本地 | G3 | **2026-10-13 G3 完成**：localapi B2 CLEAN；cmd/mynetd 仅 keys/config（GUARD-OK 组合根） |
+| C1-03 / S2 | mynetd/localapi 行为越界（gnb_ctl/OS route/主机指标） |  [C1-03](audit-2026-10-13/C1-mynet-agent.md) L13<br>[C1-13](audit-2026-10-13/C1-mynet-agent.md) L33 | 已验证本地 | G3 | **2026-10-13**：node_status/route 迁执行器 + Ops；localapi 不 import mynet |
+| C1-04 / S2 | guard B2 守护面缺口 | [C1-04](audit-2026-10-13/C1-mynet-agent.md) L15 | 已验证本地 | G3 | **2026-10-13**：B2 扫 cmd/mynetd+mynetd，变异测试 10/0，多 GOOS 干净 |
 | C1-05 / S2 | make dist 的 openwrt 腿给 mynetd 带 embed，与 SSOT/文档/CI 三方矛盾 | [C1-05](audit-2026-10-13/C1-mynet-agent.md) L17 | 已提交待复验 | G0 | 9a578a6：OpenWrt 去 embed、webui.html 出产物 |
 | C1-06 / S3 | 托盘启停打在 install 从不注册的服务标识上（macOS + Windows） | [C1-06](audit-2026-10-13/C1-mynet-agent.md) L19 | 进行中未提交 | G0 | 托盘/服务常量/paths 工作树修改存在；本次不改他人文件 |
 | C1-07 / S3 | 产物仍带 webui.html，安装文档称已无此物 | [C1-07](audit-2026-10-13/C1-mynet-agent.md) L21 | 已提交待复验 | G0 | 9a578a6：OpenWrt 去 embed、webui.html 出产物 |

@@ -13,7 +13,7 @@
 
 | ID | 优先级 | 问题与报告项 | 归属 |
 |---|---|---|---|
-| CPI-71 | P1 | OpenWrt实际Lua Ops不满足新config/connect/apply合同（R1） | agent/OpenWrt，O1/H1–H2 |
+| CPI-71 | P1 | **部分已修 2026-10-13**：C-2 签名薄桥、guest 路由唯一写面、桥 ACL 三方 19/19 一致；config/connect/apply 映射在 `mynet.uc`。**仍开**：真机合同字段/失败语义全量 | agent/OpenWrt |
 | ~~CPI-76~~ | ~~P1~~ | ✅ **已修 2026-10-13**：自更新只取 archive（zip/tgz），拒绝 installer；HostPlatform 区分 openwrt≠linux；仅 ipk 时宁缺勿装错（agent `285029b`） | 已修复 |
 | CPI-80 | P1 | GNB Wintun初始化失败分支调用未初始化函数指针（R10，静态确认、真Windows未验）。**随包缓解**：安装器带 wintun.dll（G-10/R10，`mynet_desktop/nsis/vendor/wintun/`）；gnb `src/` 未改，根治待上游/补丁包裁定 | GNB补丁包/上游，H3 |
 
