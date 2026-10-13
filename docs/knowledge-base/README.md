@@ -14,6 +14,7 @@
 - [八轨合并台账](audit-consolidated-2026-10-13.md)：完整来源、去重、当前状态与原文合订。
 - [治理计划](governance-plan-2026-10-13.md)：全部剩余工作包、依赖、裁决与验收。
 - [接续证据](governance-followup-2026-10-13.md)：已完成批的具体测试结果。
+- [mynetd Ops 合同](spec/mynetd-ops-contract.md)：执行器命令面/信封/B2（G3.a 冻结）。
 
 ## 0. 开工必读（新会话从这里进）
 

@@ -295,3 +295,16 @@ api Default：**511 tests / 4875 assertions / 1 skip**。
 | G5.b guest 路由 writer | **未迁** | `guest.lua` 仍写 route.conf；历史 marker 过滤保留 |
 | G5.c deploy plan | **完成** | `deploy.sh plan` 审查清单（ctl `afcf4e8`）；不连生产 |
 | Lua5.1 / 实机 | **未做** | 本机仅 lua 语法 + local_config_test；实机归用户窗口 |
+
+## G7 文档收口（2026-10-13）
+
+| 交付 | 状态 |
+|---|---|
+| project-memory HEAD/测试计数 | **已刷新**（api 511/4874/1skip；ctl 82/467/1skip） |
+| README 导航 | 治理计划 / 接续证据 / Ops 合同三层入口齐 |
+| 用户裁决 | G2/G4 交互裁决已落档（本文件前文） |
+| 来源 ID 回溯 | 各批证据按工作包+来源 ID 记录；合并台账仍为冻结来源 |
+| CPI 批注 | CPI-71（Lua Ops）→ **部分**：心跳 C-2 签名已薄桥（G5.a），config/connect/apply 合同仍开；CPI-76/R6 开（G4 双件未接 updater）；N-01 **已修**（guard 45/0） |
+
+未全表重写 CPI（体量大、部分仍开）；已修项以本文件+合并台账为准。
+设备/生产验收不进本文。
