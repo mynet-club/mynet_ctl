@@ -111,6 +111,7 @@ flowchart LR
 - **D4-B 发布矩阵**：推荐 installer 与 archive 都发布，Windows更新zip、darwin更新tgz、OpenWrt更新opkg；候选替代为声明mac/win只安装器升级并同步删自更新承诺。ctl唯一键/查询需支持所选矩阵；`kind` 已有列不代表双件已可上传。身份候选为 product/platform/arch/variant/version/kind/ext 的显式约束或 filename 唯一（待选），不擅自选一种落生产。
 - **D4-C 更新选择**：支持Windows `.exe` 二进制名；客户端归档不含 mynet_gateway，不能要求缺件或擅把server组件装桌面。OpenWrt不得选generic Linux归档，走声明的opkg协调；平台包选择必须同时核kind/ext/platform/arch/variant，不能仅runtime.GOOS。
 - **D4-D ctl活发行错误**：上传先拒未知扩展/空kind；无效filename不得成功登记并生成 `/d/{filename}` 假链；旧产品tui/client/@mynet插件清单由业务保留/退役矩阵决定，successor必须真实。不把已有filename精确下载修复重做一遍。
+- **D4-E 密钥权威面收敛（2026-10-13 用户点名「这才是问题」）**：四条密钥路径三个面并存——①online 面 `conf/online/<t>/nodes/<id>/keys/node.private` 是**生成权威**（`mynet/cmd_node.go:238`、`mynet/keys/nodekeys.go:50`）；②driver 面 `driver/gnb/conf/<id>/security/<id>.private` 是**消费投影**（`mynet/project_active.go:52` → `mynet/driver/gnb.go:294`，gnb 布局 128hex 是驱动事实**不动**）；③local 面 `conf/local/keys/`（local 模式专用，`mynet/cmd_refresh.go:153`）；④CLI 幻影路径（`MYNET_HOME` 未设按 exe 树落 prefix `/opt/mynet` + 模式判错报 local 而实际 online，`mynet/setup_v2.go:185`），叠加 prefix(/opt/mynet) vs home(/var/lib/mynet) 双树。治理候选：status 显式区分「权威/投影」两行、home 解析兜底到 mode.json 所在树、`config keys` 的 keys_dir 跟实际模式走；附带小修 state/last-good 快照自清（只留 N 份或快照不落 security/，12 天长 55 份私钥副本，2026-10-13 已手工清到 1 份）。
 
 **迁移/回滚**：只生成本地迁移/DDL与重复件预检，不实施生产；明确旧rows kind回填来源、唯一键冲突、未知ext、latest维度、降级回滚可保留双kind数据的方式。迁移前备份/验证清单，冲突停止；已有生产数据不得自动去重删除。文件SHA、版本与来源固定；旧下载URL保持filename精确身份。
 
