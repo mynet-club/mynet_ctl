@@ -371,3 +371,19 @@ api Default：**511 tests / 4875 assertions / 1 skip**。
 | 全量测试 | `mynet`+`mynetd`+`shared` 全绿 |
 
 未在 Mac 装 launchd/托盘服务（避免改本机运行态）；.dmg/.pkg 装机链待发布窗口。
+
+## Mac launchd 服务态验收（2026-10-13）
+
+**未重装/未卸载在跑服务**（node RUNNING · utun4 · 对端 23/23，动它会断业务）。
+
+| 项 | 结果 |
+|---|---|
+| LaunchDaemon `com.mynet.mynetd` | running（pid 556，`/opt/mynet/bin/mynetd -listen 127.0.0.1:8096`，KeepAlive） |
+| LaunchAgent `club.mynet.tray` | running（pid 764，KeepAlive=false） |
+| localapi `/api/v1/status` | `{role: transport-only, listen: 127.0.0.1:8096}` |
+| `/api/v1/node-status` | **RUNNING** · utun4 · 10.182.236.181 · 对端 23/23 在线 |
+| Label SSOT | `com.mynet.mynetd` / `club.mynet.tray` 与 `shared/utils/service_names.go` 一致（测试 PASS） |
+| `install --dry-run` | 正确列出 plist/env/bootstrap/gnb 置备；**不执行** |
+| `uninstall --dry-run` | bootout + 删 plist；**保留** conf/var（身份密钥） |
+
+注：dry-run 前缀为 `/usr/local/opt/mynet`，实机在 `/opt/mynet`（历史安装位）；无冲突。
