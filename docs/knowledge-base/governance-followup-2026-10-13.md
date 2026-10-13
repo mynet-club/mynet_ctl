@@ -274,3 +274,14 @@ G4 全项关闭（含此前 D4-D 上传校验、filename 唯一、tui/client 退
 | 组合根传递断开 | **完成** | shared/creds + shared/proxysync；cmd/mynetd 仅剩 keys/config（GUARD-OK 组合根） |
 
 C1-02/03/04 可按契约复验后收口（归 G0/G7 销账）。
+
+## G6 完成（2026-10-13）
+
+| 项 | 状态 | 证据 |
+|---|---|---|
+| G6.a N-01 | 完成（前批） | guard 45/0 |
+| G6.b mirror | **完成** | `BootstrapMirrorTest`：401/422/production 500/404 行为 + bootstrap 源码守卫（api `775f647`） |
+| G6.c fixtures | **完成** | 双仓 `node_face_vectors.json` 同源 SHA `c9aa35e1…`；缺失硬失败；PHP sign 对齐 Go（api `fa52285`，agent `0bc4fe7`） |
+| G6.d test/tool | **完成** | 五态权限行为断言 + 删 assertTrue(true)（api `c360e83`） |
+
+api Default：**511 tests / 4875 assertions / 1 skip**。
