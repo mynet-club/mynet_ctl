@@ -2,6 +2,17 @@
 # ════════════════════════════════════════════════════════════
 # MyNet CTL 生产部署脚本
 #
+# 🔴 整仓覆盖 ≠ 日常部署（2026-10-13 对账口径，务必先读）
+#
+#   生产 /data/app/mynet.club/ctl **不是 git 检出**，代码停在 2026-03，
+#   与仓库有约 7 个月漂移（含生产侧手改与锚点补丁）。本脚本的
+#   `rsync -avz --delete` 是**整仓覆盖**：会无提示抹掉生产侧所有手改，
+#   并按 --delete 清掉仓库里没有的生产独有文件。
+#
+#   ⇒ **整仓部署是另一次独立发布**（需要真正的 3 月→10 月 diff 评审 + 单独审批），
+#     不能拿本脚本当「日常同步」随手跑。日常改生产走**锚点式补丁**
+#     （cp -a 备份 → 定点替换 → php -l 断言）。
+#
 # 用法:
 #   ./scripts/deploy/deploy.sh              # 交互式部署
 #   ./scripts/deploy/deploy.sh sync         # 仅同步代码（不重启服务）
@@ -159,6 +170,7 @@ mkdir -p "$REMOTE_DIR"/{storage/{logs,framework/{cache,sessions,views},app/{rele
 EOF
 
     log_info "rsync 同步中..."
+    log_warn "整仓覆盖 + --delete：生产侧手改与仓库没有的文件会被抹掉（见脚本头红线）"
     rsync -avz --delete \
         --exclude-from="$RSYNC_IGNORE" \
         --progress \

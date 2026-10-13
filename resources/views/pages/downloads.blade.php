@@ -11,7 +11,7 @@
 
     {{-- 产品 tab --}}
     <div class="flex gap-2 mb-8 border-b border-gray-200" id="product-tabs">
-        @foreach(['tui' => 'MyNet Client', 'gnb' => 'GNB', 'utc' => 'UTC'] as $key => $label)
+        @foreach($productLabels as $key => $label)
         <button
             data-product="{{ $key }}"
             class="product-tab px-5 py-3 text-sm font-medium border-b-2 -mb-px transition-colors
@@ -21,7 +21,7 @@
     </div>
 
     {{-- 版本列表 --}}
-    @foreach(['tui' => 'MyNet Client', 'gnb' => 'GNB', 'utc' => 'UTC'] as $productKey => $productLabel)
+    @foreach($productLabels as $productKey => $productLabel)
     <div class="product-panel {{ $productKey !== ($product ?? 'tui') ? 'hidden' : '' }}" data-product="{{ $productKey }}">
         @php $productVersions = $releases[$productKey] ?? [] @endphp
         @if(count($productVersions) === 0)

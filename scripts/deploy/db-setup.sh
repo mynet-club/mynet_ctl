@@ -84,20 +84,44 @@ create_remote_db() {
     read -rs REMOTE_DB_PASS
     echo
 
-    ssh "$REMOTE_USER@$REMOTE_HOST" << EOFDB
-mysql ${REMOTE_MYSQL_ROOT_PASS:+-p"$REMOTE_MYSQL_ROOT_PASS"} -e "
-CREATE DATABASE IF NOT EXISTS \\\`$REMOTE_DB_NAME\\\`
+    # ⚠️ 口令不上命令行（与下面 import_to_remote 同一口径）：root 口令原来是
+    # `mysql -p"..."` 上 argv（远端 ps 可见），应用口令拼进 `mysql -e` 的 SQL 文本
+    # （同样落在 argv）。现在两枚口令只经 **ssh stdin** 送进远端 0600 临时文件，
+    # mysql 走 --defaults-extra-file，SQL 走 stdin。（口令含换行会断行——别用带换行的值。）
+    printf '%s\n%s\n' "$REMOTE_MYSQL_ROOT_PASS" "$REMOTE_DB_PASS" \
+        | ssh "$REMOTE_USER@$REMOTE_HOST" 'umask 077; cat > /tmp/mynet_ctl_dbsetup_secrets'
+
+    ssh "$REMOTE_USER@$REMOTE_HOST" "REMOTE_DB_NAME=$REMOTE_DB_NAME REMOTE_DB_USER=$REMOTE_DB_USER" bash -s << 'EOFDB'
+set -e
+SECRETS=/tmp/mynet_ctl_dbsetup_secrets
+ROOT_PASS=$(sed -n '1p' "$SECRETS")
+APP_PASS=$(sed -n '2p' "$SECRETS")
+CNF=$(mktemp)
+chmod 600 "$CNF"
+trap 'rm -f "$CNF" "$SECRETS"' EXIT
+
+{
+    echo '[client]'
+    echo 'user=root'
+    printf 'password="%s"\n' "$(printf '%s' "$ROOT_PASS" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')"
+} > "$CNF"
+
+# SQL 单引号转义（' → ''）。SQL 全程走 stdin，不进任何进程 argv。
+APP_PASS_SQL=$(printf '%s' "$APP_PASS" | sed "s/'/''/g")
+
+mysql --defaults-extra-file="$CNF" << EOSQL
+CREATE DATABASE IF NOT EXISTS \`${REMOTE_DB_NAME}\`
     CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
-CREATE USER IF NOT EXISTS '$REMOTE_DB_USER'@'localhost'
-    IDENTIFIED BY '$REMOTE_DB_PASS';
+CREATE USER IF NOT EXISTS '${REMOTE_DB_USER}'@'localhost'
+    IDENTIFIED BY '${APP_PASS_SQL}';
 
-GRANT ALL PRIVILEGES ON \\\`$REMOTE_DB_NAME\\\`.* TO '$REMOTE_DB_USER'@'localhost';
+GRANT ALL PRIVILEGES ON \`${REMOTE_DB_NAME}\`.* TO '${REMOTE_DB_USER}'@'localhost';
 
 FLUSH PRIVILEGES;
 
 SELECT 'Database and user created successfully' AS result;
-"
+EOSQL
 EOFDB
 
     log_success "远程数据库 $REMOTE_DB_NAME 创建完成"
@@ -247,23 +271,35 @@ import_to_remote() {
     scp "$DUMP_FILE" "$REMOTE_USER@$REMOTE_HOST:/tmp/mynet_ctl_import_${TIMESTAMP}.sql"
 
     # 导入
-    ssh "$REMOTE_USER@$REMOTE_HOST" << EOFIMPORT
-cd $REMOTE_DIR
+    # ⚠️ 口令不上命令行（CPI-43 的远端侧同病）：原来是 `mysql -u "$DB_USER" -p"$DB_PASS"`
+    # ×2，口令经 argv 进 `ps`，生产主机任意用户可见。现在远端 mysql 一律走
+    # --defaults-extra-file（0600 临时 cnf，用完即删）；口令只经**管道**喂给 sed 转义、
+    # 不进任何进程 argv。脚本体用 `<< 'EOFIMPORT'`（不本地展开）+ 环境变量前缀传非敏感值。
+    ssh "$REMOTE_USER@$REMOTE_HOST" "REMOTE_DIR=$REMOTE_DIR TIMESTAMP=$TIMESTAMP" bash -s << 'EOFIMPORT'
+cd "$REMOTE_DIR"
 
 # 从 .env 读取数据库信息
-DB_NAME=\$(grep '^DB_DATABASE=' .env | cut -d= -f2)
-DB_USER=\$(grep '^DB_USERNAME=' .env | cut -d= -f2)
-DB_PASS=\$(grep '^DB_PASSWORD=' .env | cut -d= -f2)
+DB_NAME=$(grep '^DB_DATABASE=' .env | cut -d= -f2)
+DB_USER=$(grep '^DB_USERNAME=' .env | cut -d= -f2)
+DB_PASS=$(grep '^DB_PASSWORD=' .env | cut -d= -f2) # GUARD-OK 运行时从 .env 读口令，非硬编码（A1 撞 grep 的取值行）
 
-echo "导入到数据库: \$DB_NAME"
-mysql -u "\$DB_USER" -p"\$DB_PASS" "\$DB_NAME" < /tmp/mynet_ctl_import_${TIMESTAMP}.sql
+CNF=$(mktemp)
+chmod 600 "$CNF"
+{
+    echo '[client]'
+    printf 'user="%s"\n' "$DB_USER"
+    printf 'password="%s"\n' "$(printf '%s' "$DB_PASS" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')"
+} > "$CNF"
+
+echo "导入到数据库: $DB_NAME"
+mysql --defaults-extra-file="$CNF" "$DB_NAME" < "/tmp/mynet_ctl_import_${TIMESTAMP}.sql"
 echo "✅ 数据导入完成"
 
 # 清理临时文件
-rm -f /tmp/mynet_ctl_import_${TIMESTAMP}.sql
+rm -f "/tmp/mynet_ctl_import_${TIMESTAMP}.sql"
 
 # 统计行数
-mysql -u "\$DB_USER" -p"\$DB_PASS" "\$DB_NAME" -e "
+mysql --defaults-extra-file="$CNF" "$DB_NAME" -e "
 SELECT 'releases' AS tbl, COUNT(*) AS cnt FROM releases
 UNION ALL SELECT 'plugins', COUNT(*) FROM plugins
 UNION ALL SELECT 'scripts', COUNT(*) FROM scripts
@@ -271,6 +307,7 @@ UNION ALL SELECT 'api_tokens', COUNT(*) FROM api_tokens
 UNION ALL SELECT 'openwrt_devices', COUNT(*) FROM openwrt_devices
 UNION ALL SELECT 'openwrt_device_firmware', COUNT(*) FROM openwrt_device_firmware;
 "
+rm -f "$CNF"
 EOFIMPORT
 
     log_success "远程数据导入完成"

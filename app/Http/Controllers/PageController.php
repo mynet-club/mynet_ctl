@@ -19,28 +19,34 @@ class PageController extends Controller
 
     public function home()
     {
+        // 产品面取自 domain SSOT（ReleaseDomainService::PRODUCTS），不在控制器里另抄一份
+        // （曾硬编码 ['tui','gnb','utc'] → mynet_agent/lua/proxy 产物「上传得了、页面看不到」）。
+        $products = ReleaseDomainService::PRODUCTS;
+
         $latestReleases = [];
-        foreach (['tui', 'gnb', 'utc'] as $product) {
+        foreach (array_keys($products) as $product) {
             $r = $this->releaseService->getLatest($product, 'linux', 'amd64');
             if ($r) {
                 $latestReleases[$product] = $r;
             }
         }
 
-        return view('pages.home', compact('latestReleases'));
+        return view('pages.home', compact('latestReleases', 'products'));
     }
 
     public function downloads(Request $request)
     {
+        // 白名单与 domain SSOT 同源（同 ReleaseAdminController::store）：硬编码清单会漂。
+        $productLabels = array_map(static fn ($p) => $p['name'], ReleaseDomainService::PRODUCTS);
+
         $product = $request->query('product', 'tui');
-        $allowedProducts = ['tui', 'gnb', 'utc'];
-        if (! in_array($product, $allowedProducts)) {
-            $product = 'tui';
+        if (! array_key_exists($product, $productLabels)) {
+            $product = array_key_first($productLabels);
         }
 
         // Group flat release records by version for display
         $releases = [];
-        foreach ($allowedProducts as $p) {
+        foreach (array_keys($productLabels) as $p) {
             $flat = $this->releaseService->listByProduct($p);
             $grouped = [];
             foreach ($flat as $r) {
@@ -65,7 +71,7 @@ class PageController extends Controller
             $releases[$p] = array_values($grouped);
         }
 
-        return view('pages.downloads', compact('releases', 'product'));
+        return view('pages.downloads', compact('releases', 'product', 'productLabels'));
     }
 
     public function openwrt()

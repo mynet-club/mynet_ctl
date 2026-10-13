@@ -53,12 +53,13 @@
 <section class="max-w-6xl mx-auto px-4 sm:px-6 py-12">
     <h2 class="text-xl font-semibold text-gray-900 mb-6">最新版本</h2>
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        @foreach(['tui' => ['icon' => '💻', 'name' => 'MyNet Client', 'desc' => '终端配置工具（Linux / macOS / Windows）'],
-                  'gnb' => ['icon' => '🔗', 'name' => 'GNB', 'desc' => 'P2P 组网核心二进制'],
-                  'utc' => ['icon' => '⚡', 'name' => 'UTC', 'desc' => 'UDP→TCP 转换器 + 加速器']] as $product => $info)
+        {{-- 产品清单来自 domain SSOT（$products = ReleaseDomainService::PRODUCTS，控制器传入）；
+             图标只是展示装饰，缺省用 📦，不构成产品清单的第二份真源。 --}}
+        @php $productIcons = ['tui' => '💻', 'gnb' => '🔗', 'utc' => '⚡']; @endphp
+        @foreach($products as $product => $info)
         <div class="bg-white rounded-xl border border-gray-200 p-5 hover:border-indigo-300 transition-colors">
             <div class="flex items-center gap-3 mb-3">
-                <span class="text-2xl">{{ $info['icon'] }}</span>
+                <span class="text-2xl">{{ $productIcons[$product] ?? '📦' }}</span>
                 <div>
                     <div class="font-semibold text-gray-900">{{ $info['name'] }}</div>
                     @if(isset($latestReleases[$product]))
