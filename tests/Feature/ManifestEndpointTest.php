@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
 use Tests\CreatesCtlTables;
 use Tests\TestCase;
 
@@ -193,8 +194,8 @@ class ManifestEndpointTest extends TestCase
 
     public function test_download_serves_exact_filename(): void
     {
-        \Illuminate\Support\Facades\Storage::fake('local');
-        \Illuminate\Support\Facades\Storage::disk('local')->put('releases/gnb_linux_amd64_v1.6.0.tgz', 'TARBALL-BYTES');
+        Storage::fake('local');
+        Storage::disk('local')->put('releases/gnb_linux_amd64_v1.6.0.tgz', 'TARBALL-BYTES');
 
         $response = $this->get('/d/gnb/gnb_linux_amd64_v1.6.0.tgz');
 

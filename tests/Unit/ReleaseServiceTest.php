@@ -4,6 +4,7 @@ namespace Tests\Unit;
 
 use App\Services\Manifest\ManifestService;
 use App\Services\Release\ReleaseService;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -28,6 +29,7 @@ class ReleaseServiceTest extends TestCase
     use RefreshDatabase;
 
     private ReleaseService $service;
+
     private ManifestService $manifest;
 
     protected function setUp(): void
@@ -96,7 +98,7 @@ class ReleaseServiceTest extends TestCase
         $this->upload('mynet_agent', 'linux', 'amd64', 'v1.0.0', 'mynet_agent_linux_amd64_v1.0.0.tgz');
 
         // 同四元组、扩展名不同：不得把 tgz 的内容套 zip 文件名发出去
-        $this->expectException(\Illuminate\Database\Eloquent\ModelNotFoundException::class);
+        $this->expectException(ModelNotFoundException::class);
         $this->service->downloadByFilename('mynet_agent_linux_amd64_v1.0.0.zip', '127.0.0.1', 'phpunit');
     }
 

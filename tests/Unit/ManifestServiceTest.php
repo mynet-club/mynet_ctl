@@ -4,6 +4,7 @@ namespace Tests\Unit;
 
 use App\Services\Manifest\ManifestService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\CreatesCtlTables;
 use Tests\TestCase;
 
@@ -102,7 +103,7 @@ class ManifestServiceTest extends TestCase
     {
         // 字符串 MAX('v1.10.0','v1.9.0') = 'v1.9.0'；latest 必须版本感知
         foreach ([['v1.9.0', 'gnb_linux_armv7_v1.9.0.tgz'], ['v1.10.0', 'gnb_linux_armv7_v1.10.0.tgz']] as [$v, $fn]) {
-            \Illuminate\Support\Facades\DB::table('releases')->insert([
+            DB::table('releases')->insert([
                 'release_id' => random_int(3000, 3999),
                 'product' => 'gnb', 'version' => $v, 'platform' => 'linux', 'arch' => 'armv7',
                 'variant' => '', 'filename' => $fn, 'file_path' => "releases/{$fn}",
