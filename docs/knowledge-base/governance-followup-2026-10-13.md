@@ -27,3 +27,27 @@
 - OpenWrt `bdb2939`：节点面 API 路径映射。
 
 agent 托盘/服务名/home 与后端 `tests/TestCase.php` 在接续时有他人未提交改动，本批未碰。治理计划中的「执行中/未开始」不是上述提交是否存在的可靠依据；继续开工须核 HEAD 与工作树。
+
+## 后端 GNB CLI 假绿与私钥日志收口
+
+提交：mynet_api `873ebc9`（本地，未 push）。对应 A3 的 GnbKeyCliFallbackTest 假绿项，并新增核实私钥日志出口。
+
+- `tests/Unit/Domain/GnbKeyCliFallbackTest.php`：删除旧 workspace 绝对路径与依赖缺失 skip，直接加载生产 `config/mynet.php`（配置变量 `MYNET_GNB_CRYPTO_BIN`，默认 PATH 上 `gnb_crypto`）。原生扩展存在时直接调用 CLI 分支，仍验证回退。默认套件需要真 CLI，缺少即失败。
+- `app/Modules/VPN/Domain/Services/NodeKeyDomainService.php:523`：CLI 可执行路径作为单参数引用，支持空格路径；缺配置明确拒绝；输出必须合法 64/128 hex；成功、失败、格式异常都在 finally 清理临时私钥/公钥/目录。CLI 原始输出不进入异常与日志，仅保留退出码。
+- 同服务的 Ed25519/GNB/WireGuard 三处成功日志删除私钥预览；`NodeKeyResponseDTO::getSummary()` 删除私钥预览。新增 `NodeKeyLogSafetyTest` 用实际生成与日志事件验证 Ed25519/WireGuard 日志及 DTO 输出无私钥片段；本机无 GNB 原生扩展，该分支日志删除为代码验证，CLI 分支已真跑。
+- `TenantServiceApiTest` 的无 Accept 头请求按生产 `shouldRenderJsonWhen(api/*)` 断言 401 JSON，替换旧空正文断言。
+
+实测：真 CLI 与失败路径 **3 tests / 10 assertions**，日志事件 **1 test / 6 assertions**；全量 `make test` **497 tests / 4790 assertions / 1 skip**（既有 SQLite 并发）；guard、改动文件 Pint 与 diff 检查通过。
+
+全量测试依据为**当前工作树**，包含其他修复批尚未提交的 `tests/TestCase.php` 镜像；该文件未被本批改动或提交。401 JSON 断言依赖这份生产镜像，整批发布需一起集成，不能将此记录当作仅 `873ebc9` 干净 checkout 的全量验收。未测试或部署生产。
+
+## GUI 三层路由守卫收敛
+
+提交：mynet_gui `a874bc3`（本地，未 push）。对应 S2-15。
+
+- `src/boot/auth.ts`：恢复认证后注册唯一的 `setupRouteGuards`，不再自建 beforeEach；认证初始化失败抛出，阻止无守卫启动。
+- `src/router/middleware.ts`：读认证 store 的实时 `isAuthenticated/token`，包含过期时间与用户状态，不再以本地 token 存在作为登录依据。统一登录重定向与完整 redirect 参数、node ID 校验、页面标题；删除恒 true 的编辑权限函数，授权归后端。
+- `src/router/index.ts`/`nodeRoutes.ts`：删除重复节点守卫注册与实现，其余导航工具保留。
+- 既有 callback 白名单保留；用 URL.searchParams 设置 token，避免 fragment 吞参或旧 token 重复。外域拒绝与会话过期均由真实 memory router 导航测试覆盖。
+
+实测：新增 5 项导航测试；全量 vitest **58/58**；`make check` 通过（eslint 零错误，存量 warnings；i18n；类型棘轮 **184 未升**；guard；vitest）；SPA 正式构建通过。最后移除未用 boot 参数与 EOF 空行后 diff 检查与提交 guard 通过。构建产生的已跟踪 `.quasar/prod-spa/client-entry.js` 在提交前恢复，本批不提交生成物。**未浏览器实测、未发布**。
