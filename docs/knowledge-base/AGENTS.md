@@ -42,9 +42,15 @@ R4-1/R4-2/R4-3+G2、T3-3、C-6、F-4 共五处是纸面达成——桩代码、s
 ### 1.1 不破坏驱动的协议与目录结构
 
 gnb / wireguard 各自的协议与目录结构**不能也不打算破坏**。
-- gnb 的配置只写进 `driver/gnb/conf/<nodeId>/`；`gnb.map` 由 gnb 自己产出，**只读不搓**。
+- gnb 的配置只写进**节点唯一存放位** `conf/<form>/<nodeId>/`（**2026-10-13 D4-E 裁定**：
+  form=local|online 是获取 key 的形式，tenant 维度收进 mode.json/节点 meta，nodeID 全局唯一；
+  此前口径 `driver/gnb/conf/<nodeId>/` 随 driver/ 安装目录层退役，旧树由
+  `mynet config migrate-layout` 收口）；**协议内布局不变**——node.conf / route.conf /
+  address.conf / security/<id>.{private,public} / ed25519/*.public 仍在该目录内原样；
+  `gnb.map` 由 gnb 自己产出，**只读不搓**。
 - gnb 源码的改动走 **`git format-patch` 补丁包**（`mynet_gnb/packages/`），`src/` 保持上游原样，升级用 `rebase.sh`。
 - gnb 落盘的私钥是 `clamp(SHA512(seed))`（128 hex），公钥 64 hex——**这是驱动的事实，只能遵循**。
+  磁盘只存驱动原生密钥格式（gnb=128hex、wg=wg.conf 的 base64 44）；hex↔base64 只留 DB/上报边界。
 
 ### 1.2 mynetd 是纯通信层
 

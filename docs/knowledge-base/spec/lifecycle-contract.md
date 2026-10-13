@@ -82,7 +82,8 @@ STEPS:
   2. 预检（全部通过才装配）：二进制存在、目录可写、驱动依赖可用
   3. 建目录：home/{conf,var}（0700）
   4. 写 env（0600，不含明文凭据）
-  5. 置备驱动四件套 → home/driver/<driver>/bin（同构建配套）
+  5. 置备驱动四件套 → `<prefix>/bin`（同构建配套；2026-10-13 D4-E：driver/ 安装目录层
+     退役，gnb 四件套与 agent 同居 prefix。旧 `home/driver/<driver>/bin` 只作查找回退）
   6. 平台登记（B 层唯一 owner）：
      - linux: systemd unit + daemon-reload + enable --now
      - darwin: launchd plist + bootstrap
@@ -188,6 +189,16 @@ OpenWrt 上凡**依赖隧道接口**的动作，规则统一为：**安装期只
 | OpenWrt | `/opt/mynet`（bin 在 `sbin`） | `/etc/mynet` |
 | macOS | `/usr/local/opt/mynet` | `/var/lib/mynet` |
 | Windows | `C:\Program Files\MyNet` | `C:\ProgramData\MyNet` |
+
+**运行路径矩阵（2026-10-13 D4-E 随动）**：
+
+| 对象 | 目标位置 | 备注 |
+|---|---|---|
+| 二进制（mynet/mynetd/gnb 四件套） | `<prefix>/bin` | driver/ 安装目录层退役；旧 `home/driver/gnb/bin` 只作查找回退 |
+| 节点实体（密钥 + 驱动 conf） | `<home>/conf/<form>/<nodeId>/` | 唯一存放位；gnb 协议内布局不变 |
+| gnb `-c` 目标 | `<home>/conf/<form>/<nodeId>` | 服务单元生成面按 mode.json 解析 form+nodeId（`__GNB_CONF_REL__`） |
+| wg conf | `<home>/conf/<form>/<nodeId>/wg.conf` | setconf/syncconf 指文件；旧 `/etc/wireguard/<iface>.conf` 只作未迁移兜底 |
+| 密钥格式 | gnb=security/ 下 128/64hex 无换行；wg=wg.conf base64 44 | 磁盘只存驱动原生格式，hex↔base64 只留 DB/上报边界 |
 
 **服务登记目标矩阵**（同名对象只能有一个 owner/一条启动链）：
 

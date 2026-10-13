@@ -29,9 +29,18 @@
 
 > **定稿（2026-10-12 用户裁定）——三面职责，一个可手改面**：
 > · **`conf/` 是人/云端写意图与身份的唯一面**（`mode.json` 也在这里），格式 JSON（**密钥材料除外**，驱动要裸 hex）。
-> · **`driver/` 是投影层**：agent 的 apply 链（mynetd 触发 → `mynet apply`）落盘，**手改会被覆盖**。
+> · **驱动 conf 是 apply 投影**：agent 的 apply 链（mynetd 触发 → `mynet apply`）落盘，**手改会被覆盖**。
+>   2026-10-13 D4-E 起与密钥**同居节点目录**（`conf/<form>/<nodeId>/` 内的协议布局），`driver/` 投影树退役。
 > · **`var/` 是运行态**：同样由 agent 落盘（bundle 拉取 / detector / tunnel 状态），**不进备份、手改无意义**。
 > · **不再有 `mynetd.env`**：`MYNET_HOME` 由**服务单元的启动命令**给出（见 §2.1）。
+
+> **节点唯一存放位（2026-10-13 D4-E 裁定）**：每节点实体在 `<home>/conf/<form>/<nodeId>/`
+> （密钥 + 驱动 conf 同居一目录）。`form = local | online` 是**获取 key 的形式**（本地自产生 /
+> 在线下发），不是平行密钥面；tenant 维度收进 `mode.json`/节点 meta，**nodeID 全局唯一**（无租户层）。
+> gnb 协议内布局**不动**（node.conf / route.conf / address.conf / security/<id>.{private,public} /
+> ed25519/*.public / gnb.map 只读）；wg = `wg.conf`（驱动原生，PrivateKey base64 44）。
+> 磁盘只存驱动原生密钥格式（gnb=128hex、wg=base64 44），hex↔base64 只留 DB/上报边界。
+> 旧布局由 `mynet config migrate-layout [--dry-run]` 一次性收口（旧树改名 `.bak-<ts>` 保留）。
 
 ```text
 $MYNET_HOME/                         # Store Root（真相源根；由服务单元启动命令给出）
@@ -41,33 +50,35 @@ $MYNET_HOME/                         # Store Root（真相源根；由服务单�
 │   ├── local/                       #   本地模式
 │   │   ├── intent.json              #     抽象意图（无 gnb/wg 术语）
 │   │   ├── proxy_intent.json        #     代理意图（双轨合一后的 Local 轨）
-│   │   ├── nodes/<id>/keys/         #     节点密钥（裸材料，非 JSON；私钥 0600）
-│   │   └── plugins/<name>.json      #     插件配置
-│   └── online/<tenant>/             #   联网模式
-│       ├── profile.json             #     租户身份面（无密钥）
-│       ├── nodes/<id>/keys/
-│       └── plugins/<name>.json
-├── driver/                          # ★投影层：agent apply 写出，禁手改（改了会被覆盖）
-│   ├── gnb/
-│   │   ├── bin/                     #   gnb gnb_ctl gnb_es gnb_crypto（同套件！）
-│   │   └── conf/<nodeId>/           #   node.conf route.conf address.conf proxy.conf
-│   │       ├── security/            #   <id>.private / <id>.public
-│   │       ├── ed25519/             #   <peer>.public
-│   │       ├── gnb.map              #   ctl-block（运行态，可再生）
+│   │   ├── plugins/<name>.json      #     插件配置
+│   │   └── <nodeId>/                #     ★节点唯一存放位（D4-E）密钥 + 驱动 conf 同居
+│   │       ├── meta.json            #       身份元数据（node_id/algorithm/back_pub_hex）
+│   │       ├── security/            #       gnb：<id>.private / <id>.public（128/64hex 无换行）
+│   │       ├── ed25519/             #       gnb：<peer>.public
+│   │       ├── node.conf route.conf address.conf proxy.conf
+│   │       ├── wg.conf              #       wg：驱动原生（PrivateKey = base64 44）
+│   │       ├── gnb.map              #       ctl-block（运行态，可再生）
 │   │       └── gnb.pid
-│   └── wireguard/<nodeId>/wg0.conf
+│   └── online/<nodeId>/             #   联网模式：同构节点目录（tenant 在 mode.json）
+│       └── （profile.json 等租户面仍按 tenant 存 conf/online/<tenant>/）
 ├── plugins/                         # 插件包体（可重装）
 ├── var/                             # ★运行态，不进备份（agent 落盘）
 │   ├── system.json                  # detector 结果
 │   ├── bundle.json (+ .etag)        # 云端 envelope 拉取落盘（唯一一份，勿在 conf/ 再放）
 │   ├── tunnel-state.json
 │   ├── subject.json                 # subject 解析缓存（见 §4）
+│   ├── wg.conf                      # OpenWrt init 兼容回退位（未迁移 init）
 │   ├── run/local-api.token
 │   └── log/
 ├── state/
-│   └── last-good/<ts>/              # Apply 成功快照
+│   └── last-good/<ts>/              # Apply 成功快照（只留最近 3 份，含密钥副本须自清）
 └── backups/                         # config export/import 与升级备份
 ```
+
+**二进制安装位（D4-E：driver/ 安装目录层退役）**：gnb 四件套（gnb/gnb_ctl/gnb_es/gnb_crypto）
+与 mynet/mynetd 同居 `<prefix>/bin`（Linux `/opt/mynet/bin`、macOS `/usr/local/opt/mynet/bin`、
+Windows `C:\Program Files\MyNet\bin`、OpenWrt 按 ipk 现状）。旧 `<home>/driver/gnb/bin` 只作
+**查找回退**（存量未迁移节点），不再往那装。旧 `<home>/driver/{gnb/conf,wireguard}/` 同理只作读回退。
 
 ### 2.1 启动期取值（原 `mynetd.env` 的归宿）
 
@@ -152,7 +163,7 @@ $MYNET_HOME/                         # Store Root（真相源根；由服务单�
 
 | | **mynet 自己** | **驱动 gnb / wg** |
 |---|---|---|
-| 位置 | `conf/**`（含 `conf/mode.json`） | `driver/**` |
+| 位置 | `conf/**`（含 `conf/mode.json`） | `conf/<form>/<nodeId>/` 内的驱动原生布局（D4-E 同居；旧 `driver/**` 只读回退） |
 | 格式 | JSON schema v2（密钥材料除外） | gnb 文本 / wg INI |
 | 写入者 | 用户 / 后端 / wizard | **仅 `driver.Apply`** |
 | 手改 | 可 | **禁**（会被 apply 覆盖） |
@@ -160,7 +171,7 @@ $MYNET_HOME/                         # Store Root（真相源根；由服务单�
 
 **proxy 两层命名（易混）**：
 - `intent.listen.proxy` / `node.conf` 的 `proxy on` = GNB 数据面准出开关
-- `plugins/proxy.json` → `driver/gnb/conf/<id>/proxy.conf` = 出口选点/权重
+- `plugins/proxy.json` → `conf/<form>/<nodeId>/proxy.conf` = 出口选点/权重（D4-E 随节点目录）
 - 「开不开」与「走谁」，不是同一件事
 
 ---
@@ -170,11 +181,12 @@ $MYNET_HOME/                         # Store Root（真相源根；由服务单�
 | 进备份 | 不进备份 |
 |---|---|
 | `conf/**`（含 `conf/mode.json`） | `var/**`（运行态，agent 落盘） |
-| `state/last-good/` | `driver/**`（可再生；需要时单独打） |
+| `state/last-good/` | 旧 `driver/**` 残留（可再生；需要时单独打） |
 | `backups/` | `plugins/**` 包体（可重装） |
-| 密钥 `nodes/*/keys/` | `gnb.map` / `gnb.pid` / logs |
+| 密钥 `conf/<form>/<nodeId>/`（security/、wg.conf） | `gnb.map` / `gnb.pid` / logs |
 
-私钥备份**必须**含 `conf/**/nodes/*/keys/` 或 `driver/gnb/conf/<id>/security/`（以运行根为准）。
+私钥备份**必须**含 `conf/<form>/<nodeId>/` 的密钥面（`security/` 或 `wg.conf`，D4-E）；
+未迁移节点仍按旧口径 `conf/**/nodes/*/keys/` 或 `driver/gnb/conf/<id>/security/`（以运行根为准）。
 
 ---
 
