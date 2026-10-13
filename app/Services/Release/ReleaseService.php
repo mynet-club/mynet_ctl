@@ -38,10 +38,25 @@ class ReleaseService
         // 但运行包是 **.ipk**（原生安装包）—— 重算会把它写成 tgz（O6「显式 ipk
         // 扩展名」实测踩过）。上传件无扩展名时才回落平台默认。
         $ext = strtolower((string) $file->getClientOriginalExtension());
+        if ($ext === '') {
+            throw new RuntimeException('上传件缺少扩展名，无法判定产物类型（kind）');
+        }
+        // G4-D：未知扩展 / 空 kind 一律拒收 —— 否则会登记出 kind 空、
+        // filename 不可反解析的假件，download_url 只能落 fallback 假链。
+        $kind = $this->domain->artifactKindForExt($ext);
+        if ($kind === '') {
+            throw new RuntimeException("未知的产物扩展名 .{$ext}，仅允许 installer（exe/dmg/pkg/ipk）或 archive（tgz/zip/tar.gz）");
+        }
+
         $filename = $this->domain->generateFilename($product, $platform, $arch, $version, $ext);
 
-        // 产物类型：登记时按扩展名映射一次并落库（读取端不再运行时推断）
-        $kind = $this->domain->artifactKindForExt(pathinfo($filename, PATHINFO_EXTENSION));
+        // filename 是下载精确身份：反解析必须成功，且不得与既有件撞名
+        if (! $this->domain->parseFilename($filename)) {
+            throw new RuntimeException("生成的文件名无法反解析，拒绝登记: {$filename}");
+        }
+        if (Release::where('filename', $filename)->exists()) {
+            throw new RuntimeException("filename 已存在（精确身份唯一），拒绝重复登记: {$filename}");
+        }
         $path = "releases/{$product}/{$version}/{$filename}";
 
         $sha256 = hash_file('sha256', $file->getRealPath());
@@ -213,8 +228,8 @@ class ReleaseService
             return rtrim(config('app.url'), '/')."/d/{$name}/{$filename}";
         }
 
-        // fallback——无法解析时仍用 /d/ 前缀
-        return rtrim(config('app.url'), '/')."/d/{$filename}";
+        // G4-D：不得生成无产品前缀的假 /d/ 链 —— 解析失败是登记错误，应拒收而非落假 URL
+        throw new RuntimeException("filename 无法反解析，拒绝生成 download_url: {$filename}");
     }
 
     private function logDownload(string $type, int $resourceId, string $ip, string $userAgent): void

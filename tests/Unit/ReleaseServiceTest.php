@@ -132,6 +132,52 @@ class ReleaseServiceTest extends TestCase
 
     // -------------------------------------------------------------------------
 
+    // =========================================================================
+    // G4-D：未知扩展 / 空 kind / 重复 filename 一律拒收（不得生成假 /d/ 链）
+    // =========================================================================
+
+    public function test_upload_rejects_unknown_extension(): void
+    {
+        Storage::fake('local');
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('未知的产物扩展名');
+        $this->upload('mynet_agent', 'linux', 'amd64', 'v1.0.0', 'mynet_agent_linux_amd64_v1.0.0.rar');
+    }
+
+    public function test_upload_rejects_version_suffix_mistaken_for_ext(): void
+    {
+        // `..._v1.0.0` 无真实扩展名时 pathinfo 会把「.0」当成 ext —— 同样必须拒收
+        Storage::fake('local');
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('未知的产物扩展名');
+        $this->upload('mynet_agent', 'linux', 'amd64', 'v1.0.0', 'mynet_agent_linux_amd64_v1.0.0');
+    }
+
+    public function test_upload_rejects_truly_empty_extension(): void
+    {
+        Storage::fake('local');
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('缺少扩展名');
+        $this->upload('mynet_agent', 'linux', 'amd64', 'v1.0.0', 'bare-artifact');
+    }
+
+    public function test_upload_rejects_duplicate_filename(): void
+    {
+        Storage::fake('local');
+        $this->upload('mynet_agent', 'linux', 'amd64', 'v1.0.0', 'mynet_agent_linux_amd64_v1.0.0.tgz');
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('filename 已存在');
+        $this->upload('mynet_agent', 'linux', 'amd64', 'v1.0.0', 'mynet_agent_linux_amd64_v1.0.0.tgz');
+    }
+
+    public function test_upload_rejects_retired_product_tui(): void
+    {
+        Storage::fake('local');
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('无效的产品类型');
+        $this->upload('tui', 'linux', 'amd64', 'v1.0.0', 'mynet_linux_amd64_v1.0.0.tgz');
+    }
+
     private function upload(string $product, string $platform, string $arch, string $version, string $filename)
     {
         $file = UploadedFile::fake()->create($filename, 10);
