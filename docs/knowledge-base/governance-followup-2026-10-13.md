@@ -237,3 +237,16 @@ agent 托盘/服务名/home 与后端 `tests/TestCase.php` 在接续时有他人
 | D4-A 翻译层 | `Monitor\\Domain\\CommandVocabulary` 持有 wire 命令↔展示词；MonitorRtCmd 委托；BundleEnvelope Gnb/Wg 不改名 | api `4e730df`，Default **501/1skip** |
 
 G4 全项关闭（含此前 D4-D 上传校验、filename 唯一、tui/client 退役）。
+
+## G3 启动：G3.a 合同冻结 + G3.b 部分（2026-10-13）
+
+| 项 | 状态 | 证据 |
+|---|---|---|
+| G3.a Ops 合同 | **冻结** | `spec/mynetd-ops-contract.md`（命令面/信封/超时/B2 禁止包/违例清单） |
+| G3.b node_status | **已迁** | `mynet/node_status.go` + `mynet node-status --json`；localapi 状态壳走 Ops（agent `d8d7074`） |
+| G3.b route_query | 未迁 | 仍 exec ip/route；合同已列 `route exists` |
+| G3.b wizard 凭证 | 未迁 | `wizard.go` 仍 import `mynet`（Credential/DeviceFingerprint） |
+| G3.c B2 全量 | 未做 | `go list -deps ./cmd/mynetd` 仍见 mynet/shared/config（组合根+wizard） |
+
+注：agent 工作树另有他人未提交的「秘密不走 argv」收口（handlers/wizard），
+`TestDispatchFailureMasksArgvSecrets` 与之冲突（400 vs 500），不属本批，未覆盖。
