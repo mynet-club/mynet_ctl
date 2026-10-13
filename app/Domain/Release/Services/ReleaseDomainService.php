@@ -260,20 +260,6 @@ class ReleaseDomainService
     }
 
     /**
-     * 构建 /d/ 分发前缀的下载 URL
-     *
-     * 统一生成 /d/{displayProduct}/{filename} 格式
-     */
-    public function buildDistUrl(string $product, string $platform, string $arch, string $version, string $variant = ''): string
-    {
-        $name = $this->getProductFilenamePrefix($product);
-        $ext = $this->getDefaultExtension($platform);
-        $filename = $this->generateFilename($product, $platform, $arch, $version, $ext);
-
-        return "/d/{$name}/{$filename}";
-    }
-
-    /**
      * 比较版本号大小，返回 1/-1/0
      */
     public function compareVersions(string $a, string $b): int
