@@ -53,3 +53,71 @@ agent 托盘/服务名/home 与后端 `tests/TestCase.php` 在接续时有他人
 - 既有 callback 白名单保留；用 URL.searchParams 设置 token，避免 fragment 吞参或旧 token 重复。外域拒绝与会话过期均由真实 memory router 导航测试覆盖。
 
 实测：新增 5 项导航测试；全量 vitest **58/58**；`make check` 通过（eslint 零错误，存量 warnings；i18n；类型棘轮 **184 未升**；guard；vitest）；SPA 正式构建通过。最后移除未用 boot 参数与 EOF 空行后 diff 检查与提交 guard 通过。构建产生的已跟踪 `.quasar/prod-spa/client-entry.js` 在提交前恢复，本批不提交生成物。**未浏览器实测、未发布**。
+
+## G6.a N-01 guard C4 词法修复 + G1 第一批余留删除（2026-10-13，未提交）
+
+对应治理计划 G6.a / G1。**未 commit、未 push**；不触碰他人未提交件
+（api `tests/TestCase.php`、agent 托盘/服务名/home/handlers/wizard、web `.githooks/guard.sh`）。
+
+### G6.a N-01（guard C4 诊断乱码 → 自测 8 红）
+
+- 根因：`bad "C4 编译产物不得入库（$c4_hit）: ..."` 里 `$c4_hit` 紧贴中文全角 `）`，
+  shell 按字节解析变量名，诊断变成 `不得入库（��: app.exe`，原因丢失；
+  退出码仍正确，故不能称 C4 全失效。
+- 修法：显式变量边界 `${c4_hit}` / `${f}`（模板与各仓同一处）。
+- 同步：模板 SSOT + ctl/api/gui/agent/desktop 六份；并把模板已有的
+  `.guard-c4-allow` 持久白名单块补进上述五仓（desktop 原已一致）。
+- **保留 agent B2 有意分叉**（`mynet/(detector|tools|apply|metrics|service|keys)|shared/config|gopsutil`）。
+- web/utc/openwrt/gnb 仓副本尚无 C4 段，且 web guard 为他人未提交 —— 本批不动。
+- 实测：`sh templates/.githooks/guard_test.sh [各仓 guard.sh]`，
+  模板/ctl/api/gui/agent/desktop **均 45 通过 / 0 失败**（原样双断言：退出码 + 原因）；
+  不是把断言改窄换绿。修复前模板与 ctl 为 37/8。
+
+### G1 API（A2-05/08/12/13/15/17）
+
+| 来源 | 动作 | 证据 |
+|---|---|---|
+| A2-08 | 删 `UserService::listUsers()` | 全仓仅声明行；同类 `getUserList` 等仍有调用 |
+| A2-15 | `ApiExceptionHandler` 只留 `handleNodeException`，删 5 个零调用静态方法 | `handleDomainException/businessError/resourceNotFound/accessDenied/validationFailed` 全仓 0 调用（`NodeException::accessDenied` 是另一类） |
+| A2-12 | 删 `config/logging.php` 的 `admin` 通道 | 仅定义，无 `Log::channel('admin')` |
+| A2-13 | 删 `config/mynet.php` 的 `tenant_isolation_enabled` | 仅定义，零读取 |
+| A2-17 | 删 `app/helpers.php` 的 `current_tenant_id()`/`with_tenant_id()` | 零调用；且 `env('DEFAULT_TENANT_ID',1)` 会静默落租户 1。`term_zone()` 保留（有调用） |
+| A2-05 | 删空目录 `database/factories`、`lang`；composer 去掉 `Database\Factories\` autoload | `find -type d -empty` 仅此二处；app/database 等历史空目录已不在 |
+
+实测：`php vendor/bin/phpunit --testsuite Default` → **497 tests / 4790 assertions / 1 skip**（原样绿）。
+
+### G1 GUI（C2-08 + `.quasar` + public 测试 HTML）
+
+| 项 | 动作 | 证据 |
+|---|---|---|
+| C2-08 | 删 `getDashboardData` + `mockApiResponse` + `mockData.ts` 整文件 | mock 栈仅 api.ts 自用；`useDashboard`/`DashboardPage` 走真数据，不删 |
+| 生成物 | `git rm -r --cached .quasar front/.quasar`，`.gitignore` 加两行 | 24 个生成文件出索引；`npm ci→quasar prepare` 可重建 |
+| 测试 HTML | `public/{network-config-test,test-boot,time-test}.html` → `dev-tests/html/` | 生产 `public/` 只剩 docs/favicon/icons |
+
+实测：`npm run test:unit` **58/58**；`check:types` 棘轮 **184 未升**；`check:i18n` 通过。
+
+### G1 ctl（C3-06/07）
+
+- 删 `scripts/verify-endpoints.php`（全仓零消费者，校验的是已下线 URL）。
+- 删 `ReleaseDomainService::buildDistUrl`（零调用；`ScriptService::buildDistUrl` 是同名异物，保留）。
+- **不删** ReleaseService 上传/ext 与坏 URL fallback（活功能，归 G4）。
+- 实测：`php vendor/bin/phpunit` → **73 tests / 513 assertions / 1 skip**。
+
+### G1 OpenWrt（C3-18）
+
+- 删 `scripts/shell/heartbeat.sh` 与 Makefile 安装行（无人调度；postinst/prerm 从不写 cron）。
+- **保留** postinst/prerm 的 `sed -i '/mynet-heartbeat/d'` 旧 cron 清理迁移。
+- 实测：`sh .githooks/guard.sh` 通过。
+
+### G1 agent（C1-14 收口）
+
+- 删 `cmd/keyprove`（头注释自述「实验」，Makefile/测试/脚本零引用；历史仅 archive 报告提及）。
+- 保留 `mynet/keys/genvec` 并注明为 **NodeFace 联测向量生成器**（产出 `testdata/node_face_vectors.json`，供 `node_face_vector_test.go`）；删空壳 `rfc_check.go`（`//go:build ignore` 空文件）。
+- 实测：`go test ./mynet/keys/ ./mynet/ ./shared/utils/` 全绿。
+
+### 本批未做 / 阻断
+
+- 未提交未推送（等确认后按仓小提交）。
+- 未碰 G0 的 69 组「已提交待复验」逐项销账（体量大，另开批）。
+- G2/G4 需用户裁决；web guard、api TestCase、agent 生命周期批仍为他人未提交。
+- openwrt `make guard` 需 SDK `package.mk`，本机只跑了 `.githooks/guard.sh`。
