@@ -13,23 +13,23 @@
 
 ## 当前基线（本地提交取证，非本轮测试或线上验收）
 
-**2026-10-13 刷新（G1-d 治理批实测；G1-a/b/c 批并行进行中，其未提交改动如实记）**：
+**2026-10-13 刷新（G6.a N-01 + G1 第一批删除 + G0 已提交待复验抽查）**：
 
 | 项目 | HEAD | 未推送 | 工作树 | 最新事实 |
 |---|---|---|---|---|
-| mynet_agent | ceb1a5f（10-12） | 0 | **8 项未提交**（G1-c 清理批进行中，非本轮） | UCI include 用命名段（fw4 不认 name option）；G1-c 批未提交 |
-| mynet_api | 5a1f4b5（10-13） | 0 | 干净 | pint 格式收尾；G1-a 清理批并行 |
-| mynet_ctl | aa7a54a（10-13） | 1（含本表的文档批提交后为 2） | 知识库文档批（本表）+ **审计依据文件未入库**（`docs/knowledge-base/audit-2026-10-13*`、`governance-plan-2026-10-13.md`，冻结件） | G1-d：下载页产品面改 SSOT 派生（+4 测试）、删零消费者 `scripts/install.sh`/`upgrade.sh`、db-setup 口令下命令行、deploy.sh 整仓覆盖警示；B2 文档漂移 16+ 条修正 |
-| mynet_gui | 0dfd6f2（10-13） | 7 | 干净 | G1-b 清理批提交中 |
-| mynet_desktop | 786d9ca（10-11） | 0 | 干净 | ctl 每 platform+arch 只发一件（dmg+pkg 撞 500 已修） |
-| mynet_openwrt | 62911e6（10-13） | 2 | 干净 | G1-d：删 guest.htm.bak、O0 矩阵命名批；route.conf 注入退役归 G3 两侧行动 |
-| mynet_gnb | 8734260（10-04） | **2** | 裸仓（工作树 `.wt/gnb-actions`） | 两条未推送全是 guard 模板同步 |
+| mynet_agent | 9d5bf96（10-13） | 8 | **13 项未提交**（托盘/服务名/home/handlers/wizard 等，他人进行中） | N-01 guard 45/0；删 keyprove、genvec 标向量生成器；私钥 stdin/argv 四出口测试 PASS |
+| mynet_api | dc7a73a（10-13） | 15 | **1 项他人未提交（`tests/TestCase.php`）** | N-01 guard；G1 删 listUsers/死异常助手/admin 日志/tenant_isolation/危险租户 helper；Default **497/1skip** |
+| mynet_ctl | 93d10a4（10-13） | 3 | （本表刷新） | N-01 模板+仓 guard；G1 删 verify-endpoints/buildDistUrl；Release 往返 **65/65**；G0 销账证据在 followup |
+| mynet_gui | 7a94309（10-13） | 13 | 干净 | N-01；G1 删 mock 栈、`.quasar` 出索引、测试 HTML→dev-tests；vitest **58/58**，类型棘轮 184 未升 |
+| mynet_desktop | 34a6ce5（10-13） | 2 | 干净 | N-01 guard 与模板一致 |
+| mynet_openwrt | 088cb71（10-13） | 5 | 干净 | G1 删 heartbeat.sh+安装行，保留旧 cron 清理；guard 过 |
+| mynet_gnb | 8734260（10-04） | **2** | 裸仓（工作树 `.wt/gnb-actions`） | 两条未推送全是 guard 模板同步；无 C4 段待同步 |
 | mynet_utc | 79443b6（10-04） | 1 | **7 项未提交**（gateway_session 进行中，不属本轮） | 搁置口径不变；工作树另有他人进行中变更 |
-| mynet_web | dc3ad08（10-04） | 1 | **1 项他人未提交改动（`.githooks/guard.sh`）** | 本轮不动 web（他人在改） |
+| mynet_web | dc3ad08（10-04） | 1 | **1 项他人未提交改动（`.githooks/guard.sh`）** | 本轮不动 web（他人在改）；无 C4 段 |
 
-上表取自 `git log`/`git status` 实测（2026-10-13）。**mynet_gnb 是裸仓**（工作树 `.wt/gnb-actions`）。
-未推送口径 = `git log --branches --not --remotes`。G1-a/b/c 三个清理批并行进行中，
-其未提交/未推送量会继续变化，**读表先重跑 `git status`**。
+上表取自 `git log`/`git status` 实测（2026-10-13 本批提交后）。**mynet_gnb 是裸仓**。
+未推送口径 = `git log --branches --not --remotes`。他人未提交件（api TestCase、
+agent 托盘/服务名/wizard、web guard）**不得覆盖**；读表先重跑 `git status`。
 
 **本机测试（2026-10-10）**：api `make test`（=`--testsuite Default`）**471 tests / 4690
 assertions / 1 skip**（skip = sqlite 并发，需 MySQL 双连接）、`make test-mysql` **172 passed /

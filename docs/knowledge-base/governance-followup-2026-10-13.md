@@ -121,3 +121,62 @@ agent 托盘/服务名/home 与后端 `tests/TestCase.php` 在接续时有他人
 - 未碰 G0 的 69 组「已提交待复验」逐项销账（体量大，另开批）。
 - G2/G4 需用户裁决；web guard、api TestCase、agent 生命周期批仍为他人未提交。
 - openwrt `make guard` 需 SDK `package.mk`，本机只跑了 `.githooks/guard.sh`。
+
+## G0 已提交待复验 —— 文件/符号/行为抽查销账（2026-10-13，未提交）
+
+对 §5 G0 的 69 组「已提交待复验」按**提交簇**做覆盖核对（不只看 commit 标题），
+并对治理计划 G0「必须验证」行为面实跑。**一组多对象逐一对上**的以符号/文件清单为准。
+
+### 提交簇覆盖核对（样本穷尽关键对象）
+
+| 提交簇 | 组 | 核对结论（file:line / 实测） |
+|---|---|---|
+| api d73962f | A1-01, A2-07 | `GET /users`/`users/search` 已下架（`VPN/Routes/api.php:230` 注释+route:list 无 URI）；onboarding 仍在 → 按计划留 G2 |
+| api 51498f6 | A1-08 | 域异常统一为 `App\Modules\VPN\Domain\Exceptions\DomainException`（`DomainException.php:22`）；SPL 混用消失 |
+| api 8c1fa4b | A1-09 | `NodeController::keysResponsePayload()`（:966-976）白名单仅 node_id/public_key/key_type/algorithm/generated_at；mail_data/User 不进响应 |
+| api 1564646 | A1-10/11/13 | 原 26 死类清单抽 16 个全部 gone；原 30 死方法（NodeMonitor/NodeConfig/NodeController×8/Route×4）全部 gone；**保留** `getRouterKeys`（live，G0 明示）与 `TenantServiceController::getIndexServices`（`Routes/api.php:192`） |
+| api 74e534f | A2-01 | `app/Services/stubs/` 仅剩 `ToolDtoPlaceholder.php`；MailTemplateService/AuditService 垫片与 composer files 声明已删 |
+| api ae39804/873ebc9 | A2-02 | `config/mynet.php:55` `gnb_crypto_bin` + `NodeKeyDomainService.php:525-527` 只认配置路径 |
+| api c159c2c | A2-03 | `config/cors.php:16-17` 显式空赋值拒绝，不再 `? explode : ['*']` |
+| api 4881f91 | A2-04/06/09/10/11/14 | stubs/cache 产物/dup 配置清理后与上述一致；composer 仅留 ToolDtoPlaceholder |
+| api 110f1d8 | A3-03 | （测试面）create/update 成功断言不再接受 500 —— Default 套件 497 绿 |
+| api 993b475 | A3-04 | MariaDB 方言说明保留；**未**据此宣称 MariaDB 行为已验 |
+| openwrt bdb2939 | B1-03 | Lua 仍有 v1 path（`api.lua:153/188/209`）与 HMAC（`system.lua:698-703`）；HMAC/回执**实链仍归 G5** |
+| gui 6678e11 | B1-07/08, C2-05/09 | middleware 导航测试 5/5；登出链路仍在（真能力）；旧 `monitor/heartbeat` 用户面调用 0 |
+| api c1e8fff | B1-09 | `HeartbeatRequest.php:70-90` 复数 `vpn_interfaces` 标准注释；`HeartbeatVpnInterfacesTest` 覆盖「非仅 [0]」 |
+| ctl 621a8a9 + agent 370b26d | B2-03…26, C1-18, B2-21…26 | 文档/台账归位提交（ctl 20+ kb 文件 + agent playbook）；B2 逐条正文核对仍属 G7 收口，本批只核提交文件覆盖 |
+| agent 9525391 | C1-01 | `cmd_config_face_keys_test.go`：stdin 读入 / argv 保留 / 缺 private 报错 / 空 stdin 报错 **四出口全 PASS**；`cmd_config_face.go:431-433` 红线注释在 |
+| agent 9a578a6 | C1-05/07 | OpenWrt 去 embed、webui.html 出产物（desktop 4ef90c3 口径一致） |
+| agent ee83dd9 | C1-09 | 后端路径修正；**缺仓失败语义**仍未行为验收（不把 grep 当完成） |
+| agent 44339e1 | C1-12 | shared/errors 删除（与本批 G1 删 keyprove 同类） |
+| gui 0235888 | C2-02/07/11 | `src/pages` 无 debug 页；A1-07 旧心跳封装 0 |
+| gui 8e623fe | C2-03 | deploy-target 单源；**未**做生产回滚实测 |
+| gui 371edbd | C2-06/10 | 孤儿/推荐残骸删除；类型棘轮 184 未升 |
+| gui e08ad98 | C2-12/13/14/18 | useCache/空文件/testData/middleware 死后半/barrel 清理（全量 vitest 58/58） |
+| ctl 50f398b | C3-01/02/04/10 | `ReleaseFilenameTest`+`ReleaseServiceTest`+`ManifestServiceTest`+`ReleaseDownloadRouteTest` 等 **65 tests / 489 assertions 全绿** |
+| ctl aa7a54a | C3-05/09/12 | 旧脚本删、公开产品面派生、远端口令 defaults-file（ctl 73 绿） |
+| ctl b8fc68a | C3-19 | guest.htm.bak 删除 |
+
+### G0「必须验证」行为面实跑
+
+| 面 | 结果 |
+|---|---|
+| 后端全局中间件/异常渲染/租户 | `bootstrap/app.php:40-108` prepend/append/redirectGuestsTo(null)/shouldRenderJsonWhen + renderable；`tests/TestCase.php` 仍镜像（他人未提交件，只读核对） |
+| GUI 守卫 | `src/router/__tests__/middleware.test.ts` **5/5**；全量 vitest **58/58** |
+| agent 私钥 stdin/argv 失败出口 | `TestParseKeysSetArgsStdin/DirectFlag/MissingPrivate/EmptyStdin` + `TestKeysSet*` **全 PASS** |
+| ctl filename/kind/版本 roundtrip | filter Release/Filename/Kind/Manifest **65/65** |
+| OpenWrt v1 路径与剩余 Lua | 14 个 Lua 在；v1 URL/HMAC 注释与调用点在。**Lua5.1 设备验收 / HMAC 实链未做**（归 G5） |
+
+### 保留理由（G0 明示，不删）
+
+- `POST /nodes/{id}/router-keys`（`NodeController::getRouterKeys:816`）— live 消费者。
+- GUI avatar/me/url 与 config-bundle 后端 v2 — 旧 bundle 待消费者全迁后删（G2）。
+- onboarding PUT 假持久化 — 归 G2 裁决，不在 G0/G1 删。
+
+### G0 仍未销账 / 下批
+
+- B2 26 组文档**逐条**正文核对（本批只核提交文件覆盖）→ G7。
+- A3-01/02、C1-06/11「进行中未提交」（TestCase、托盘/SCM/label/home）— 等其批集成后复验。
+- A2-22 待核实、B2-02 待修复、C3-16 部分修复 — 不在已提交待复验集。
+- C1-09 缺仓失败语义、C2-03 生产回滚、B1-03 HMAC 实链、OpenWrt Lua5.1 — 明确未验，不冒充绿。
+- project-memory HEAD 表需在下一批收口时与当前 worktree 对齐刷新。
