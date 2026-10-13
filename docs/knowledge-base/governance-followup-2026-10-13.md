@@ -344,3 +344,18 @@ api Default：**511 tests / 4875 assertions / 1 skip**。
 | B2-26 | **成立已修**：project-memory 无「已被取代」补丁句式 |
 
 **CPI-76** 本批已修并移「已修复」；**CPI-71** 仅签名/部分 Ops 仍开；**CPI-80** 仍开（Windows 真机）。
+
+## 清零收尾（2026-10-13）
+
+| 项 | 状态 |
+|---|---|
+| C1-09 security_audit 缺仓 | **已修**：必需路径缺失 exit 1，消假绿（agent `2978c5a`） |
+| CPI-71 本地合同 | **已锁**：Ops 超时/非零/坏JSON/部分状态/秘密 argv 测试（agent `9158705`） |
+| openwrt/utc guard C4+A3 | **已同步**，自测 45/0 |
+| C1-02/03/04 | 台账已标「已验证本地」 |
+
+### 仅剩（非代码可清）
+
+1. 生产发布/上线 smoke —— 用户窗口（`deploy.sh plan` 已备）
+2. 实机（OpenWrt/Windows）—— CPI-71 端到端、CPI-80 Wintun
+3. 他人未提交件 —— api TestCase、agent 托盘、web guard
