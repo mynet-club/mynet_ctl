@@ -91,24 +91,30 @@ class ReleaseService
                 'status' => 1,
             ]);
 
-            $this->refreshLatestFlag($product, $platform, $arch, $variant);
+            $this->refreshLatestFlag($product, $platform, $arch, $variant, $kind);
         });
 
         return $release;
     }
 
     /**
-     * 查询最新稳定版（按 product + platform + arch）
+     * 查询最新稳定版（按 product + platform + arch [+ variant + kind]）。
+     *
+     * D4-B：kind 可选 —— installer 给装机页，archive 给 mynet update；
+     * 不传 kind 时取时间最新的一件（兼容旧调用）。
      */
-    public function getLatest(string $product, string $platform, string $arch, string $variant = ''): ?Release
+    public function getLatest(string $product, string $platform, string $arch, string $variant = '', string $kind = ''): ?Release
     {
-        return Release::active()->stable()
+        $q = Release::active()->stable()
             ->where('product', $product)
             ->where('platform', $platform)
             ->where('arch', $arch)
-            ->where('variant', $variant)
-            ->orderByDesc('created_at')
-            ->first();
+            ->where('variant', $variant);
+        if ($kind !== '') {
+            $q->where('kind', $kind);
+        }
+
+        return $q->orderByDesc('created_at')->orderByDesc('id')->first();
     }
 
     /**
@@ -187,28 +193,25 @@ class ReleaseService
     }
 
     /**
-     * 刷新 is_latest 标记：同 product+platform+arch+variant 下，只有最新版 = 1
+     * 刷新 is_latest：同 (product, platform, arch, variant, **kind**) 各自最新 = 1。
+     *
+     * D4-B 双件：installer 与 archive 各有一条 is_latest，互不覆盖。
      */
-    private function refreshLatestFlag(string $product, string $platform, string $arch, string $variant): void
+    private function refreshLatestFlag(string $product, string $platform, string $arch, string $variant, string $kind = ''): void
     {
-        $latest = Release::active()->stable()
+        $base = Release::active()->stable()
             ->where('product', $product)
             ->where('platform', $platform)
             ->where('arch', $arch)
             ->where('variant', $variant)
-            ->orderByDesc('created_at')
-            ->first();
+            ->when($kind !== '', fn ($q) => $q->where('kind', $kind));
 
+        $latest = (clone $base)->orderByDesc('created_at')->orderByDesc('id')->first();
         if (! $latest) {
             return;
         }
 
-        Release::where('product', $product)
-            ->where('platform', $platform)
-            ->where('arch', $arch)
-            ->where('variant', $variant)
-            ->update(['is_latest' => 0]);
-
+        (clone $base)->update(['is_latest' => 0]);
         Release::where('id', $latest->id)->update(['is_latest' => 1]);
     }
 

@@ -38,7 +38,9 @@ trait CreatesCtlTables
             uploaded_by INTEGER NULL,
             status INTEGER NOT NULL DEFAULT 1,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            -- D4-B：同 tuple 可并存 installer + archive（filename 仍是下载精确身份）
+            UNIQUE(product, version, platform, arch, variant, kind)
         )');
 
         DB::statement('CREATE TABLE IF NOT EXISTS plugins (

@@ -178,6 +178,68 @@ class ReleaseServiceTest extends TestCase
         $this->upload('tui', 'linux', 'amd64', 'v1.0.0', 'mynet_linux_amd64_v1.0.0.tgz');
     }
 
+    // =========================================================================
+    // D4-B 双件：同 tuple 可并存 installer + archive，is_latest 各记各的
+    // =========================================================================
+
+    public function test_same_tuple_accepts_installer_and_archive(): void
+    {
+        Storage::fake('local');
+        $exe = $this->upload('mynet_agent', 'windows', 'amd64', 'v1.2.0', 'mynet_agent_windows_amd64_v1.2.0.exe');
+        $zip = $this->upload('mynet_agent', 'windows', 'amd64', 'v1.2.0', 'mynet_agent_windows_amd64_v1.2.0.zip');
+
+        $this->assertSame('installer', $exe->kind);
+        $this->assertSame('archive', $zip->kind);
+        $this->assertNotSame($exe->filename, $zip->filename);
+    }
+
+    public function test_get_latest_filters_by_kind(): void
+    {
+        Storage::fake('local');
+        $this->upload('mynet_agent', 'darwin', 'arm64', 'v1.2.0', 'mynet_agent_darwin_arm64_v1.2.0.dmg');
+        $this->upload('mynet_agent', 'darwin', 'arm64', 'v1.2.0', 'mynet_agent_darwin_arm64_v1.2.0.tgz');
+
+        $installer = $this->service->getLatest('mynet_agent', 'darwin', 'arm64', '', 'installer');
+        $archive = $this->service->getLatest('mynet_agent', 'darwin', 'arm64', '', 'archive');
+        $any = $this->service->getLatest('mynet_agent', 'darwin', 'arm64');
+
+        $this->assertSame('installer', $installer->kind);
+        $this->assertSame('mynet_agent_darwin_arm64_v1.2.0.dmg', $installer->filename);
+        $this->assertSame('archive', $archive->kind);
+        $this->assertSame('mynet_agent_darwin_arm64_v1.2.0.tgz', $archive->filename);
+        $this->assertNotNull($any);
+    }
+
+    public function test_is_latest_is_per_kind(): void
+    {
+        Storage::fake('local');
+        $this->upload('mynet_agent', 'windows', 'amd64', 'v1.2.0', 'mynet_agent_windows_amd64_v1.2.0.exe');
+        $this->upload('mynet_agent', 'windows', 'amd64', 'v1.2.0', 'mynet_agent_windows_amd64_v1.2.0.zip');
+
+        $installer = $this->service->getLatest('mynet_agent', 'windows', 'amd64', '', 'installer');
+        $archive = $this->service->getLatest('mynet_agent', 'windows', 'amd64', '', 'archive');
+        $this->assertTrue((bool) $installer->is_latest);
+        $this->assertTrue((bool) $archive->is_latest);
+    }
+
+    public function test_newer_version_marks_both_kinds_latest(): void
+    {
+        Storage::fake('local');
+        $this->upload('mynet_agent', 'windows', 'amd64', 'v1.2.0', 'mynet_agent_windows_amd64_v1.2.0.exe');
+        $this->upload('mynet_agent', 'windows', 'amd64', 'v1.2.0', 'mynet_agent_windows_amd64_v1.2.0.zip');
+        $this->upload('mynet_agent', 'windows', 'amd64', 'v1.3.0', 'mynet_agent_windows_amd64_v1.3.0.exe');
+        $this->upload('mynet_agent', 'windows', 'amd64', 'v1.3.0', 'mynet_agent_windows_amd64_v1.3.0.zip');
+
+        $old = \App\Models\Release::where('version', 'v1.2.0')->get();
+        foreach ($old as $row) {
+            $this->assertFalse((bool) $row->is_latest, "v1.2.0 {$row->kind} 不应再是 latest");
+        }
+        $new = \App\Models\Release::where('version', 'v1.3.0')->get();
+        foreach ($new as $row) {
+            $this->assertTrue((bool) $row->is_latest, "v1.3.0 {$row->kind} 应是 latest");
+        }
+    }
+
     private function upload(string $product, string $platform, string $arch, string $version, string $filename)
     {
         $file = UploadedFile::fake()->create($filename, 10);
