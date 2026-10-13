@@ -228,3 +228,12 @@ agent 托盘/服务名/home 与后端 `tests/TestCase.php` 在接续时有他人
 1. D4-B：同 tuple 两 kind 上传→manifest→精确下载→checksum；ctl 唯一键/查询支持双件；重复件预检 DDL（不实施生产）。
 2. D4-A：业务命令词表→驱动字段翻译层（双侧 fixtures/schema/兼容窗口）。
 3. G3 mynetd 边界、G6.b/c/d、G7 收口。
+
+## G4 完成（D4-A 翻译层 + D4-B 双件，2026-10-13）
+
+| 项 | 落地 | 证据 |
+|---|---|---|
+| D4-B 双件 | releases 唯一键 +kind；is_latest 按 (tuple,kind)；getLatest 可滤 kind | ctl `c3e2850`，82 tests；迁移 `2026_10_13_000001_releases_unique_key_include_kind.php` 只生成 DDL 不上生产 |
+| D4-A 翻译层 | `Monitor\\Domain\\CommandVocabulary` 持有 wire 命令↔展示词；MonitorRtCmd 委托；BundleEnvelope Gnb/Wg 不改名 | api `4e730df`，Default **501/1skip** |
+
+G4 全项关闭（含此前 D4-D 上传校验、filename 唯一、tui/client 退役）。
