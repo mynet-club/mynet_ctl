@@ -285,3 +285,13 @@ C1-02/03/04 可按契约复验后收口（归 G0/G7 销账）。
 | G6.d test/tool | **完成** | 五态权限行为断言 + 删 assertTrue(true)（api `c360e83`） |
 
 api Default：**511 tests / 4875 assertions / 1 skip**。
+
+## G5 部分完成（2026-10-13）
+
+| 项 | 状态 | 证据 |
+|---|---|---|
+| G5.a 签名合同 | **完成** | 发现 Lua 旧公钥 HMAC 与后端默认 C-2 DH+HMAC 分叉；`mynet nodeface sign` + `util.nodeface_sign` 薄桥（agent `49340c0`，openwrt `b627819`）；local_config_test PASS |
+| G5.b init 单源 | **已核** | 包不写 init，`mynet install` 从 agent 内嵌 `openwrt_mynet*.init` 写出 |
+| G5.b guest 路由 writer | **未迁** | `guest.lua` 仍写 route.conf；历史 marker 过滤保留 |
+| G5.c deploy plan | **完成** | `deploy.sh plan` 审查清单（ctl `afcf4e8`）；不连生产 |
+| Lua5.1 / 实机 | **未做** | 本机仅 lua 语法 + local_config_test；实机归用户窗口 |
