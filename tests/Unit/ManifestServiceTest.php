@@ -98,6 +98,24 @@ class ManifestServiceTest extends TestCase
         }
     }
 
+    public function test_apps_index_latest_is_version_aware_not_string_max(): void
+    {
+        // 字符串 MAX('v1.10.0','v1.9.0') = 'v1.9.0'；latest 必须版本感知
+        foreach ([['v1.9.0', 'gnb_linux_armv7_v1.9.0.tgz'], ['v1.10.0', 'gnb_linux_armv7_v1.10.0.tgz']] as [$v, $fn]) {
+            \Illuminate\Support\Facades\DB::table('releases')->insert([
+                'release_id' => random_int(3000, 3999),
+                'product' => 'gnb', 'version' => $v, 'platform' => 'linux', 'arch' => 'armv7',
+                'variant' => '', 'filename' => $fn, 'file_path' => "releases/{$fn}",
+                'file_size' => 100, 'sha256' => str_repeat('f', 64), 'download_url' => '',
+                'is_stable' => 1, 'is_latest' => 0, 'status' => 1,
+                'created_at' => now(), 'updated_at' => now(),
+            ]);
+        }
+
+        $result = $this->service->getAppsIndex();
+        $this->assertSame('v1.10.0', $result['products']['gnb']['latest']);
+    }
+
     // =========================================================================
     // getManifest
     // =========================================================================

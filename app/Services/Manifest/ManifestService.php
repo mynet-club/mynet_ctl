@@ -73,11 +73,16 @@ class ManifestService
         $productDefs = ReleaseDomainService::PRODUCTS;
 
         // 获取所有有效产品及其最新版本
-        $latestVersions = Release::where('status', 1)
-            ->selectRaw('product, MAX(version) as latest_version')
-            ->groupBy('product')
-            ->pluck('latest_version', 'product')
-            ->all();
+        // ⚠️ 版本比较必须**版本感知**：SQL MAX(version) 是字符串比较，
+        // v10 恒小于 v9、v1.6.0.a 与 v1.6.0 序错，latest 会指错版本。
+        $domain = new ReleaseDomainService;
+        $latestVersions = [];
+        foreach (Release::where('status', 1)->select('product', 'version')->get() as $row) {
+            $current = $latestVersions[$row->product] ?? null;
+            if ($current === null || $domain->compareVersions($row->version, $current) > 0) {
+                $latestVersions[$row->product] = $row->version;
+            }
+        }
 
         // === v1 扁平格式（向后兼容） ===
         $apps = [];
@@ -267,8 +272,12 @@ class ManifestService
                 $ext = pathinfo($release->filename, PATHINFO_EXTENSION) ?: 'tgz';
 
                 // 统一使用 /d/ 分发路径
+                // ⚠️ URL 的文件名必须用**落库的 filename**（含真实扩展名）：
+                // generateFilename 不传 ext 会落平台默认 tgz/zip，非默认 ext 的产物
+                // （ipk/exe/dmg/pkg）url 就指向一个不存在的假文件名，取 url 即恒 404。
                 $displayName = (new ReleaseDomainService)->getProductFilenamePrefix($internalProduct);
-                $dlFilename = (new ReleaseDomainService)->generateFilename($internalProduct, $release->platform, $release->arch, $release->version);
+                $dlFilename = $release->filename
+                    ?: (new ReleaseDomainService)->generateFilename($internalProduct, $release->platform, $release->arch, $release->version, $ext);
                 $url = rtrim(config('app.url'), '/')."/d/{$displayName}/{$dlFilename}";
 
                 $artifacts[] = [

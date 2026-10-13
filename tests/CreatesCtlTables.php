@@ -5,8 +5,13 @@ namespace Tests;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Creates the core CTL tables (releases, plugins, scripts, api_tokens)
- * in the SQLite test database. These tables don't have Laravel migrations.
+ * Creates the core CTL tables (releases, plugins) in the SQLite test database.
+ *
+ * ⚠️ 与 database/migrations 的建表**必须同列**（CPI-47 家族：测试态/生产态
+ * schema 静默分叉）。当前测试套件跑 `RefreshDatabase`，迁移先建表、这里的
+ * `IF NOT EXISTS` 实际是兜底；但一旦有测试不跑迁移，本 trait 就是唯一 schema
+ * 来源 —— 列漂移会在这里埋雷（2026-10-10 迁移给 releases 加了 kind，
+ * 这里一度没跟）。
  */
 trait CreatesCtlTables
 {
@@ -20,6 +25,7 @@ trait CreatesCtlTables
             platform VARCHAR(32) NOT NULL,
             arch VARCHAR(32) NOT NULL,
             variant VARCHAR(32) NOT NULL DEFAULT "",
+            kind VARCHAR(16) NULL,
             filename VARCHAR(255) NOT NULL,
             file_path VARCHAR(512) NOT NULL,
             file_size INTEGER NOT NULL DEFAULT 0,

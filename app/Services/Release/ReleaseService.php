@@ -123,15 +123,17 @@ class ReleaseService
     }
 
     /**
-     * 按文件名属性查找并返回文件绝对路径（用于 /d/ 下载路由）
+     * 按文件名精确查找并返回文件绝对路径（用于 /d/ 下载路由）
+     *
+     * ⚠️ 必须按 filename 精确匹配：早先按 (product,platform,arch,version)
+     * 四元组 first() 取件，忽略 filename/ext/variant —— 同版本多容器
+     * （windows zip 归档 + exe 安装器、openwrt ipk + tgz）时会把 A 文件
+     * 套 B 文件名发给用户，下载计数/日志也记错行。
      */
-    public function downloadByFilename(string $product, string $platform, string $arch, string $version, string $ip, string $userAgent): string
+    public function downloadByFilename(string $filename, string $ip, string $userAgent): string
     {
         $release = Release::active()
-            ->where('product', $product)
-            ->where('platform', $platform)
-            ->where('arch', $arch)
-            ->where('version', $version)
+            ->where('filename', $filename)
             ->firstOrFail();
 
         Release::where('id', $release->id)->increment('download_cnt');

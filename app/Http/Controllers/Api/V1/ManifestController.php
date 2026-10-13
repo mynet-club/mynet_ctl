@@ -90,24 +90,20 @@ class ManifestController extends Controller
     /**
      * GET /d/{product}/{filename}
      *
-     * 静态风格的文件下载端点。从文件名解析 product/platform/arch/version，
-     * 查找对应 release 并返回二进制文件。
+     * 静态风格的文件下载端点。从文件名反解析出命名契约字段做门禁校验，
+     * 实际取件按 **filename 精确匹配**（四元组匹配会忽略 ext/variant，
+     * 同版本多容器时会发错文件）。
      *
      * 示例: /d/mynet/mynet_openwrt_mipsel_v1.4.0.tgz
      */
     public function downloadRelease(Request $request, string $product, string $filename): BinaryFileResponse
     {
-        $parsed = $this->domainService->parseFilename($filename);
-
-        if (! $parsed) {
+        if (! $this->domainService->parseFilename($filename)) {
             abort(404, 'Invalid filename format');
         }
 
         $absolutePath = $this->releaseService->downloadByFilename(
-            $parsed['product'],
-            $parsed['platform'],
-            $parsed['arch'],
-            $parsed['version'],
+            $filename,
             $request->ip(),
             $request->userAgent() ?? ''
         );

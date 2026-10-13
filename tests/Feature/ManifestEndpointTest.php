@@ -188,6 +188,30 @@ class ManifestEndpointTest extends TestCase
     }
 
     // =========================================================================
+    // /d/{product}/{filename} 下载：按 filename 精确取件
+    // =========================================================================
+
+    public function test_download_serves_exact_filename(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('local');
+        \Illuminate\Support\Facades\Storage::disk('local')->put('releases/gnb_linux_amd64_v1.6.0.tgz', 'TARBALL-BYTES');
+
+        $response = $this->get('/d/gnb/gnb_linux_amd64_v1.6.0.tgz');
+
+        $response->assertOk();
+        $this->assertStringContainsString(
+            'gnb_linux_amd64_v1.6.0.tgz',
+            (string) $response->headers->get('content-disposition')
+        );
+    }
+
+    public function test_download_rejects_same_tuple_wrong_filename(): void
+    {
+        // 同四元组但扩展名/文件名不同：不得把 tgz 的行套 .zip 文件名发出去
+        $this->get('/d/gnb/gnb_linux_amd64_v1.6.0.zip')->assertNotFound();
+    }
+
+    // =========================================================================
     // conventions.json
     // =========================================================================
 

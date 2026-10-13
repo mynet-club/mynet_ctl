@@ -47,7 +47,9 @@ class ProxyController extends Controller
         }
 
         $displayName = (new ReleaseDomainService)->getProductFilenamePrefix($release->product);
-        $dlFilename = (new ReleaseDomainService)->generateFilename($release->product, $release->platform, $release->arch, $release->version);
+        // ⚠️ 用落库 filename（含真实扩展名），generateFilename 不带 ext 会落平台默认扩展名
+        $dlFilename = $release->filename
+            ?: (new ReleaseDomainService)->generateFilename($release->product, $release->platform, $release->arch, $release->version);
         $downloadUrl = rtrim(config('app.url'), '/')."/d/{$displayName}/{$dlFilename}";
 
         return response()->json([
