@@ -263,3 +263,14 @@ G4 全项关闭（含此前 D4-D 上传校验、filename 唯一、tui/client 退
 | 秘密 argv 双层 | 已集成并测 | 400 拒直传 + 500 路径 argv 遮蔽（含工作树已有 S1 收口） |
 
 实测：`go test ./mynet/ ./mynetd/...` 全绿。
+
+## G3 完成（2026-10-13）
+
+| 项 | 状态 | 证据 |
+|---|---|---|
+| G3.a Ops 合同 | 完成 | `spec/mynetd-ops-contract.md` |
+| G3.b 系统能力迁执行器 | 完成 | node_status→mynet；route exists；凭证注入；localapi B2 CLEAN（`d8d7074`/`13749e7`） |
+| G3.c B2 守护 | **完成** | 扫 mynetd+cmd/mynetd；根 mynet/driver/upgrade/shared/config/gopsutil；变异测试 **10/0**；多 GOOS+embed 干净（`49881a6`） |
+| 组合根传递断开 | **完成** | shared/creds + shared/proxysync；cmd/mynetd 仅剩 keys/config（GUARD-OK 组合根） |
+
+C1-02/03/04 可按契约复验后收口（归 G0/G7 销账）。
