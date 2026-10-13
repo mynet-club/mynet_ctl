@@ -316,3 +316,31 @@ api Default：**511 tests / 4875 assertions / 1 skip**。
 | `mynet guest route` | **完成** | 与 Lua gen_route_conf 同构；单测 2 例（agent `8bd35cb`） |
 | Lua `ensure_route_conf` | **委托** | 优先执行器；无 mynet 时本地写兜底（openwrt `f499f02`） |
 | node.generate_route_conf | 保留 | /etc/mynet/conf 侧 cidr-via 表，另一语义 |
+
+## G0 B2 文档逐条销账（2026-10-13）
+
+对照合并台账 B2-*（已提交待复验）逐条核**当前文档正文**（非只看 commit）：
+
+| ID | 核对结论 |
+|---|---|
+| B2-03 | **成立已修**：README:137「V1-8 仍 ☐（V1-9/V1-10 已 ✅）」 |
+| B2-04 | **成立已修**：paths.md 指向 `PlatformDefaultHome()` 为 SSOT |
+| B2-05 | **成立已修**：mynet.md 写 `clamp(SHA512(seed))`，非 seed‖pub |
+| B2-06 | **否定**：现文无「完整 13 条见…」死链 |
+| B2-07 | **否定**：deployment-registry 无 GUI_REPO/-V2 漂移句 |
+| B2-08 | **成立已修**：AGENTS:3「9 个 repo」 |
+| B2-09 | **成立已修**：写明「旧树 5 个，本 workspace 无命中」 |
+| B2-10 | **成立已修**：local-api relay 行 ✅ 且区分 V1-8 验收未完 |
+| B2-11 | **成立已修**：Playbook §仓库职责写 D-4 作废 |
+| B2-12 | **成立已修**：README 状态列现行/冻结/取代/归档 |
+| B2-14 | **成立已修**：back-baggage 与 operator 回装并注 |
+| B2-15 | **成立已修**：mynet_ui 标历史仓/不在 workspace |
+| B2-16 | **成立已修**：node-keying 依据指现行路径，旧仓取证作废 |
+| B2-17 | **成立已修**：Playbook 注明 `make pkg-darwin` 已退役 |
+| B2-18 | **本批补正**：Playbook「无类型检查」→ 类型棘轮已建 |
+| B2-21/22 | **成立已修**：workspace-review 顶部注取代「均未修复」 |
+| B2-23 | **成立已修**：CPI 头注明 R2–R5/R7–R12 已归位 |
+| B2-24 | 部分：CPI-47 保留裁定，不在本批强迁 |
+| B2-26 | **成立已修**：project-memory 无「已被取代」补丁句式 |
+
+**CPI-76** 本批已修并移「已修复」；**CPI-71** 仅签名/部分 Ops 仍开；**CPI-80** 仍开（Windows 真机）。

@@ -7,14 +7,14 @@
 
 ## 待修复（按优先级排序）
 
-### 2026-10-10 跨平台 review 新登记（R2–R5/R7–R12 对应项已修并移入「已修复」表，2026-10-13 归位；仍开：CPI-71/R1、CPI-76/R6、CPI-80/R10 部分）
+### 2026-10-10 跨平台 review 新登记（R2–R5/R7–R12 对应项已修并移入「已修复」表，2026-10-13 归位；仍开：CPI-71/R1、CPI-80/R10 部分（CPI-76/R6 已修 2026-10-13））
 
 逐项源码证据、静态/复现边界及本轮测试见 [workspace 审查报告](workspace-review-20261010.md)；执行边界见 [跨平台规划](spec/platform-lifecycle-build-playbook.md)。本批不据已有测试绿勾选平台完成。
 
 | ID | 优先级 | 问题与报告项 | 归属 |
 |---|---|---|---|
 | CPI-71 | P1 | OpenWrt实际Lua Ops不满足新config/connect/apply合同（R1） | agent/OpenWrt，O1/H1–H2 |
-| CPI-76 | P1 | update不识别exe，OpenWrt仍选Linux裸更新路径（R6） | agent/ctl，H4 |
+| ~~CPI-76~~ | ~~P1~~ | ✅ **已修 2026-10-13**：自更新只取 archive（zip/tgz），拒绝 installer；HostPlatform 区分 openwrt≠linux；仅 ipk 时宁缺勿装错（agent `285029b`） | 已修复 |
 | CPI-80 | P1 | GNB Wintun初始化失败分支调用未初始化函数指针（R10，静态确认、真Windows未验）。**随包缓解**：安装器带 wintun.dll（G-10/R10，`mynet_desktop/nsis/vendor/wintun/`）；gnb `src/` 未改，根治待上游/补丁包裁定 | GNB补丁包/上游，H3 |
 
 
