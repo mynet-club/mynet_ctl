@@ -250,3 +250,16 @@ G4 全项关闭（含此前 D4-D 上传校验、filename 唯一、tui/client 退
 
 注：agent 工作树另有他人未提交的「秘密不走 argv」收口（handlers/wizard），
 `TestDispatchFailureMasksArgvSecrets` 与之冲突（400 vs 500），不属本批，未覆盖。
+
+## G3.b localapi 纯通信收口（2026-10-13）
+
+| 项 | 状态 | 证据 |
+|---|---|---|
+| node_status 迁执行器 | **完成** | agent `d8d7074` |
+| localapi 凭证/指纹注入 | **完成** | `SaveLoginSession`/`DeviceFingerprint` 注入；wizard 不再 import mynet（`13749e7`） |
+| route exists | **完成** | `mynet route exists`；localapi/route_query_* 删除 |
+| localapi B2 deps | **CLEAN** | `go list -deps ./mynetd/localapi` 无 mynet/shared/config/gopsutil |
+| cmd/mynetd 组合根 | 仍 import mynet+shared/config | 合同允许暂时保留；G3.c 扫描面 |
+| 秘密 argv 双层 | 已集成并测 | 400 拒直传 + 500 路径 argv 遮蔽（含工作树已有 S1 收口） |
+
+实测：`go test ./mynet/ ./mynetd/...` 全绿。
