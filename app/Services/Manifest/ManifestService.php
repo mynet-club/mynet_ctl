@@ -110,7 +110,7 @@ class ManifestService
             // tui 标记为废弃
             if ($product === 'tui') {
                 $entry['deprecated'] = true;
-                $entry['successor'] = 'client';
+                $entry['successor'] = 'mynet_agent'; // 真实现役产品，不得指向已冻结 client
             }
 
             // client 产品附带插件清单
@@ -131,9 +131,6 @@ class ManifestService
                     'latest' => null,
                     'manifest_url' => "/d/{$product}/manifest.json",
                 ];
-                if ($product === 'client') {
-                    $entry['plugins'] = $this->getClientPlugins(null);
-                }
                 $products[$product] = $entry;
             }
         }

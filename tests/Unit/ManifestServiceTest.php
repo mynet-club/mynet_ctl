@@ -55,9 +55,9 @@ class ManifestServiceTest extends TestCase
     public function test_apps_index_includes_unreleased_products(): void
     {
         $result = $this->service->getAppsIndex();
-        // client and lua have no releases but are defined in PRODUCTS
-        $this->assertArrayHasKey('client', $result['products']);
+        // lua 无 release 但仍在现役 PRODUCTS；client 已退役（C3-08），不得出现在产品面
         $this->assertArrayHasKey('lua', $result['products']);
+        $this->assertArrayNotHasKey('client', $result['products']);
     }
 
     public function test_apps_index_tui_deprecated(): void
@@ -66,19 +66,18 @@ class ManifestServiceTest extends TestCase
         $mynet = $result['products']['mynet'];
 
         $this->assertTrue($mynet['deprecated']);
-        $this->assertEquals('client', $mynet['successor']);
+        // successor 必须真实：指向现役 mynet_agent，不得指向已冻结的 client
+        $this->assertEquals('mynet_agent', $mynet['successor']);
     }
 
-    public function test_apps_index_client_plugins(): void
+    public function test_apps_index_client_plugins_retired(): void
     {
         $result = $this->service->getAppsIndex();
-        $client = $result['products']['client'];
-
-        $this->assertArrayHasKey('plugins', $client);
-        $this->assertCount(3, $client['plugins']);
-        $this->assertArrayHasKey('heartbeat', $client['plugins']);
-        $this->assertArrayHasKey('updater', $client['plugins']);
-        $this->assertArrayHasKey('proxy', $client['plugins']);
+        // C3-08：client / @mynet 插件面整面退役，新产品面不得再广告 plugins
+        $this->assertArrayNotHasKey('client', $result['products']);
+        foreach ($result['products'] as $key => $entry) {
+            $this->assertArrayNotHasKey('plugins', $entry, "product {$key} 不得再带 plugins");
+        }
     }
 
     public function test_apps_index_aliases(): void

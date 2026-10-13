@@ -51,21 +51,18 @@ class ManifestEndpointTest extends TestCase
         $this->getJson('/d/apps.json')
             ->assertOk()
             ->assertJsonPath('products.mynet.deprecated', true)
-            ->assertJsonPath('products.mynet.successor', 'client');
+            ->assertJsonPath('products.mynet.successor', 'mynet_agent');
     }
 
-    public function test_apps_json_client_has_plugins(): void
+    public function test_apps_json_client_plugins_retired(): void
     {
         $response = $this->getJson('/d/apps.json');
         $data = $response->json();
 
-        $this->assertArrayHasKey('client', $data['products']);
-        $this->assertArrayHasKey('plugins', $data['products']['client']);
-
-        $pluginNames = array_keys($data['products']['client']['plugins']);
-        $this->assertContains('heartbeat', $pluginNames);
-        $this->assertContains('updater', $pluginNames);
-        $this->assertContains('proxy', $pluginNames);
+        $this->assertArrayNotHasKey('client', $data['products']);
+        foreach ($data['products'] as $key => $entry) {
+            $this->assertArrayNotHasKey('plugins', $entry, "product {$key} 不得再带 plugins");
+        }
     }
 
     public function test_apps_json_has_aliases(): void

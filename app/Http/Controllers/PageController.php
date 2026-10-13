@@ -39,7 +39,7 @@ class PageController extends Controller
         // 白名单与 domain SSOT 同源（同 ReleaseAdminController::store）：硬编码清单会漂。
         $productLabels = array_map(static fn ($p) => $p['name'], ReleaseDomainService::PRODUCTS);
 
-        $product = $request->query('product', 'tui');
+        $product = $request->query('product', 'mynet_agent'); // tui 已退役，下载页默认现役产品
         if (! array_key_exists($product, $productLabels)) {
             $product = array_key_first($productLabels);
         }

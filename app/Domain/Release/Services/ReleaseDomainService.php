@@ -16,15 +16,26 @@ class ReleaseDomainService
     // ═══════════════════════════════════════════════════════════════════════
     // 产品
     // ═══════════════════════════════════════════════════════════════════════
+    // 现役产品（上传白名单 + 下载页产品面）。
+    // 2026-10-13 G4/C3-08 裁决：tui/client/@mynet 插件面整面退役 —— 不再出现在
+    // 对外清单/上传白名单；历史 filename 仍可精确下载（见 ALL_PRODUCTS / parseFilename）。
     const PRODUCTS = [
         'mynet_agent' => ['name' => 'MyNet Agent', 'alias' => null, 'lang' => 'go', 'desc' => '节点侧全套（mynetd + mynet + mynet_gateway）'],
-        'tui' => ['name' => 'MyNet TUI',    'alias' => 'mynet', 'lang' => 'go',   'desc' => 'Go 终端客户端（旧版，对外别名 mynet）'],
         'gnb' => ['name' => 'GNB',          'alias' => null,    'lang' => 'c',    'desc' => 'GNB P2P 组网核心'],
         'utc' => ['name' => 'UTC',          'alias' => null,    'lang' => 'c',    'desc' => 'UDP→TCP 隧道转换器'],
-        'client' => ['name' => 'MyNet Client', 'alias' => null,    'lang' => 'node', 'desc' => 'Node.js 跨平台客户端（计划中）'],
         'proxy' => ['name' => 'MyNet Proxy',  'alias' => null,    'lang' => 'node', 'desc' => 'Mihomo 代理管理器'],
         'lua' => ['name' => 'MyNet Lua',    'alias' => null,    'lang' => 'lua',  'desc' => 'OpenWrt LuCI 插件（.ipk）'],
     ];
+
+    // 已退役：仅用于历史文件名反解析/别名，不再对外展示、不再接受新上传。
+    // successor 不得指向已冻结的 client（原 tui→client 假 successor 已随退役拆除）。
+    const RETIRED_PRODUCTS = [
+        'tui' => ['name' => 'MyNet TUI',    'alias' => 'mynet', 'lang' => 'go',   'desc' => 'Go 终端客户端（已退役，历史件仍按 filename 下载）'],
+        'client' => ['name' => 'MyNet Client', 'alias' => null,    'lang' => 'node', 'desc' => 'Node.js 跨平台客户端（已退役）'],
+    ];
+
+    /** 现役 + 退役：parseFilename / 历史 identity 用全集 */
+    const ALL_PRODUCTS = self::PRODUCTS + self::RETIRED_PRODUCTS;
 
     // ═══════════════════════════════════════════════════════════════════════
     // 平台
@@ -140,7 +151,7 @@ class ReleaseDomainService
 
     public function validateProduct(string $product): bool
     {
-        return array_key_exists($product, self::PRODUCTS);
+        return array_key_exists($product, self::PRODUCTS); // 上传/展示只认现役
     }
 
     /** 扩展名 → 产物类型（未登记则 ''）。登记时调用一次并落库。 */
@@ -177,7 +188,7 @@ class ReleaseDomainService
      */
     public function getProductFilenamePrefix(string $product): string
     {
-        return self::PRODUCTS[$product]['alias'] ?? $product;
+        return self::ALL_PRODUCTS[$product]['alias'] ?? $product; // 含退役 tui→mynet 历史别名
     }
 
     /**
@@ -237,7 +248,7 @@ class ReleaseDomainService
 
         // Reverse alias: mynet → tui
         $product = $name;
-        foreach (self::PRODUCTS as $key => $meta) {
+        foreach (self::ALL_PRODUCTS as $key => $meta) {
             if (($meta['alias'] ?? null) === $name) {
                 $product = $key;
                 break;
@@ -273,7 +284,7 @@ class ReleaseDomainService
     public function exportConventions(): array
     {
         $productList = [];
-        foreach (self::PRODUCTS as $key => $meta) {
+        foreach (self::ALL_PRODUCTS as $key => $meta) {
             $productList[] = array_merge(['id' => $key], $meta);
         }
 
