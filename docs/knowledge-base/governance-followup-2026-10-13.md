@@ -180,3 +180,51 @@ agent 托盘/服务名/home 与后端 `tests/TestCase.php` 在接续时有他人
 - A2-22 待核实、B2-02 待修复、C3-16 部分修复 — 不在已提交待复验集。
 - C1-09 缺仓失败语义、C2-03 生产回滚、B1-03 HMAC 实链、OpenWrt Lua5.1 — 明确未验，不冒充绿。
 - project-memory HEAD 表需在下一批收口时与当前 worktree 对齐刷新。
+
+## G2/G4 用户裁决（2026-10-13，交互式拍板）
+
+| 裁决项 | 用户选择 | 实施口径 |
+|---|---|---|
+| G2 四个鉴权 URL | **删壳，但迁等价项** | validate-reset-token/change-password/activate-account/resend-activation-email：无完全等价则删；verify-email/resend-verification/PUT auth/password 仅在载荷·token 类型·登录前后身份全等价时迁 |
+| G2 per-key 撤销 | **删 per-key 按钮/调用** | 不映射成整节点撤销；负测试锁「整节点密钥未被 per-key 误撤」 |
+| G2 onboarding | **两端删假持久化** | 删 PUT 假 handler 与 GUI 云保存调用；本地引导如仍要则明示本地状态 |
+| G2 route stats/history | **stats 删壳；history 迁 peer-connections** | history 必须核 nodeId/routeId、分页/时间/字段对齐后迁，不只换 URL |
+| G2 兼容面 | **connect 删，bundle 立即删，v2 保留** | 用户明确：legacy config-bundle **立即删**（严于计划的「待全迁」）；v2 Rewrite 保留至 ctl 迁完并给退出条件 |
+| G4-A wire 词表 | **①保留驱动字段 + 抽翻译层** | BundleEnvelope 的 Gnb*/Wg* 不改名；业务命令走翻译层；双侧 fixtures/schema/兼容窗口同步 |
+| G4-B 发布矩阵 | **双件：installer+archive** | Windows 更新 zip、darwin 更新 tgz、OpenWrt 更新 opkg |
+| G4-B 身份 | **filename 精确唯一** | 沿用 filename=下载精确身份；重复 filename 幂等/拒绝 |
+| G4-C/D 旧产品面 | **整面退役 tui+client+@mynet 插件** | 清单只留现役产品；successor 不得指向冻结的 client |
+| G4-D 活发行错误 | **本批修** | 拒未知 ext/空 kind；无效 filename 不得成功登记；假 `/d/` 链消除；不重做已有 filename 精确下载修复 |
+
+裁决来源：`question` 交互；计划 §7「G2 有消费者功能处置 / G4 wire·双 kind」两项已解除待裁决。
+
+## G2 实施 + G4 部分实施（2026-10-13，按用户裁决，已提交未 push）
+
+### G2（已完成）
+
+| 裁决 | 落地 | 证据 |
+|---|---|---|
+| 鉴权：删壳迁等价 | changePassword→PUT auth/password；activate/resend→verify-email/resend-verification；validateResetToken 删预校验 | gui `4a3b146` |
+| per-key 删除 | 删 GUI 按钮/对话框/service；整节点 revoke 保留 | gui `91ee3b7` |
+| onboarding 两端删 | API GET/PUT 下架；GUI 本就 localStorage | api `1d25562` |
+| stats 删 / history 迁 | ConnectionDetailsPage→/nodes/{id}/peer-connections；请求键对齐 | gui `4fd64b9`；api `6d3218b` |
+| connect 删 / bundle 立即删 | routesService.connectToNode 删；legacy config-bundle 路由/handler 删；ctl ConfigPack 固定分散请求 | api `6d3218b`；ctl `f9f4877` |
+| v2 Rewrite 保留 | 未动（退出条件：ctl 迁完 v1） | — |
+
+测试：api **497/1skip**；gui **58/58**（类型棘轮 183≤184）；ctl **73→78/1skip**。
+
+### G4（部分完成）
+
+| 裁决 | 状态 | 证据 |
+|---|---|---|
+| D4-D 上传活错误 | **已修**：拒未知扩展/空 kind/重复 filename；假 /d/ 链消除 | ctl `01a3d7a`，ReleaseServiceTest 10 例 |
+| filename 精确唯一 | **已修**：登记前查重 + 可反解析硬门槛 | 同上 |
+| C3-08 产品面退役 | **已修**：PRODUCTS 只留现役；tui/client 进 RETIRED；successor=mynet_agent；@mynet plugins 不再广告 | ctl `833b4fe`，78 tests |
+| D4-A 翻译层 | **未做**：BundleEnvelope Gnb*/Wg* 保持 wire 不变；业务命令翻译层待下批 | — |
+| D4-B 双件发布 | **未做**：installer+archive 同 tuple 双 kind 上传/矩阵/迁移 DDL 待下批 | — |
+
+### 下批入口
+
+1. D4-B：同 tuple 两 kind 上传→manifest→精确下载→checksum；ctl 唯一键/查询支持双件；重复件预检 DDL（不实施生产）。
+2. D4-A：业务命令词表→驱动字段翻译层（双侧 fixtures/schema/兼容窗口）。
+3. G3 mynetd 边界、G6.b/c/d、G7 收口。
