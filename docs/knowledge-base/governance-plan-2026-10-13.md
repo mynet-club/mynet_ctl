@@ -134,6 +134,14 @@ flowchart LR
   openwrt Lua/tests 若干、desktop INSTALL.md、ctl 文档。存量节点迁移面：service/init 里写死的 `-c` 路径、
   `GnbBinDir` 从 home 相对改 prefix 相对（181 实测 gnb 在 home 树 driver/gnb/bin）、181/182/184/188/.180
   的 conf 树搬迁 + 回滚步骤。
+  **WG 侧安排（与 gnb 对称）**：`mynet/driver/wireguard.go:158,170` 的 `ConfPath=/etc/wireguard/<iface>.conf`
+  改到 `conf/<form>/<nodeId>/`；装载换路径即用——通用 Linux/OpenWrt `ip link add` + `wg setconf <iface> <file>`
+  （OpenWrt init 兜底现状即此路）、热更新 `wg syncconf <iface> <file>`（`wireguard.go:229` 已实现）、
+  macOS wireguard-go 起口后同走 setconf/syncconf；**磁盘只存驱动原生密钥格式**（gnb=128hex、wg=base64 44），
+  hex↔base64 只留在 DB/上报边界（node_keys 表 hex 是 wire 格式），不再留双形态副本。
+  **执行期裁定项**：①Windows `wireguard.exe /installtunnelservice` 是复制式（服务收 conf 进自己的
+  `Data\Configurations`）——接受「本目录=权威、WireGuard 服务目录=安装投影」还是改 wireguard-go 自管；
+  ②存量迁移：`/etc/wireguard/` 残留与 .182⇄.188 `wg_exit` 现网活隧道。
   附带小修：state/last-good 快照自清（只留 N 份或快照不落 security/，12 天长 55 份私钥副本，2026-10-13 已手工清到 1 份）。
 
 **迁移/回滚**：只生成本地迁移/DDL与重复件预检，不实施生产；明确旧rows kind回填来源、唯一键冲突、未知ext、latest维度、降级回滚可保留双kind数据的方式。迁移前备份/验证清单，冲突停止；已有生产数据不得自动去重删除。文件SHA、版本与来源固定；旧下载URL保持filename精确身份。
