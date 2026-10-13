@@ -61,8 +61,8 @@ class ConfigPackService
         $node = $nodeDetail['data'] ?? $nodeDetail;
         $nodeName = $node['node_name'] ?? "node_{$nodeId}";
 
-        // 2. 获取所有配置 + 密钥（优先使用 config-bundle API，失败则降级为分散请求）
-        [$configs, $keys] = $this->fetchViaBundle($token, $zoneId ?? 0, $nodeId);
+        // 2. 获取所有配置 + 密钥（legacy config-bundle 已下架 G2，固定分散请求）
+        [$configs, $keys] = $this->fetchViaScattered($token, $zoneId ?? 0, $nodeId);
 
         // 2b. R8：BundleEnvelope schema v2（与在线更新 / 离线 last-known-good 同一契约）
         $bundleJson = '';
@@ -90,40 +90,16 @@ class ConfigPackService
     }
 
     /**
-     * 优先使用 config-bundle API 获取配置 + 密钥，失败则降级为分散请求
+     * 分散请求取配置 + 密钥（legacy config-bundle 已下架，不再尝试 bundle）
      *
      * @return array{0: array<string, string>, 1: array<string, string>} [configs, keys]
      */
-    private function fetchViaBundle(string $token, int $zoneId, int $nodeId): array
+    private function fetchViaScattered(string $token, int $zoneId, int $nodeId): array
     {
-        try {
-            $bundle = $this->backClient->getConfigBundle($token, $zoneId, $nodeId);
+        $configs = $this->fetchAllConfigs($token, $zoneId, $nodeId);
+        $keys = $this->fetchKeys($token, $zoneId, $nodeId, $configs['route.conf'] ?? '');
 
-            $configs = $bundle['files'] ?? [];
-            $keys = [];
-
-            // Flatten ed25519 keys: { nodeId => pubkey_hex } → { "nodeId.public" => pubkey_hex }
-            foreach ($bundle['keys']['ed25519'] ?? [] as $id => $pubkey) {
-                $keys["{$id}.public"] = $pubkey;
-            }
-
-            // Security keys
-            $sec = $bundle['keys']['security'] ?? [];
-            if (! empty($sec['private'])) {
-                $keys["{$nodeId}.private"] = $sec['private'];
-            }
-            if (! empty($sec['public'])) {
-                $keys["{$nodeId}.public"] = $sec['public'];
-            }
-
-            return [$configs, $keys];
-        } catch (RuntimeException) {
-            // Fallback to legacy multi-request
-            $configs = $this->fetchAllConfigs($token, $zoneId, $nodeId);
-            $keys = $this->fetchKeys($token, $zoneId, $nodeId, $configs['route.conf'] ?? '');
-
-            return [$configs, $keys];
-        }
+        return [$configs, $keys];
     }
 
     /**

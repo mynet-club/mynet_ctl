@@ -144,15 +144,6 @@ class MynetBackClient
         ], $zoneId);
     }
 
-    /**
-     * 一次性获取节点配置包（config-bundle）
-     *
-     * 返回: { node_id, zone_id, version, files: { node.conf, address.conf, route.conf }, keys: { ed25519: {}, security: {} } }
-     */
-    public function getConfigBundle(string $token, int $zoneId, int $nodeId): array
-    {
-        return $this->get("/api/v2/nodes/{$nodeId}/config-bundle", $token, ['zone_id' => $zoneId], $zoneId);
-    }
 
     /**
      * BundleEnvelope schema v2（R8）。GET /nodes/{id}/bundle 返回**裸 Envelope**。
