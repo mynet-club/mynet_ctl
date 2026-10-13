@@ -14,6 +14,7 @@
 #     （cp -a 备份 → 定点替换 → php -l 断言）。
 #
 # 用法:
+#   ./scripts/deploy/deploy.sh plan         # 只出审查清单（不连生产、不 rsync）
 #   ./scripts/deploy/deploy.sh              # 交互式部署
 #   ./scripts/deploy/deploy.sh sync         # 仅同步代码（不重启服务）
 #   ./scripts/deploy/deploy.sh upgrade      # 同步 + composer + migrate + cache
@@ -131,6 +132,37 @@ EOF
 # ════════════════════════════════════════════════════════════
 # 备份
 # ════════════════════════════════════════════════════════════
+
+# plan —— G5.c：出 3月→10月 发布审查清单，不连生产、不改任何文件
+plan_release() {
+    log_step "发布审查清单（plan，不执行部署）"
+    echo "远程: $REMOTE_USER@$REMOTE_HOST:$REMOTE_DIR"
+    echo "本地: $PROJECT_ROOT"
+    echo
+    echo "【1】整仓覆盖范围（rsync --delete 将抹掉）"
+    echo "  - 生产侧所有手改（锚点补丁）"
+    echo "  - 生产独有文件（仓库没有的）"
+    echo "  - 请在跳板机执行: find $REMOTE_DIR -type f | sort > /tmp/prod-ctl-files.txt"
+    echo "    本地: cd $PROJECT_ROOT && git ls-files | sort > /tmp/repo-ctl-files.txt"
+    echo "    对照: comm -23 /tmp/prod-ctl-files.txt /tmp/repo-ctl-files.txt  # 目标独有"
+    echo "         comm -13 /tmp/prod-ctl-files.txt /tmp/repo-ctl-files.txt  # 仅仓库有"
+    echo
+    echo "【2】批准范围（必须书面确认）"
+    echo "  [ ] 3月→10月 diff 已人工评审"
+    echo "  [ ] 目标独有文件/手改清单已列出并决定去留"
+    echo "  [ ] schema/迁移依赖：composer install + migrate 的回滚点已知"
+    echo "  [ ] 发布矩阵（G4 双件）与 manifest 影响已评估"
+    echo
+    echo "【3】备份与回滚"
+    echo "  备份: $REMOTE_BACKUP_DIR/ctl_backup_<ts>.tar.gz（脚本 backup_remote）"
+    echo "  回滚: 1) 解开备份到 $REMOTE_DIR  2) php artisan config:clear  3) 重启 php-fpm/nginx"
+    echo "  失败停止: 任一步非零退出即停，不继续 migrate/覆盖"
+    echo
+    echo "【4】本计划不替代"
+    echo "  - 漂移检测（需 rsync --dry-run --itemize-changes 对生产）"
+    echo "  - 上线验收（需真实 HTTP/发布链 smoke）"
+    echo "  两者都要单独做，且归用户发布窗口。"
+}
 
 backup_remote() {
     log_step "备份现有部署"
@@ -443,6 +475,11 @@ echo
 echo -e "部署类型: ${GREEN}$DEPLOY_TYPE${NC}"
 echo -e "目标: ${GREEN}$REMOTE_USER@$REMOTE_HOST:$REMOTE_DIR${NC}"
 echo
+# plan 只出清单，不连生产，无需确认
+if [ "$DEPLOY_TYPE" = "plan" ]; then
+    plan_release
+    exit 0
+fi
 read -p "确认开始部署? [y/N] " -r
 if [[ ! $REPLY =~ ^[Yy]$ ]]; then
     log_info "已取消"
@@ -450,6 +487,7 @@ if [[ ! $REPLY =~ ^[Yy]$ ]]; then
 fi
 
 case "$DEPLOY_TYPE" in
+    plan)    plan_release; exit 0 ;;
     sync)    do_sync ;;
     upgrade) do_upgrade ;;
     full)    do_full ;;
