@@ -120,8 +120,20 @@ flowchart LR
   **待治理的真问题**：①投影物与来源物双实体（`conf/online/<t>/nodes/<id>/keys/node.private` vs
   `security/<id>.private`）无「权威/投影」标注，排查必晕（2026-10-13 本次踩坑实证）；②`mynet config keys`
   的 keys_dir 不按实际获取形式报（online 节点报 local 面）且 `MYNET_HOME` 未设时按 exe 树落 prefix 幻影路径
-  （`mynet/setup_v2.go:185`）；③可选根治：利用 `-c` 把运行 conf 目录共置到 local/online 具体目录消双份
-  ——**需先裁定改 AGENTS §1.1「gnb 配置只写进 driver/gnb/conf/<nodeId>」口径**，不许静默改布局。
+  （`mynet/setup_v2.go:185`）。
+  **目标模型（2026-10-13 用户裁定，根治方向）**：「存就存到 conf 目录下」——
+  `conf/local/<nodeId>/` 与 `conf/online/<nodeId>/` 为每节点唯一存放位（密钥 + 驱动 conf）；
+  gnb 用 `gnb -c`、wg 用配置文件路径**分别指到对应目录/文件**；
+  **`driver/` 安装目录层拿掉**，二进制统一装 prefix 指定目录（`/opt/mynet/bin` 等）。
+  随之修改 **AGENTS §1.1「gnb 配置只写进 driver/gnb/conf/<nodeId>」口径**（规则属用户，随本裁定生效）；
+  **保持不动**：gnb 协议内布局（node.conf/route.conf/security/ed25519 128hex、gnb.map 只读）、
+  lifecycle-contract 服务名矩阵（路径列随动）。
+  **改动面（2026-10-13 实测）**：mynet_agent 95 处引用/12+ 文件（hub=`shared/utils/paths.go` 的
+  GnbConfDir/GnbBinDir/GnbNodeConfDir/WireGuardNodeDir；另 subject.go 硬编码路径列表、config_schema、
+  parity、upgrade/install、cmd_install_*、mynetd events/executor_lua、tray control、driver/gnb.go）；
+  openwrt Lua/tests 若干、desktop INSTALL.md、ctl 文档。存量节点迁移面：service/init 里写死的 `-c` 路径、
+  `GnbBinDir` 从 home 相对改 prefix 相对（181 实测 gnb 在 home 树 driver/gnb/bin）、181/182/184/188/.180
+  的 conf 树搬迁 + 回滚步骤。
   附带小修：state/last-good 快照自清（只留 N 份或快照不落 security/，12 天长 55 份私钥副本，2026-10-13 已手工清到 1 份）。
 
 **迁移/回滚**：只生成本地迁移/DDL与重复件预检，不实施生产；明确旧rows kind回填来源、唯一键冲突、未知ext、latest维度、降级回滚可保留双kind数据的方式。迁移前备份/验证清单，冲突停止；已有生产数据不得自动去重删除。文件SHA、版本与来源固定；旧下载URL保持filename精确身份。
