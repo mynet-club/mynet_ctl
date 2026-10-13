@@ -3,7 +3,7 @@
 > ⚠️ **本文件描述的是已冻结的旧线（`mynet_lua` / `mynet_client`），不是当前的实现依据。**
 > 冻结策略见 [`../integration-plan-v2.md`](../integration-plan-v2.md) §2.2；
 > 本目录（`spec/README.md`）声明的唯一实现是 **`mynet_agent`（`mynetd`）**。
-> **目标线对应**：身份生命周期（注册/激活/登录/登出/密码重置）在目标线**由框架实现**，back 只承载业务（见 [`unified-platform-architecture.md`](unified-platform-architecture.md) §1.0）；**节点通道**鉴权见 [`node-keying.md`](node-keying.md) §4–5
+> **目标线对应**：身份生命周期（注册/激活/登录/登出/密码重置）在目标线**由框架实现**，后端只承载业务（见 [`unified-platform-architecture.md`](unified-platform-architecture.md) §1.0）；**节点通道**鉴权见 [`node-keying.md`](node-keying.md) §4–5
 
 
 > 更新：2026-05 | 适用：mynet_lua / mynet_client

@@ -79,7 +79,7 @@ MeshPlan {
 - `enforce`：超限 **409 拒绝**，复用 `DomainException::conflict()`（与重入拒绝同口径）。
 
 ### 3.5 planner 落点
-新建 back 侧 `MeshPlannerDomainService`（domain 层、租户 scoped）——**不是** `TransportPlanner`（后者是「一条连接 → OS 路由」，不是「谁连谁」）。
+新建后端侧 `MeshPlannerDomainService`（domain 层、租户 scoped）——**不是** `TransportPlanner`（后者是「一条连接 → OS 路由」，不是「谁连谁」）。
 `TransportPlanner` 在 `enforce` 里作为**第二跳**被调用（pairs → 每条连接的 OS 路由），从而把 §1-6 的零调用方**接上**，而不是新造一套。
 
 ### 3.6 应用面（enforce）
@@ -95,7 +95,7 @@ enforce 失败 → 撤销**本轮新建**的 `routes` → 重发布 → 节点�
 
 ---
 
-## 4. 待裁（D1–D5，每条两案，back 不擅自选）
+## 4. 待裁（D1–D5，每条两案，后端不擅自选）
 
 | # | 事项 | A 案 | B 案 | 取向备注 |
 |---|---|---|---|---|

@@ -127,7 +127,7 @@ mynetd（心跳组装 · WS）
 | api.mynet.club / api.mynet.local | mynet_api | prod / dev |
 | console.mynet.club | mynet_api（**租户管理**） | prod |
 | gw.mynet.club | mynet_gateway（节点面 WS + `/v1/relay`） | prod |
-| admin.mynet.club | 框架 platform/operator SPA（**不是** back 管理面） | prod |
+| admin.mynet.club | 框架 platform/operator SPA（**不是** 后端管理面） | prod |
 | ctl.mynet.club / ctl.mynet.local | mynet_ctl | prod / dev |
 | my.mynet.club / my.mynet.local | mynet_gui | prod / dev |
 | www.mynet.club / www.mynet.local | mynet_web | prod / dev |

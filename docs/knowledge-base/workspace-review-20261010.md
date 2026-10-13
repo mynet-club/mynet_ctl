@@ -3,6 +3,12 @@
 > 范围：9 个仓的职责、构建/安装/运行/升级链、当前测试与关键跨仓接口。不是逐行穷尽审计，也不是实机/生产验收。
 > 本轮只修改规划、报告与导航；未修运行时、提交/推送、部署、安装驱动或修改目标设备。
 > 行为处置见 [跨平台规划](spec/platform-lifecycle-build-playbook.md)，OpenWrt 详见 [平台规划](../../../mynet_openwrt/docs/AGENT_INTEGRATION_PLAYBOOK.md)。
+>
+> **R 项处置状态（2026-10-13 归位）**：R2–R5、R7–R12 **已关闭**（对应 `spec/lifecycle-contract.md`
+> G 表 G-1/2/3/4/5/8/9/10/11/12/14/15 与 `cross-project-issues.md`「已修复」表 CPI-72~82 行，附证据）；
+> **仍开放：R1**（CPI-71，OpenWrt Lua Ops 不满足新 connect/config 合同，归 O1）与
+> **R6**（CPI-76，update 不识别 exe、OpenWrt 仍选 Linux 裸更新路径）。本报告是 2026-10-10 快照，
+> 下文「均未修复」的判定已被本注取代。
 
 ## 1. 当前基线与用户澄清
 
@@ -20,7 +26,7 @@
 | UTC | 79443b6 | 正在进行的 gateway_session、测试和 milestone 修改，含未跟踪文件；只读纳入审查与测试，不改其任务和范围 |
 | web | dc3ad08 | 干净；核职责/构建/检查，保留既有 CPI-40 |
 
-## 2. 优先问题（均未修复）
+## 2. 优先问题（2026-10-10 快照；处置状态见文首归位注 —— R2–R5/R7–R12 已关闭，R1/R6 仍开放）
 
 P1 为会阻断安装/接入/发行或造成错误副作用的项；P2 为结构与验收债。静态结论、隔离 fixture 和实机验证严格分开。
 
@@ -79,7 +85,7 @@ cmdInstall 在解析 --home 前调用 requireHome（`mynet_agent/mynet/cmd_insta
 - API 的 Proxy 权限、事务/版本发布和 wire 权威已有实现，仍应复用；默认套件绿不证明真实多节点流量与 OpenWrt规则兼容，不扩造第二套鉴权。
 - GUI 测试与类型棘轮可运行；41 tests 已超过旧记忆中的20。仍有194条类型错误/38文件，只是未增加；本轮没有声称类型零错或生产浏览器流程全部通过。
 - GNB 主通道补丁可在纯上游导出树应用、幂等、包内52项测试通过。此结果不覆盖 Windows Wintun错误路径、全部 target、真实隧道或四程序发行兼容。
-- UTC gateway_session 正在其他工作中，PHASE7 明确只冻结会话内核，未实现 TCP/TLS/HTTP/WebSocket、gateway/back实际接入和生产认证。测试通过不构成 agent↔UTC集成完成；本轮不扩大UTC实施任务。
+- UTC gateway_session 正在其他工作中，PHASE7 明确只冻结会话内核，未实现 TCP/TLS/HTTP/WebSocket、gateway/后端实际接入和生产认证。测试通过不构成 agent↔UTC集成完成；本轮不扩大UTC实施任务。
 - web 的构建占位为已知 CPI-40，且缺 node_modules 导致单测跳过；其代码里仍有历史 local/social页面，与官网定位不一致。本轮不合并/删除，保持既有职责待裁定。
 
 ## 4. 本轮验证
@@ -103,4 +109,4 @@ cmdInstall 在解析 --home 前调用 requireHome（`mynet_agent/mynet/cmd_insta
 
 先锁 H0 的分层与平台矩阵，再做 H1/H2；发行输入与解析 H4可先准备。OpenWrt原生入口在稳定的安装/执行合同上推进。现有测试绿保留为基线，同时增加能检测服务分叉、真实执行器合同、首次/重复系统登记、缺DLL、包种类与恢复的反证测试。
 
-不据本报告勾平台完成、不自动升级.178/.182、不改变UTC当前未提交工作、不清理历史目录或凭证。修复逐项记录证据后再更新对应台账；审查发现的问题均保留“未修复”。
+不据本报告勾平台完成、不自动升级.178/.182、不改变UTC当前未提交工作、不清理历史目录或凭证。修复逐项记录证据后再更新对应台账。（2026-10-13 归位：R2–R5、R7–R12 已修复并移入 `cross-project-issues.md`「已修复」表；R1/R6 仍开放，见文首注。）

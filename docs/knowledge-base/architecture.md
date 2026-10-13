@@ -84,7 +84,7 @@ $MYNET_HOME/                           # /opt/mynet 或 ~/.local/mynet
 ```
 
 - 人用会话（cookie），机器用密钥。
-- **gateway 不鉴权**——纯透传 + 连接状态表；鉴权一律归 back。
+- **gateway 不鉴权**——纯透传 + 连接状态表；鉴权一律归后端。
 - X25519 签不了名 → 节点面走 **DH 不走签名**，一套驱动密钥通吃 gnb/wg。
 - 心跳：`POST /api/v2/monitor/heartbeat`，`X-Node-Id` + `X-Timestamp` + `X-Node-Signature`（HMAC-SHA256）。
 - 用户 Token 刷新：API 401 → `POST /auth/token/refresh`。

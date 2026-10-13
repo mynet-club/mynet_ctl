@@ -1226,7 +1226,7 @@ Response 403:
 > `interface` 四列在 `routes` 表里**都不存在**（实列见 `2026_09_23_000001_create_vpn_business_tables.php:118-133`），
 > 端点返 200 但字段被静默丢弃 ⇒ 幻影端点。现在命中这条 URI 是 **405**（URI 在、方法不收）。
 > 状态开关走 `POST /route/bulk/status`，删除走 `DELETE /route/{id}`；GUI 只用后者。
-> 权威契约见 [openapi/back.yaml](../api/openapi/back.yaml)。
+> 权威契约见 [openapi/后端.yaml](../api/openapi/后端.yaml)。
 
 ```
 Middleware: auth:sanctum, api.zone
@@ -1549,13 +1549,13 @@ Response 200:
 | Method | Path | 认证 | 参数 | 说明 |
 |--------|------|------|------|------|
 | GET | `/api/v2/setup/platforms` | 无 | — | 平台矩阵 |
-| GET | `/api/v2/setup/zones` | Sanctum | — | Zone 列表 (代理 back) |
-| POST | `/api/v2/setup/switch-zone` | Sanctum | `zone_id` (body) | 切换 Zone (代理 back) |
-| GET | `/api/v2/setup/nodes` | Sanctum | `?zone_id=` (必填) | 节点列表 (代理 back) |
-| GET | `/api/v2/setup/nodes/{id}` | Sanctum | `?zone_id=` (必填) | 节点详情 (代理 back) |
+| GET | `/api/v2/setup/zones` | Sanctum | — | Zone 列表 (代理后端) |
+| POST | `/api/v2/setup/switch-zone` | Sanctum | `zone_id` (body) | 切换 Zone (代理后端) |
+| GET | `/api/v2/setup/nodes` | Sanctum | `?zone_id=` (必填) | 节点列表 (代理后端) |
+| GET | `/api/v2/setup/nodes/{id}` | Sanctum | `?zone_id=` (必填) | 节点详情 (代理后端) |
 | GET | `/api/v2/setup/config-pack/{id}` | Sanctum | `?zone_id=`, `?platform=`, `?arch=` | 配置包 ZIP |
 
-#### QuickConfig (快配, 不依赖 back)
+#### QuickConfig (快配, 不依赖后端)
 | Method | Path | 认证 | 说明 |
 |--------|------|------|------|
 | GET | `/api/v2/quickconfig/node-id` | 无 | 分配临时节点 ID |
@@ -1614,7 +1614,7 @@ Response 200:
 
 ### 4.2 登录字段匹配
 
-| 字段 | back 返回 | GUI 解析 | client 解析 | lua 解析 |
+| 字段 | 后端返回 | GUI 解析 | client 解析 | lua 解析 |
 |------|-----------|----------|-------------|----------|
 | `data.auth_token` | ✅ string | ✅ | ✅ | ✅ |
 | `data.refresh_token` | ✅ string | ✅ | ✅ | ✅ |
@@ -1629,7 +1629,7 @@ Response 200:
 
 ### 4.3 节点列表字段匹配
 
-| 字段路径 | back 返回 | GUI | client | lua |
+| 字段路径 | 后端返回 | GUI | client | lua |
 |----------|-----------|-----|--------|-----|
 | `data.nodes` | ✅ array | ✅ | ✅ (多路径 fallback) | ✅ |
 | `data.meta.total` | ✅ int | ✅ | — | — |
@@ -1641,7 +1641,7 @@ Response 200:
 
 ### 4.4 config-bundle 字段匹配
 
-| 字段 | back 返回 | client 解析 | lua 解析 | CTL ConfigPackService |
+| 字段 | 后端返回 | client 解析 | lua 解析 | CTL ConfigPackService |
 |------|-----------|-------------|----------|----------------------|
 | `data.files["node.conf"]` | ✅ string | ✅ | ✅ | ✅ |
 | `data.files["address.conf"]` | ✅ string | ✅ | ✅ | ✅ |
@@ -1656,7 +1656,7 @@ Response 200:
 
 ### 4.5 心跳字段匹配
 
-| 字段 | back 期望 | client 发送 | lua 发送 |
+| 字段 | 后端期望 | client 发送 | lua 发送 |
 |------|-----------|-------------|----------|
 | `vpn_interface` (单数) | ✅ 接受 | ✅ 使用单数 | — |
 | `vpn_interfaces` (复数) | ✅ 接受 | — | ✅ 使用复数 |
@@ -1664,7 +1664,7 @@ Response 200:
 | `status` | — | — | ✅ 发送 "online"\|"offline" |
 | `uptime` | — | — | ✅ 发送 int |
 
-> back 同时接受 `vpn_interface`(单数) 和 `vpn_interfaces`(复数)，两端均匹配。
+> 后端同时接受 `vpn_interface`(单数) 和 `vpn_interfaces`(复数)，两端均匹配。
 
 ### 4.6 CTL 端点匹配
 
@@ -1681,7 +1681,7 @@ Response 200:
 
 ### 4.7 router-keys 字段匹配
 
-| 特性 | back 期望/返回 | client | lua |
+| 特性 | 后端期望/返回 | client | lua |
 |------|---------------|--------|-----|
 | 请求体 | `{ "router_node_ids": [int] }` | ✅ 发送 | ⚠️ 发送空 `{}` |
 | 响应路径 | `data.keys[]` | ✅ (多路径 fallback) | ✅ (多路径 fallback) |
@@ -1800,11 +1800,11 @@ Response 200:
 
 | # | 项目 | 问题 | 详情 |
 |---|------|------|------|
-| M1 | **mynet_lua** | router-keys 发送空 body `{}` | back 期望 `{ "router_node_ids": [int] }`。lua 在 bundle fallback 时依赖 back 自动推导 |
+| M1 | **mynet_lua** | router-keys 发送空 body `{}` | 后端期望 `{ "router_node_ids": [int] }`。lua 在 bundle fallback 时依赖后端自动推导 |
 | M2 | **client** | keys/upload 发送 `custom_public_key` | v2 合并为 `/keys`，字段名为 `custom_public_key`。需确认 v2 是否仍接受此字段 |
 | M3 | **GUI** | 批量设备信息用 `PUT /nodes/deviceinfo` | v2 改为 `POST`。GUI 需更新为 POST |
 | M4 | **GUI** | keys/generate 和 keys/upload 分开调用 | v2 合并为 `POST /nodes/{id}/keys`。GUI 仍使用 v1 路径 |
-| M5 | **client** | router-keys 响应期望 `{peerId: "hex"}` 扁平格式 | back 返回 `{ keys: [{ router_node_id, public_key }], failed: [...] }`。client 需做格式转换 |
+| M5 | **client** | router-keys 响应期望 `{peerId: "hex"}` 扁平格式 | 后端返回 `{ keys: [{ router_node_id, public_key }], failed: [...] }`。client 需做格式转换 |
 
 ### 🟡 建议改进
 
@@ -1819,7 +1819,7 @@ Response 200:
 
 ## 七、错误格式规范
 
-### back API 错误格式
+### 后端 API 错误格式
 
 #### 格式 A: 一般错误
 ```json

@@ -108,7 +108,7 @@ func netshRouteCmds(r) []routeCmd              // windows（待补）
 
 ### M4 — 数据源钉死
 - [x] `ApplyPlan` / `cmd_apply` 注释标明：`network.routes` = OS 路由 SSOT；`route.conf` = L5 宣告
-- [x] back 契约：`test_network_routes_do_not_filter_by_local_subnet` —— 后端不过滤，冲突归 L6 闸
+- [x] 后端契约：`test_network_routes_do_not_filter_by_local_subnet` —— 后端不过滤，冲突归 L6 闸
 
 ### M5 — 多写者收敛（F-5）
 - [x] `mynet_agent/scripts/check-route-writers.sh`：执行点仅 `apply_plan.go` + `GUARD-OK` 例外

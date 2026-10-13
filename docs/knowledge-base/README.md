@@ -52,16 +52,19 @@
 | [spec/driver-abstraction.md](spec/driver-abstraction.md) | VPN driver 抽象层：抽象 bundle、驱动接口、gnb↔wg 映射 | 现行 |
 | [spec/lifecycle-contract.md](spec/lifecycle-contract.md) | **生命周期合同（H0）** — 安装/卸载/服务/应用/升级的 A–F 分层、默认路径/服务名、原生包与归档矩阵 | 现行 |
 | [spec/local-api.md](spec/local-api.md) | 本机能力面（local-api） | 现行 |
+| [spec/v1-permission-matrix.md](spec/v1-permission-matrix.md) | v1 权限矩阵（P0 冻结件）—— 现状列 vs 冻结列 | 现行 |
+| [spec/v1-error-codes.md](spec/v1-error-codes.md) | v1 稳定错误码清单（P0 冻结件，F-25/F-26 已裁定） | 现行 |
+| [spec/gnb-compat-baseline.md](spec/gnb-compat-baseline.md) | GNB 兼容基线决策包（登记实测、待主线裁决） | 现行 |
 | [spec/paths.md](spec/paths.md) | **路径 SSOT** — 存储 / 运行 / 投影 / 运行态 | 现行 |
 | [spec/data-models.md](spec/data-models.md) | 所有 JSON/conf 数据结构（唯一定义处） | 现行 |
 | [spec/proxy-split.md](spec/proxy-split.md) | **代理分流（新线）** | 现行 |
 | [spec/route-apply-unification.md](spec/route-apply-unification.md) | 路由写入归一（L6 单入口） | 现行 |
 | [spec/route-firewall-split.md](spec/route-firewall-split.md) | 路由 / 防火墙分工 — L5 驱动 vs L6 系统 | 现行 |
 | [spec/proxy-conf-design.md](spec/proxy-conf-design.md) | proxy.conf 设计 — route.conf 延续 + 热读取（v3） | 现行 |
-| [spec/auth.md](spec/auth.md) | 登录 / 登出 / Token 刷新 | 现行 |
-| [spec/wizard.md](spec/wizard.md) | 安装向导：首次配置、Zone/节点选择、配置同步 | 现行 |
-| [spec/service.md](spec/service.md) | 服务三层启停（GNB → 路由 → 防火墙） | 现行 |
-| [spec/plugins.md](spec/plugins.md) | 插件生命周期（heartbeat、updater、proxy） | 现行 |
+| [spec/auth.md](spec/auth.md) | 登录 / 登出 / Token 刷新 | **冻结**（旧线 mynet_lua / mynet_client 对照，不是现行实现依据） |
+| [spec/wizard.md](spec/wizard.md) | 安装向导：首次配置、Zone/节点选择、配置同步 | **冻结**（旧线对照，不是现行实现依据） |
+| [spec/service.md](spec/service.md) | 服务三层启停（GNB → 路由 → 防火墙） | **冻结**（旧线对照，不是现行实现依据） |
+| [spec/plugins.md](spec/plugins.md) | 插件生命周期（heartbeat、updater、proxy） | **冻结**（旧线对照，不是现行实现依据） |
 | [spec/debug-env.md](spec/debug-env.md) | macOS 本地调试环境（vm / vml） | 现行 |
 | [spec/node-status-gate.md](spec/node-status-gate.md) | `node_status` 谁说了算 — GET 只读（已执行）/ 心跳无条件写 1（保持） | **已裁决**（2026-10-04） |
 | [spec/zone-removal.md](spec/zone-removal.md) | Zone 删除 — 实为「改名 + 两件残留物」；裁定改名保留、假租户兜底改指真实平台租户 | **已裁决**（2026-10-04） |
@@ -124,7 +127,7 @@
 - `mynet_agent/docs/MYNET_V1_PLAYBOOK.md`（v1 上位口径）—— P0–P7 工作包 + M0–M6 验证闸门 + §12 DoD，
   回答「v1 算不算完成」。**跨仓文件**，路径写全。
 - [long-range-plan-deep.md](long-range-plan-deep.md)（V0–V5 底座线）—— V1 gateway 可执行化 → V2 交付链真跑 →
-  V3 生产落地 → V4 规模化 → V5 生态公测。**V1-8/V1-9 仍 ☐，这条线没走完。**
+  V3 生产落地 → V4 规模化 → V5 生态公测。**V1-8 仍 ☐（V1-9/V1-10 已 ✅，2026-09-24），这条线没走完。**
 
 > ⚠️ **一处真实交叠**：v1 Playbook 的 **P6（Gateway 和部署闭环）** 与 deep 的 **V1–V3** 是同一段。
 > 交叠处口径：**判据（什么算验过）认 Playbook 的闸门；条目粒度认 deep 的 V1-8/V1-9 这类编号。**
@@ -140,7 +143,7 @@
 | [long-range-plan.md](long-range-plan.md) | R 段 R0–R5（条目已并入 deep） | ④ 口径 | 现行 |
 | [long-range-plan-t.md](long-range-plan-t.md) | T 段 T0–T5（条目已并入 deep） | ④ 口径 | 现行 |
 | [integration-plan-v2.md](integration-plan-v2.md) | 全生态整合 v2：五层模型、四条工作流、SSOT 归属表 | ④ 口径 | 现行 |
-| [back-upshift-design.md](back-upshift-design.md) | back 业务上移设计：状态归属矩阵、上移/下沉判据 | ④ 口径 | 现行（设计稿） |
+| [back-upshift-design.md](back-upshift-design.md) | 后端业务上移设计：状态归属矩阵、上移/下沉判据 | ④ 口径 | 现行（设计稿） |
 | [cross-project-issues.md](cross-project-issues.md) | CPI 债务台账 | 数据 | 现行 |
 | [upstream-dsplat-issues.md](upstream-dsplat-issues.md) | 上游缺陷反馈（框架侧） | 数据 | 现行 |
 

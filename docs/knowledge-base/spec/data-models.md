@@ -1,9 +1,9 @@
 # SPEC: 数据模型（Data Models）
 
-> 更新：2026-09-21 | 适用：mynet_agent（实现）/ mynet_ui / mynet_openwrt  
+> 更新：2026-09-21 | 适用：mynet_agent（实现）/ mynet_gui / mynet_openwrt（mynet_ui 为历史仓，不在 workspace，页面素材已进 mynet_web）  
 > **本文件是所有 JSON/conf 格式的唯一定义处。两端修改格式前必须先更新此处。**
 >
-> **注意（目标线）**：§4 与 §9 描述的 gnb 原生格式属**驱动适配层**。back 下发的应是
+> **注意（目标线）**：§4 与 §9 描述的 gnb 原生格式属**驱动适配层**。后端下发的应是
 > `BundleEnvelope + NetworkIntent + driver-specific intent`，由 agent 分别交给 driver adapter 与
 > NetworkReconciler。GNB route/discovery/relay 与 WireGuard AllowedIPs/Endpoint 不可机械映射。
 > 见 [`driver-abstraction.md`](driver-abstraction.md) 与 [`../integration-plan-v2.md`](../integration-plan-v2.md) §3 W2。

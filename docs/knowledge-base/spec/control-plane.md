@@ -1,7 +1,7 @@
 # SPEC: 控制面与传输（control-plane）
 
 > 更新：2026-09-21
-> 适用：`mynet_agent`（`mynetd` + `mynet_gateway`）、`mynet_api`、`mynet_gui` / `mynet_ui`
+> 适用：`mynet_agent`（`mynetd` + `mynet_gateway`）、`mynet_api`、`mynet_gui`（`mynet_ui` 为历史仓，不在 workspace）
 > 依赖：[`node-keying.md`](node-keying.md)、[`driver-abstraction.md`](driver-abstraction.md)、[`local-api.md`](local-api.md)、[`unified-platform-architecture.md`](unified-platform-architecture.md)
 > 状态：**已落地**（`mynet_gateway` 已在 `mynet_agent/cmd/mynet_gateway` 实现并端到端跑通；
 > 本文档为传输面契约 SSOT。§6.3 记录了各项的落地状态。）
@@ -25,7 +25,7 @@ mynetd ═══════ WebSocket ═══════> gateway ── 内
 
 | 跳 | 组件 | 职责 | 不做什么 |
 |----|------|------|---------|
-| ① 本机 | `mynetd` httpd（`local-api.md`） | 对 GUI 提供本机能力面；对需要 back 数据的查询做中继 | 不直连 back；不持有 back 凭据 |
+| ① 本机 | `mynetd` httpd（`local-api.md`） | 对 GUI 提供本机能力面；对需要后端数据的查询做中继 | 不直连后端；不持有后端凭据 |
 | ② 边缘 | `mynet-gateway` | 节点鉴权、连接注册、presence、通知推送、**字节中继** | 不解析业务载荷；不存业务数据 |
 | ③ 内网 | `mynet_api` | 业务权威（L1/L2/L3）：节点/路由/密钥/好友/命令队列/BundleEnvelope | 对节点不可达 |
 
@@ -33,16 +33,16 @@ mynetd ═══════ WebSocket ═══════> gateway ── 内
 
 | 收益 | 说明 |
 |------|------|
-| **back 攻击面归零（对节点）** | 节点只需知道 gateway 地址；`/api/v1/monitor/*`、admin、用户 API 全部退内网 |
+| **后端攻击面归零（对节点）** | 节点只需知道 gateway 地址；`/api/v1/monitor/*`、admin、用户 API 全部退内网 |
 | **鉴权边界唯一** | 节点身份验证只在 gateway 做一处（Ed25519） |
 | **暴露面是小靶子** | 对外只剩一个 Go 二进制，不是整个 Laravel（含框架 vendor 数百条路由） |
 | **限流/异常检测集中** | 心跳风暴、重连惊群、异常签名都在 gateway 拦 |
-| **GUI 零信任边界** | 浏览器永不接触 back；凭据与会话都在本机 mynetd 侧 |
+| **GUI 零信任边界** | 浏览器永不接触后端；凭据与会话都在本机 mynetd 侧 |
 | **gateway 可水平扩展** | 无业务状态，可多点部署就近接入（§3） |
 
 ### 1.3 关键约束
 
-- **back 仍是唯一业务权威**。gateway 不产生业务数据，不校验 BundleEnvelope 的 checksum，不理解 generation 语义。
+- **后端仍是唯一业务权威**。gateway 不产生业务数据，不校验 BundleEnvelope 的 checksum，不理解 generation 语义。
 - **L4 语义不变**（见 `unified-platform-architecture.md` §4）：`Fetch(nodeID, etag)` 仍然成立，只是 Fetch 经 gateway 中继。ETag / checksum / last-known-good 回滚原样保留。
 - **gateway 挂了 → 节点退回 `last-known-good`**，链路不断（L4 离线策略）。
 - **`mynet_gnb` 不被触碰**。gateway 对的是 `mynetd`，不是 gnb 进程。
@@ -58,14 +58,14 @@ mynetd ═══════ WebSocket ═══════> gateway ── 内
 | **对外** | mynetd | `WS /v1/node/connect` | **Ed25519 challenge-response** 握手（目标方案，见 [`node-keying.md`](node-keying.md) §5）；建立长连接 |
 | **对内** | mynet_api | `POST /v1/notify` | 命令入队 / generation 变更时调用；向目标节点推通知 |
 | **查询** | mynet_api | `GET /v1/presence/{node_id}` | 节点是否在线（连接注册表） |
-| **中继** | mynetd ↔ back | WS ↔ 内网 HTTP | mynetd 发 `fetch` → gateway 转 back → 回传响应；**不解析载荷** |
+| **中继** | mynetd ↔ 后端 | WS ↔ 内网 HTTP | mynetd 发 `fetch` → gateway 转后端 → 回传响应；**不解析载荷** |
 
 ### 2.2 报文
 
 **握手（对内 gateway 侧）**
 
 > ⚠️ **不要照搬心跳现有的 HMAC 方案**。心跳现状是 `HMAC-SHA256(公钥, METHOD|path|ts|body)`
-> ——公钥被当共享秘密用，且 back 侧尚未校验，强度不足（详见 [`node-keying.md`](node-keying.md) §4）。
+> ——公钥被当共享秘密用，且后端侧尚未校验，强度不足（详见 [`node-keying.md`](node-keying.md) §4）。
 > gateway 作为唯一鉴权边界，采用**真非对称**方案：
 
 ```
@@ -79,7 +79,7 @@ S: {"ok":true,"data":{"session_id":"...","server_time":...}}
 
 - 私钥永不出节点；公钥可公开存储，泄露不影响认证强度
 - `ts` 偏差 > 300s → `stale_ts`（防重放）；`nonce` 在 gateway 侧短时去重（如 5 分钟窗口）
-- 节点公钥来源：back 下发的 `node_keys.public_key`，gateway 启动/定期同步到内存
+- 节点公钥来源：后端下发的 `node_keys.public_key`，gateway 启动/定期同步到内存
 
 **推送（gateway → mynetd）**
 
@@ -89,7 +89,7 @@ S: {"ok":true,"data":{"session_id":"...","server_time":...}}
 
 > **只推通知，不推业务载荷。** mynetd 收到后触发一次拉取（§2.3）。
 
-**拉取中继（mynetd → gateway → back）**
+**拉取中继（mynetd → gateway → 后端）**
 
 ```
 C:  {"type":"fetch","req_id":"…","path":"/api/v1/monitor/node/full-config","etag":"…"}
@@ -101,7 +101,7 @@ G:  {"type":"fetch_result","req_id":"…","status":304,"headers":{...},"body":"<
 
 **gateway 处理原则**：`body` 对 gateway 是**不透明字节**，原样转发。gateway 不解析、不修改、不缓存业务语义（可选做字节级短缓存，但**不作为正确性依赖**）。
 
-**心跳中继**同理：mynetd 的 heartbeat POST 经 gateway 转 back，back 响应的 `commands[]` 原样回传。
+**心跳中继**同理：mynetd 的 heartbeat POST 经 gateway 转后端，后端响应的 `commands[]` 原样回传。
 
 ### 2.3 mynetd 收到通知后的行为：**event → handler**（不是 runOnce）
 
@@ -120,7 +120,7 @@ G:  {"type":"fetch_result","req_id":"…","status":304,"headers":{...},"body":"<
 | `service.*` | `ServiceHandler` | 起停 / 重载对应服务 |
 
 **心跳的职责退回原处**：周期性遥测上报。心跳**不是通知丢失的兜底** ——
-back 的响应里确实带 `commands[]`（`NodeHeartbeatController.php:150`），
+后端的响应里确实带 `commands[]`（`NodeHeartbeatController.php:150`），
 但 agent 的 `cmd/mynetd/heartbeat.go` 只做采集+上报、**不解析该字段**，
 bundle 更不在心跳路径上拉取。
 
@@ -132,7 +132,7 @@ bundle 更不在心跳路径上拉取。
 | ② 事件处理不丢 | agent `eventDispatcher.runExclusive` | 单飞守卫期间到达的事件**按名合并、事后补跑**，不再直接丢弃 |
 | ③ 连接建立补拉 | agent `transport.Handlers.OnConnect` → `catchUpBundle` | 断线窗口里 gw 推过的事件不会补发，故**每次连上（含重连）对一次 ETag**：304 什么都不做，updated 走完整落地链 |
 | ④ 判活重连 | agent `WebSocketDialer` + `IdleTimeout` | pong（或任何下行帧）超 `IdleTimeout` 即主动断开 → 触发 ③；否则半死连接会让节点静默收不到任何下发 |
-| ⑤ pull 侧脏检查 | back `BundleRevisionSync::isStale` | 任何一次 bundle 拉取都会校验快照是否落后业务表，落后先重建再返回 |
+| ⑤ pull 侧脏检查 | 后端 `BundleRevisionSync::isStale` | 任何一次 bundle 拉取都会校验快照是否落后业务表，落后先重建再返回 |
 
 页面「主动刷新加载」= 前端调 publish/pull 接口，走的仍是 ①③⑤，不是新层。
 
@@ -180,9 +180,9 @@ bundle 更不在心跳路径上拉取。
 
 - `event` 是**稳定标识符**（handler 注册表的键），不是自由文本
 - `data` 只带定位信息（id / generation），**不带业务载荷**——真实内容仍由节点按
-  Fetch+ETag 从 back 拉取
+  Fetch+ETag 从后端拉取
 - 节点侧维护 `map[event]Handler`；**未注册的 event 记 warning 并忽略**，
-  不阻断其他事件（向前兼容：back 加了新事件，旧节点不会崩）
+  不阻断其他事件（向前兼容：后端加了新事件，旧节点不会崩）
 
 #### 并发与幂等
 
@@ -210,7 +210,7 @@ bundle 更不在心跳路径上拉取。
 
 - 不解析 BundleEnvelope / 不校验 checksum / 不理解 generation
 - 不存业务数据（连接注册表 + presence 只在内存，可随时重建）
-- 不做业务授权决策（谁能否问节点 —— 由 back 判）
+- 不做业务授权决策（谁能否问节点 —— 由后端判）
 - 不直连 gnb 进程
 
 ---
@@ -230,14 +230,14 @@ mynetd ──选择──>    ├── gateway-B (公网, 区域2) ──┼─
 ```
 
 - 多个 gateway **对等**，无主从；各自独立持连接，**不互相同步连接状态**
-- presence 查询：back 可向**任一** gateway 查询；或向**全部**并集（节点可能连在任一个上）
-- 通知下发：back 需知道节点连在哪个 gateway → 见 §3.3
+- presence 查询：后端可向**任一** gateway 查询；或向**全部**并集（节点可能连在任一个上）
+- 通知下发：后端需知道节点连在哪个 gateway → 见 §3.3
 
 ### 3.3 节点↔gateway 归属
 
-gateway 在握手成功后回调 back 登记：`POST {back}/internal/gateway/bindings` `{node_id, gateway_id, connected_at}`；断开时注销。
+gateway 在握手成功后回调后端登记：`POST {back}/internal/gateway/bindings` `{node_id, gateway_id, connected_at}`；断开时注销。
 
-back 的 `POST /v1/notify` 因此可以**定向投递**到节点所在的 gateway；若登记缺失，则广播到全部 gateway（gateway 发现本地无此连接则忽略）。
+后端的 `POST /v1/notify` 因此可以**定向投递**到节点所在的 gateway；若登记缺失，则广播到全部 gateway（gateway 发现本地无此连接则忽略）。
 
 > 该登记是**路由提示**，不是业务状态。丢失时退化为广播，不影响正确性。
 
@@ -256,7 +256,7 @@ gateways:
 1. 按序探测（握手超时如 5s），取第一个成功的
 2. 连接成功后**粘滞**，断开才换下一个
 3. 重连时从上次成功的下一个开始（避免每次都打同一台）
-4. 全部失败 → 退回心跳轮询直连 back（过渡期）或保持 last-known-good（终态）
+4. 全部失败 → 退回心跳轮询直连后端（过渡期）或保持 last-known-good（终态）
 
 列表来源：安装时由 `mynet_ctl` 下发；后续可经已连 gateway 热更新。
 
@@ -309,7 +309,7 @@ mynetd 的 gateway 列表把 overlay 地址排在公网地址之后：
 
 ### 5.1 原则
 
-**GUI 只跟本机 mynetd 说话**（`local-api.md`）。浏览器不持有 back 凭据，不直连 back/gateway。
+**GUI 只跟本机 mynetd 说话**（`local-api.md`）。浏览器不持有后端凭据，不直连后端/gateway。
 
 ```
 浏览器 ──> 127.0.0.1:8096/api/v1/... ──> mynetd
@@ -320,7 +320,7 @@ mynetd 的 gateway 列表把 overlay 地址排在公网地址之后：
 | 类型 | 数据来源 | 处理方 |
 |------|---------|--------|
 | **本机态** | gnb/wg 进程、tun、本机配置、proxy 开关、日志 | mynetd 直接答（`local-api.md` 现有能力面） |
-| **平台态** | back 上的节点列表、路由、好友、统计 | mynetd 经 gateway 中继到 back，再回给 GUI |
+| **平台态** | 后端上的节点列表、路由、好友、统计 | mynetd 经 gateway 中继到后端，再回给 GUI |
 
 ### 5.3 中继语义
 
@@ -335,8 +335,8 @@ GET /api/v1/relay?path=<back-api-path>
 
 约定：
 - **鉴权**：GUI → mynetd 用本机 local token（`local-api.md` §1）；mynetd → gateway 用节点 Ed25519 身份。GUI 永不接触后两者。
-- **路径白名单**：mynetd 只放行 back 的**用户层只读/业务接口**（`api/v1/nodes|route|social|...`），**禁止** relay 到 `admin/*` 与任何身份生命周期接口。
-- **信封**：建议 mynetd 把 back 响应包进本机信封 `{ok, data, error}`，GUI 只面对一种格式。
+- **路径白名单**：mynetd 只放行后端的**用户层只读/业务接口**（`api/v1/nodes|route|social|...`），**禁止** relay 到 `admin/*` 与任何身份生命周期接口。
+- **信封**：建议 mynetd 把后端响应包进本机信封 `{ok, data, error}`，GUI 只面对一种格式。
 
 > 这条的意义：**GUI 的信任边界止于本机**。平台态数据只是「本机代理去取回来的东西」。
 
@@ -350,7 +350,7 @@ GET /api/v1/relay?path=<back-api-path>
 |------|------|
 | 契约 | `mynet_agent/docs/HEARTBEAT_API_SPEC.md`（stats / `vpn_interfaces[]` / `node_monitor{node_self,peers_status}`） |
 | agent | `daemon.go` 每 300s 采集 → POST 心跳，响应取 `commands[]`，执行后 `PATCH result` |
-| back | `HeartbeatRequest` 校验 → `NodeStatusService::recordHeartbeat` + `NodeMonitorService::processMonitorData` → 取 `monitor_rt_cmds` → 响应 |
+| 后端 | `HeartbeatRequest` 校验 → `NodeStatusService::recordHeartbeat` + `NodeMonitorService::processMonitorData` → 取 `monitor_rt_cmds` → 响应 |
 | 命令来源 | `NodeConfigService` 在配置变更时创建 `node_refresh` 等命令 ✅ |
 
 ### 6.2 缺口（含落地状态）
@@ -371,7 +371,7 @@ GET /api/v1/relay?path=<back-api-path>
 2. ✅ **补响应性联动**：`NodeMonitorService::processMonitorData` 检测状态跃迁（`nodes.node_status` 真的变了）→ `RelatedNodeRouteRefresher` 为对端（`routes.target_node_id` 指向本节点、且 `node_status >= 启用` 的那些 `node_id`）入队 `mynet.route.update`。
    语义沿用被删除事件系统里的 `RefreshRelatedNodeRoutesHandler`。**入队放在 `DB::commit()` 之后**：命令入队会经网关立刻推事件，而节点是另一个进程、看不到未提交的行
 3. ✅ **gateway 上线**：节点已建立到 gateway 的 WS 长连接、Ed25519 challenge-response 握手、事件推送、经中继回源都已落地并**真环境端到端跑通**；心跳也经中继（`mynetd.json` 的 `relay_heartbeat`，**默认开**；设 false 可退回直连，供第 4 步之前的过渡）。节点面路由的限流也相应改为**按已验签节点**计（原 `throttle:api` 按 IP 60/分，经中继后所有节点会挤网关那一个 IP，约 300 节点即打满）
-4. ⬜ **back 节点接口收内网**：确认无直连流量后关闭公网暴露。
+4. ⬜ **后端节点接口收内网**：确认无直连流量后关闭公网暴露。
    ⚠️ 这是**部署侧动作**，需要现场观测确认；代码侧已具备条件（心跳/取命令/回报三条路径都可经中继）
    ⚠️ 另需注意：节点通道已不再有按 IP 的兜底限流（见上），未验签的洪泛须由边缘（网关 / nginx）承担
 
@@ -399,8 +399,8 @@ GET /api/v1/relay?path=<back-api-path>
 |-------------------|------|------|
 | 未登记目的地走代理 | **L2 TransportPolicy → L3 BundleEnvelope → L5 Driver** | gnb：`proxy on` + **指定出口节点（下一跳）**；wg：`AllowedIPs`（双向 cryptokey routing）。两者语义不同构，**不可压成扁平结构**（见 `driver-abstraction.md` §3） |
 | OS 策略路由（`proxy_route.conf` / `route_policy.sh`） | **L6 NetworkBackend** | 驱动无关：`ip route` / pf 对 gnb0 与 wg0 一视同仁 |
-| IP 段列表 / 地域分流（chinaip/interip、NODE_REGION） | **L2 TransportPolicy 的输入** | 谁走谁是业务决策，应由 back 算好随 envelope 下发，不在节点上现算 |
-| `proxy_role.conf` / `proxy_peers.conf` 等节点本地状态 | **消亡** | 角色与拓扑是 back 的 L1/L2 数据 |
+| IP 段列表 / 地域分流（chinaip/interip、NODE_REGION） | **L2 TransportPolicy 的输入** | 谁走谁是业务决策，应由后端算好随 envelope 下发，不在节点上现算 |
+| `proxy_role.conf` / `proxy_peers.conf` 等节点本地状态 | **消亡** | 角色与拓扑是后端的 L1/L2 数据 |
 
 > 用户原话的机制澄清：**不是「mynet_proxy 去和 driver 抽象层通信」，而是「proxy 是业务意图，由 driver 各自解释落地」**。底层可能是 gnb 也可能是 wg —— 所以意图在上、落地在 driver，中间经 envelope 传递。
 
@@ -434,7 +434,7 @@ GET /api/v1/relay?path=<back-api-path>
 | `mynet_gateway` | `mynet_agent`（`cmd/mynet_gateway`） | 同 Go module，可复用 `types` 与签名工具；将来拆独立仓随时可拆 |
 | gateway 集成（notify 调用） | `mynet_api` | 命令入队 / generation 变更处调用；失败静默降级 |
 | 长连接协程 | `mynet_agent`（`mynetd`） | 收到通知触发 `RunOnce`；fetch 中继 |
-| GUI 接入 | `mynet_gui` / `mynet_ui` | 只调 `127.0.0.1:<port>/api/v1`，业务零持有 |
+| GUI 接入 | `mynet_gui` | 只调 `127.0.0.1:<port>/api/v1`，业务零持有（`mynet_ui` 为历史仓，不在 workspace） |
 | 部署/分发 | `mynet_ctl` | gateway 列表下发、安装时配置 |
 
 ---

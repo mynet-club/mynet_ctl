@@ -616,7 +616,7 @@ DNS 只管「返回什么 IP」；「走不走隧道」仍归入口分流（IP �
 | 4 | gateway 落地：dnsmasq 上游同序 | agent (Linux/OW) | ⬜ 待做 |
 | 5 | WebUI client 模式 DNS 面板（三选一 + 来源列表） | WebUI | ⬜ 待做 |
 | 6 | peer 节点跑 DNS 服务（dnsmasq/SmartDNS） | 运维/用户 | ⬜ 待做 |
-| 7 | envelope 下发 DNS 来源（peer VIP / smart 地址） | back | ⬜ 待做 |
+| 7 | envelope 下发 DNS 来源（peer VIP / smart 地址） | 后端 | ⬜ 待做 |
 
 ### 13.7 一句话定案
 

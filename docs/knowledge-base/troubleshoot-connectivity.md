@@ -167,7 +167,7 @@ Windows / 无 gnb_ctl 时：对比 `ed25519/<peer>.public` 与对端自己 `secu
 ```text
 登录 → 取身份/节点信息 → 本地 keygen → 只上传 public → bundle/publish
 ```
-不是「back 生成私钥下发」。实现：`mynet auth login` + `mynet node claim <id>`。
+不是「后端生成私钥下发」。实现：`mynet auth login` + `mynet node claim <id>`。
 
 ### 2.6 常见 B 步病灶
 

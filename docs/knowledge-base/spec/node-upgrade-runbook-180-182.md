@@ -12,7 +12,7 @@
 |---|---|---|
 | **P-1** | **出包 commit** | 四仓当前**有未提交改动**（§1 清单）。CI 出包拿的是 HEAD → **不提交就缺**：G-11 UCI 修复、`-tags openwrt` 接线、安装器委托 `mynet install`、wintun 随包、ctl `kind` 迁移。**先提交再出包。** |
 | **P-2** | push 授权 | CI 从 GitHub 取码，**必须 push**（需你明确批准；我不擅自 push）。 |
-| **P-3** | `GUI_REPO` | 仅 mac/win 图形安装器才需要。默认 `mynet-club/mynet_gui-V2` **未确认**（workflow 从未出现过 GUI 仓名）。 |
+| **P-3** | `GUI_REPO` | 仅 mac/win 图形安装器才需要。`mynet-club/mynet_gui`（**已确认，不带 `-V2`**，见 `mynet_desktop/.github/workflows/release.yml:48`）。 |
 | **P-4** | **H5 豁免声明** | `.182` 的 **LuCI 入口层本次不验**（只验 CLI/IPK/procd/数据面）；H5 的 reference 验收另补。**写进窗口记录。** |
 | **P-5** | 备份 | 两节点 P0 + 密钥再备份（§4）。 |
 
@@ -227,6 +227,6 @@ ssh -i $KEY root@192.168.0.2 '
 | 出包 run id / artifact | `build-openwrt-sdk` `38106691052`（首轮：ipk 已发布；arm64/mipsel 因 ctl 唯一键 500 而步红）+ `38107743156`（幂等修复后三腿发布全绿）。artifact = ctl 下载面 `mynet_agent_openwrt_amd64_v0.0.0-60623c3.ipk` + `lua_openwrt_all_v0.0.0-60623c3.ipk`（sha256 与服务端登记一致） |
 | 开始 / 结束（本地时间） | 2026-10-11 11:15 – 11:22 |
 | `.180` 结果 | 上一窗口已升至 `v0.0.0-60623c3`；本次未复验 A1–A5 |
-| `.182` 结果 | B1 过（executor=lua、无心跳 cron）· B2 过（procd 单实例 gnb、`gnb_tun_16` UP）· B3 过（`fwmark 0xc8` → table mynet_proxy，双出口 .180/.188）· B4 未验（需 back 侧授权/撤销）· B5 抽查过（隧道出口公网 = 52.221.22.241 / colo=SIN，即 `.180`）· B6 过（dnsmasq→smartdns 未破坏）· **B7 LuCI 未验** |
+| `.182` 结果 | B1 过（executor=lua、无心跳 cron）· B2 过（procd 单实例 gnb、`gnb_tun_16` UP）· B3 过（`fwmark 0xc8` → table mynet_proxy，双出口 .180/.188）· B4 未验（需后端侧授权/撤销）· B5 抽查过（隧道出口公网 = 52.221.22.241 / colo=SIN，即 `.180`）· B6 过（dnsmasq→smartdns 未破坏）· **B7 LuCI 未验** |
 | 回滚？ | 否。备份在 `.182:/tmp/mynet-cfg-20261011_111514`（/etc/mynet 含密钥、/etc/config、/usr/sbin 旧二进制） |
 | 遗留 | ①升级期 procd 曾留双 gnb（一持 tun、一 tunless）——已清成单实例，待 VM 确定性复现；② ipk `PKG_VERSION` 静态 `2.1.8-r1` → opkg 升级须 `--force-reinstall`；③ luci ipk 落 `/etc/...` 文件但无 `conffiles`；④ `mynet install` 真实运行仍打 `--dry-run` 头。详见 dev-plan 任务 #18–#20 |

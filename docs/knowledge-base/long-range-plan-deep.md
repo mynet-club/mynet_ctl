@@ -46,19 +46,19 @@
 | 能力域 | 真实状态 | 关键证据 |
 |---|---|---|
 | **数据面隧道** | ✅ **真通**。gnb + wg + 跨驱动桥三场景 e2e PASS，三节点拓扑（2×LAN + 1×QEMU OpenWrt） | `scripts/e2e/g3_tunnel.sh`、`u1_mesh.sh` 6/6 |
-| **社区业务面（back）** | ✅ **真通**。注册/登录/节点/密钥/好友/连接申请/服务 CRUD 实测 200/201/422/410 各就各位；`make check` **154 tests / 2503 assertions**（2026-09-24 清理时实测；基线为 126/2398，差额来自 CPI-28 把 Feature 套件并入门禁） | 本文同日 T2-6 实测；`long-range-plan-t.md` §3 T2-6 证据表；`mynet_api` 的 `make check` 输出 |
+| **社区业务面（后端）** | ✅ **真通**。注册/登录/节点/密钥/好友/连接申请/服务 CRUD 实测 200/201/422/410 各就各位；`make check` **154 tests / 2503 assertions**（2026-09-24 清理时实测；基线为 126/2398，差额来自 CPI-28 把 Feature 套件并入门禁） | 本文同日 T2-6 实测；`long-range-plan-t.md` §3 T2-6 证据表；`mynet_api` 的 `make check` 输出 |
 | **用户前端（mynet_gui）** | ✅ **四页真打通**，连接向导四步走通并落库 | `long-range-plan-t.md` §3 T2-6 |
 | **gateway** | ✅ **可执行（V1 已完成，2026-09-24）**。V1 开工时的基线是「无 main 的库包 + `handleConnect` 占位 + `handleRelay` 恒 502 + `Makefile` dist 不产它 + compose 里 `alpine sleep infinity`」，V1-1~V1-5 已逐项解决（实测证据见 §4 各段） | 现证：`cmd/mynet_gateway/`、`gateway/ws.go`（真握手）、`Makefile:95`（五平台产 `mynet_gateway`）。⚠️ 残留：`scripts/e2e/up.sh:78` 仍自陈「cmd 待接 — 跳过」，该自陈**已过期** |
 | **在线升级** | ~~❌ 纸面（`upgrade.Fetch`/`Install` 是返回 error 的桩）、版本比较是**字典序非 semver**（`0.10.0 < 0.9.0`）~~ → ✅ **V2 已解决**（V2-5 两步协议 Fetch、V2-6 Install 含校验+备份+原子替换+回滚、V2-7 改语义比较、V2-8a 真二进制升一轮） | 现证见 §4「V2 实测证据」：真 `mynet` v0.0.1→v0.0.2；负路径校验和不符被拒且不落 `.bak` |
 | **版本与校验** | ~~❌ 产物版本**恒为 `dev`**（无 `-ldflags`）；agent 侧无 checksum 生成；客户端从不校验~~ → ✅ **V2 已解决**（V2-3 版本注入 + strip、V2-4 `make dist` 出 5 平台 × 3 二进制 + `checksums.txt`、V2-6 客户端校验且不符即拒） | 现证见 §4：三个二进制分别报出注入版本；`-s -w` 让 mynetd 由 9.7MB 降到 7.2MB |
 | **分发中心（ctl）** | ⚠️ **服务端完备**（`releases` 表有 `sha256`、上传即算校验和、manifest 输出 `artifacts[].sha256` + `checksums`）。原先「客户端未接」的五项里，**V2-1/V2-2 已解决两项**：`PRODUCTS` 注册 `mynet_agent`、`apps.json` 形状分歧修正（Go 解析器改打**真端点**，不再读 fixture 后 `t.Skip`）。仍缺：节点面 bundle 拉取与心跳上报（V1-10）、ctl 侧真拉两版（V2-8b） | `ReleaseService.php:32-38`；`ManifestService.php:268-270,279,282,300`；§4 V2 各项 |
-| **可观测性** | ⚠️ **采集与上报已通（V4-1a / V4-2），出口侧仍缺**。~~`mynet metrics` 的 `CPUPercent`/`InterfaceUp`/`Peers`/`PeersUp`/`Addrs` 全仓从未被赋值~~ → darwin 已实测非 0 且与 sysctl/ifconfig 对照一致；~~`metrics_vpn.go` 解析循环空转~~ → 已改为**调 driver 包**；~~心跳采完 `_ = out` 直接丢弃~~ → **已真上报**，back 的 Redis 与 sqlite 都核对到了真指标（V4-2）。仍缺：无 Prometheus/metrics 端点（V4-3）；告警全仓 0 处（V4-8）；`ApiRequestLogger` 仍是死代码。~~`shared/logger` 零消费者~~ → 已重写为 slog 封装并接入两个常驻进程（V4-4） | 实测 `mynet metrics --json`；`MYNET_LOG_FORMAT=json` 的日志样本；Redis `node:status:<id>` |
-| **back 侧指标** | ⚠️ 有一条真链路：`POST /api/v1/monitor/heartbeat` → Redis（pipeline + 全节点 zset + 离线扫描）。但 `ApiRequestLogger` **未在任何地方注册**（死代码） | `VPN/Routes/api.php:49`；`Monitor/Domain/Services/NodeHeartbeatDomainService.php:54,138,182`；`VPN/Middleware/ApiRequestLogger.php:92` |
-| **压测** | ⚠️ `bench_1k.go` 是**纯进程内合成**（map attach + 桩执行器 `return "ok"`），无网络/无 WS/无心跳/无 back。224k/s 测的是 map+分派吞吐，**与心跳无关** | `scripts/load/bench_1k.go:26-34,37,49,93` |
+| **可观测性** | ⚠️ **采集与上报已通（V4-1a / V4-2），出口侧仍缺**。~~`mynet metrics` 的 `CPUPercent`/`InterfaceUp`/`Peers`/`PeersUp`/`Addrs` 全仓从未被赋值~~ → darwin 已实测非 0 且与 sysctl/ifconfig 对照一致；~~`metrics_vpn.go` 解析循环空转~~ → 已改为**调 driver 包**；~~心跳采完 `_ = out` 直接丢弃~~ → **已真上报**，后端的 Redis 与 sqlite 都核对到了真指标（V4-2）。仍缺：无 Prometheus/metrics 端点（V4-3）；告警全仓 0 处（V4-8）；`ApiRequestLogger` 仍是死代码。~~`shared/logger` 零消费者~~ → 已重写为 slog 封装并接入两个常驻进程（V4-4） | 实测 `mynet metrics --json`；`MYNET_LOG_FORMAT=json` 的日志样本；Redis `node:status:<id>` |
+| **后端侧指标** | ⚠️ 有一条真链路：`POST /api/v1/monitor/heartbeat` → Redis（pipeline + 全节点 zset + 离线扫描）。但 `ApiRequestLogger` **未在任何地方注册**（死代码） | `VPN/Routes/api.php:49`；`Monitor/Domain/Services/NodeHeartbeatDomainService.php:54,138,182`；`VPN/Middleware/ApiRequestLogger.php:92` |
+| **压测** | ⚠️ `bench_1k.go` 是**纯进程内合成**（map attach + 桩执行器 `return "ok"`），无网络/无 WS/无心跳/无后端。224k/s 测的是 map+分派吞吐，**与心跳无关** | `scripts/load/bench_1k.go:26-34,37,49,93` |
 | **多平台** | linux ✅ 真跑（U1 三机）· openwrt ✅ 真跑（VM）· darwin ⚠️ 仅能构建（metrics 全 0）· windows ❌ 从未构建。`mynet_desktop` 只有 12 行 plist + 21 行 unit + 22 行脚本，**无任何 .msi/.nsis/.pkg/.dmg/.deb/.rpm**；`mynet install` 只拷二进制、不装 unit、不 enable；`uninstall` 是 print-only | `mynet_desktop/`；`mynet/cmd_install.go:12-48,50-53,55-64` |
-| **移动 relay** | ⚠️ ~~`/v1/relay` 恒 502、白名单未接线~~ → **V1-4 已解决这两项**（现真转发、`relaypolicy` 已接线，见 §4）。仍缺：① **移动端 / GUI 侧零消费**（`mynet_gui` grep `v1/relay` 0 命中，仍直连 back）——注意这与**节点面**不同，节点面已复用 `/v1/relay`（V1-9）；② spec 要求的 **mynetd 侧** `GET /api/v1/relay?path=` 在 localapi 路由表里不存在（V1-8）；③ 移动端载体：**Capacitor 连产物都出不来**（仓里无 `@capacitor/*` 依赖、无 `src-capacitor/`，`npm run build:capacitor -T android` 会停下来交互索要 appId——Quasar 的 capacitor 模式不会自动兜底）。注意与**桌面 Electron 侧**不同：后者实测 `npm run build:electron` **退出码 0 并产出 `dist/electron`**，但那是 Quasar 在构建时**自动补依赖并生成 `src-electron/` 模板**（本仓原本都没有），且从未发布过（无签名/分发配置） | `spec/control-plane.md:278-289`；`mynetd/localapi/server.go:55-67`；`mynet_gui/quasar.config.ts:205,210`；V1-4 证据见 §4 |
+| **移动 relay** | ⚠️ ~~`/v1/relay` 恒 502、白名单未接线~~ → **V1-4 已解决这两项**（现真转发、`relaypolicy` 已接线，见 §4）。仍缺：① **移动端 / GUI 侧零消费**（`mynet_gui` grep `v1/relay` 0 命中，仍直连后端）——注意这与**节点面**不同，节点面已复用 `/v1/relay`（V1-9）；② spec 要求的 **mynetd 侧** `GET /api/v1/relay?path=` 在 localapi 路由表里不存在（V1-8）；③ 移动端载体：**Capacitor 连产物都出不来**（仓里无 `@capacitor/*` 依赖、无 `src-capacitor/`，`npm run build:capacitor -T android` 会停下来交互索要 appId——Quasar 的 capacitor 模式不会自动兜底）。注意与**桌面 Electron 侧**不同：后者实测 `npm run build:electron` **退出码 0 并产出 `dist/electron`**，但那是 Quasar 在构建时**自动补依赖并生成 `src-electron/` 模板**（本仓原本都没有），且从未发布过（无签名/分发配置） | `spec/control-plane.md:278-289`；`mynetd/localapi/server.go:55-67`；`mynet_gui/quasar.config.ts:205,210`；V1-4 证据见 §4 |
 | **用户文档** | ❌ `mynet_gui/docs/help/index.json` 引用 **47** 个文件、实际只有 **5** 篇正文（`lastUpdated: 2025-09-15`），`HelpPage.vue` 消费它 → 绝大多数链接悬空。**无任何安装指南**。全仓**无隐私政策** | `mynet_gui/docs/help/index.json`；`mynet_desktop/README.md`（8 行，开发向） |
-| **生产环境** | ⚠️ **服务器与证书已存在**：`10.182.236.180`（公网 `52.77.179.176`），ctl/back/gui 共置同机不同 nginx server block，证书 `/etc/letsencrypt/live/mynet.club/{fullchain,privkey}.pem`。但 **back 尚未部署过**（无部署记录）——V3-1/V3-2 已把入口备好（`manage-prod.sh` + `deploy/nginx.conf`），剩余前置是 H5（DBA 建库）与 H6（`back_priv` 入凭证库） | `deployment-registry.md:12-15,20`；`mynet_api/manage-prod.sh`；`mynet_api/deploy/`（4 文件：`.rsyncignore` / `backup.sh` / `nginx.conf` / `README.md`） |
+| **生产环境** | ⚠️ **服务器与证书已存在**：`10.182.236.180`（公网 `52.77.179.176`），ctl/后端/gui 共置同机不同 nginx server block，证书 `/etc/letsencrypt/live/mynet.club/{fullchain,privkey}.pem`。但 **后端尚未部署过**（无部署记录）——V3-1/V3-2 已把入口备好（`manage-prod.sh` + `deploy/nginx.conf`），剩余前置是 H5（DBA 建库）与 H6（`back_priv` 入凭证库） | `deployment-registry.md:12-15,20`；`mynet_api/manage-prod.sh`；`mynet_api/deploy/`（4 文件：`.rsyncignore` / `backup.sh` / `nginx.conf` / `README.md`） |
 | **CI/CD** | ❌ `mynet_agent`/`mynet_api` **无 `.github`**；ctl/gui/utc 只有 `copilot-instructions.md`、**无 workflows**；`mynet_openwrt/release.yml` 存在但**该 repo tag 为空 → 从未跑过**；gnb 的 10 个 workflow 产物 rsync 到 **`download.mynet.club`（已废弃链路）不是 ctl** | `mynet_openwrt/.github/workflows/release.yml:1-35`；`mynet_gnb/.github/workflows/build_linux.yml:11,548-555`；`archive/2026-10/v2-upgrade-plan.md:18` |
 
 ---
@@ -129,7 +129,7 @@ T3-5（G4 外网可用）、T4-4（双 gateway）、T4-6（真节点压测）、
 | **H1** | ~~裁定 web server 方案~~ ✅ **已裁定（2026-09-24）：复用现有 nginx，不引入 Caddy** | — | — | 已决 → V3 改走 nginx server block |
 | **H2** | **DNS 记录**：`api` / `gw` / `console` / `admin` → `52.77.179.176` 或新入口 | 红线「不改 DNS」 | T3-2 → T3-4 → T3-5 → G4 | H1 已定，**可立即办** |
 | **H3** | **确认证书 SAN**：`/etc/letsencrypt/live/mynet.club/` 现有证书是否已含 `api.` / `gw.` / `console.` / `admin.` 子域；不含则需重签 | 需生产机 root + ACME 交互 | T3-2 | 与 H2 同时 |
-| **H4** | ~~裁定子域命名冲突~~ ✅ **已裁定（2026-09-24）：`console` = 租户管理（back 管理面）、`admin` = 平台管理（框架 platform/operator SPA）、`adm` 弃用**。用户原话：「back管理是租户管理，租户管理是console，admin 是平台管理」 | — | — | 已决 → 待同步 `deployment-registry.md:13` / `ecosystem.md:125` / `brand-guide.md:152` |
+| **H4** | ~~裁定子域命名冲突~~ ✅ **已裁定（2026-09-24）：`console` = 租户管理（后端管理面）、`admin` = 平台管理（框架 platform/operator SPA）、`adm` 弃用**。用户原话：「后端管理是租户管理，租户管理是console，admin 是平台管理」 | — | — | 已决 → 待同步 `deployment-registry.md:13` / `ecosystem.md:125` / `brand-guide.md:152` |
 | **H4b** | **`gw` vs `gw1`/`gw2` 未裁定**（H4 只答了 admin/adm）。建议：现阶段单入口 `gw`，等 V4-5/V4-6（presence 真接线）做完再开 `gw1`/`gw2`——现在开两个入口是空的 | 命名与多实例时机是产品决策 | T4-4 | V4 前 |
 | **H5** | **DBA 建库建表**：生产是 MySQL 8，而 `deployment-registry.md:63` 明写「**mynet_api 禁止 migration，需 DBA 走 database/sql/**」 | 生产库变更权限 | T3-4 | H1 之后 |
 | **H6** | **生成 `back_priv` / `back_pub` 并入凭证库**：当前 `.env` 无 `MYNET_BACK_FACE_*` 任何键 → 节点面 DH+HMAC **一律拒绝**（fail-closed：`BackFaceKeys::resolve()` 返 null → `NodeHeartbeatAuthMiddleware.php:192-196` 记 `Log::error` 并 return null → 调用方 `:73-75` `reject()`）。⚠️ 保护等级 **高于**节点私钥（泄露可冒充**所有**节点） | 红线「不碰生产密钥/crt」；且必须走 `crt` 凭证库 | T3-4 · T3-5 | H5 同时 |
@@ -219,7 +219,7 @@ CPI-62 缺 OS 路由 / CPI-54 授权绕过-安全）。
   实测 `connected_peers=1`、`rx/tx=4116`（此前恒 0），完整监控链
   gnb ctl block → `mynet metrics` → 心跳 → MariaDB 首次打通。
   顺带把 `bundle_changed` 接成完整生命周期（`refresh-config → service start → apply --auto`），
-  实测从 back 触发 `bundle/publish` 后节点**零人工干预**跑完三步、隧道未断。
+  实测从后端触发 `bundle/publish` 后节点**零人工干预**跑完三步、隧道未断。
 - ~~**CPI-60**：`RouteController::getRequests()` 是 TODO 桩~~
   → ✅ **已修**（`mynet_api 884cf9c` + `mynet_agent e5f3657`）。
   ⚠️ 同时**修正我先前对影响的高估**：GUI 走的是 `/route/data` 的 `requests` 子对象
@@ -294,7 +294,7 @@ CPI-62 缺 OS 路由 / CPI-54 授权绕过-安全）。
 ### V1 · 拱顶石：gateway 可执行化
 
 **出口判据 G-V1**：`mynet_gateway` 二进制能起、能监听 8710、节点能建 WS 连接、
-back 能通过它下发命令并收到结果、`/v1/relay` 能真转发且白名单生效。
+后端能通过它下发命令并收到结果、`/v1/relay` 能真转发且白名单生效。
 
 | ID | 内容 | 前置 | 验收判据 | 证据形式 | 状态 |
 |---|---|---|---|---|---|
@@ -303,17 +303,17 @@ back 能通过它下发命令并收到结果、`/v1/relay` 能真转发且白名
 | V1-3 | `handleConnect` 去占位（`server.go:249-266`） | V1-2 | 连接状态表真实反映节点在线/已鉴权 | 单测 + e2e | ✅ 2026-09-24 |
 | V1-4 | `handleRelay` 真转发（现在恒 502）+ **`relaypolicy` 接线**（现在只在注释里） | V1-1 | 白名单内路径转发成功、白名单外 403、含 `%` 一律拒 | **改掉 `server_test.go` 里把 502 判为 PASS 的 `TestC7_RelayExists`**，改为断言真实转发 | ✅ 2026-09-24 |
 | V1-5 | `Makefile` dist 产出 `mynet_gateway`（现在只 build mynet + mynetd） | V1-1 | `dist/` 下五平台均有 gateway 二进制 | `file` 输出 | ✅ 2026-09-24 |
-| V1-6 | back 侧打开 `MYNET_GATEWAY_ENABLED`（`config/gateway.php:17` 默认 false）并跑通命令下发 | V1-2..4, V1-9 | WS 命令闭环：back → gateway → mynetd → mynet 执行 → 结果回传 | e2e 脚本断言结果内容 | ⚠️ **V1-6a 部分**：闭环已用**假 back** 真二进制跑通；真 back 需 H6（生成 `MYNET_BACK_FACE_PRIV/PUB`）才能验签，按 §5 纪律不拿等价物冒充达成 |
-| V1-7 | mynetd 侧结果回传：`transport/client.go:169` 曾是 `_ = res`，命令执行结果**被直接丢弃** | V1-2 | 节点执行完命令后，结果帧真的发到 gateway 并被转发到 back | gateway 侧收到结果帧的日志/断言 | ✅ 2026-09-24（管道两端均已验证；**触发方**待 V1-9） |
-| V1-8 | mynetd localapi 缺 `relay` 域：`spec/local-api.md:19` 声称「✅ 已实现…已对真 back 实测」，但 `mynetd/localapi/server.go:56-65` 路由表里**没有** `/api/v1/relay`，且 `local-api.md:8` 指向的 `internal/localapi` 路径在 V2 树中**根本不存在** | V1-4 | GUI 经 `127.0.0.1:8096/api/v1/relay?path=` 能拿到平台态数据；`admin/*` 被拒 | 真浏览器 + 真 back 实测 | ☐ |
-| **V1-9** | 节点面 HTTP 客户端：节点侧此前**没有任何**「签名请求经 gateway 到 back」的能力，导致三处同时断（`refresh-*` 无 bundle、`command_queued` 拉不到命令、心跳采完即丢） | V1-4, V1-7 | 节点能签名拉待执行命令并回报结果 | e2e：命令闭环三端日志对齐 | ✅ 2026-09-24（命令链已通；bundle 拉取与心跳上报见 V1-10） |
-| **V1-10** | **（V1-9 的剩余面）** 节点面客户端目前只接了「拉命令 + 回报结果」两条。另两条仍缺：① bundle 拉取（`refresh-*` 实测报 `读 bundle 失败: …/var/bundle.json: no such file`）② 心跳上报（`cmd/mynetd/main.go:157` 采完 `_ = out` 丢弃；WS 只发 `{"t":"ping"}`） | V1-9 | 节点能拉到 bundle 并落盘；back 的 `monitor/heartbeat` 收到真指标 | e2e + back 侧 Redis 数据核对 | ✅ 2026-09-25 两面都合上了。② 心跳见 V4-2（`mynet_agent 141b9ed`）。① bundle 拉取见 `mynet_agent aa7090d`：`backclient.fetchBundle`（条件请求 + ETag）→ `bundleStore` 校验后原子落盘 `var/bundle.json` → 执行器只读；触发点是「启动即拉」+「`bundle_changed` 先拉后刷」。证据 `scripts/e2e/bundle_pull.sh` **11/11**（真 gateway + 真 mynetd + 真 mynet，非 mock）：起点确认文件不存在 → 落盘 generation=gen-e2e-1 → 假 back 收到带 `X-Node-Signature` 的请求 → `refresh-config` 退出码 0 并写出 `var/gnb/{node.conf,route.conf}` → 二次启动走 304 不重写。⚠️ 顺带查出 **CPI-44**：`OpNodeRefresh` 曾映射到执行器**不存在**的 `refresh-nodes` 域，故这条链即使拉到 bundle 也会以退出码 2 收尾；已改 `refresh-config` 并补跨包守护 `TestPlanRefreshDomainsExistInExecutor` |
+| V1-6 | 后端侧打开 `MYNET_GATEWAY_ENABLED`（`config/gateway.php:17` 默认 false）并跑通命令下发 | V1-2..4, V1-9 | WS 命令闭环：后端 → gateway → mynetd → mynet 执行 → 结果回传 | e2e 脚本断言结果内容 | ⚠️ **V1-6a 部分**：闭环已用**假后端** 真二进制跑通；真后端需 H6（生成 `MYNET_BACK_FACE_PRIV/PUB`）才能验签，按 §5 纪律不拿等价物冒充达成 |
+| V1-7 | mynetd 侧结果回传：`transport/client.go:169` 曾是 `_ = res`，命令执行结果**被直接丢弃** | V1-2 | 节点执行完命令后，结果帧真的发到 gateway 并被转发到后端 | gateway 侧收到结果帧的日志/断言 | ✅ 2026-09-24（管道两端均已验证；**触发方**待 V1-9） |
+| V1-8 | mynetd localapi 缺 `relay` 域：`spec/local-api.md:19` 声称「✅ 已实现…已对真后端实测」，但 `mynetd/localapi/server.go:56-65` 路由表里**没有** `/api/v1/relay`，且 `local-api.md:8` 指向的 `internal/localapi` 路径在 V2 树中**根本不存在** | V1-4 | GUI 经 `127.0.0.1:8096/api/v1/relay?path=` 能拿到平台态数据；`admin/*` 被拒 | 真浏览器 + 真后端实测 | ☐ |
+| **V1-9** | 节点面 HTTP 客户端：节点侧此前**没有任何**「签名请求经 gateway 到后端」的能力，导致三处同时断（`refresh-*` 无 bundle、`command_queued` 拉不到命令、心跳采完即丢） | V1-4, V1-7 | 节点能签名拉待执行命令并回报结果 | e2e：命令闭环三端日志对齐 | ✅ 2026-09-24（命令链已通；bundle 拉取与心跳上报见 V1-10） |
+| **V1-10** | **（V1-9 的剩余面）** 节点面客户端目前只接了「拉命令 + 回报结果」两条。另两条仍缺：① bundle 拉取（`refresh-*` 实测报 `读 bundle 失败: …/var/bundle.json: no such file`）② 心跳上报（`cmd/mynetd/main.go:157` 采完 `_ = out` 丢弃；WS 只发 `{"t":"ping"}`） | V1-9 | 节点能拉到 bundle 并落盘；后端的 `monitor/heartbeat` 收到真指标 | e2e + 后端侧 Redis 数据核对 | ✅ 2026-09-25 两面都合上了。② 心跳见 V4-2（`mynet_agent 141b9ed`）。① bundle 拉取见 `mynet_agent aa7090d`：`backclient.fetchBundle`（条件请求 + ETag）→ `bundleStore` 校验后原子落盘 `var/bundle.json` → 执行器只读；触发点是「启动即拉」+「`bundle_changed` 先拉后刷」。证据 `scripts/e2e/bundle_pull.sh` **11/11**（真 gateway + 真 mynetd + 真 mynet，非 mock）：起点确认文件不存在 → 落盘 generation=gen-e2e-1 → 假后端收到带 `X-Node-Signature` 的请求 → `refresh-config` 退出码 0 并写出 `var/gnb/{node.conf,route.conf}` → 二次启动走 304 不重写。⚠️ 顺带查出 **CPI-44**：`OpNodeRefresh` 曾映射到执行器**不存在**的 `refresh-nodes` 域，故这条链即使拉到 bundle 也会以退出码 2 收尾；已改 `refresh-config` 并补跨包守护 `TestPlanRefreshDomainsExistInExecutor` |
 
 **可并行**：V1-8 / V1-10 与轨道 A（指标采集）、轨道 B（版本注入）互不依赖，可同时开。
 
 #### V1-9 实测证据（2026-09-24）
 
-**真二进制全链 e2e**（真 `mynet_gateway` + 真 `mynetd` + 真 `mynet`，上游是会下发命令并接收结果的假 back）：
+**真二进制全链 e2e**（真 `mynet_gateway` + 真 `mynetd` + 真 `mynet`，上游是会下发命令并接收结果的假后端）：
 
 ```
 mynetd : transport: 节点面签名就绪（node_id=1245816621804034, conf=…/conf/mynet.conf）
@@ -332,11 +332,11 @@ gateway: result 已转发 path=/api/v1/monitor/commands/9007199254740993/result 
 **关键设计**：节点面 HTTP **复用 gateway 现成的 `/v1/relay`**，不需要给 gateway 加新面——
 `relaypolicy.go:19-20` 的白名单本就包含 `/api/v1/monitor` 与 `/api/v1/heartbeat`
 （注释即「含节点自身通道」），而 `ReverseProxy` 会逐字转发请求头。
-签名口径两端已核对：back 的 `NodeHeartbeatAuthMiddleware::signedPath()` 返回
+签名口径两端已核对：后端的 `NodeHeartbeatAuthMiddleware::signedPath()` 返回
 `'/'.$request->path()`（带前导斜杠），agent 侧签同一路径；**差一个斜杠就全 401，
 且症状是「鉴权失败」而非「路径写错」**。测试里有一条反面断言专门锁这点。
 
-**命令词汇映射**（用户裁定：agent 侧显式映射表）：back 的 `command` 是 `mynet.<op>`，
+**命令词汇映射**（用户裁定：agent 侧显式映射表）：后端的 `command` 是 `mynet.<op>`，
 13 条里 9 条严格吻合，4 条历史漂移（`mynet.start`/`stop`/`restart`/`service.restart`）
 走显式别名表。映射放在 `mynetd/commands/backmap.go`（命令名真值所在处）。
 **不认识的命令必须按失败回报，不能静默丢弃**——这是 CPI-4 的核心教训
@@ -353,9 +353,9 @@ gateway: result 已转发 path=/api/v1/monitor/commands/9007199254740993/result 
 **已做变异测试验证**：往 `Plan()` 塞一个字面量 case、或从 `knownOps` 删一项，守护都失败
 （第一版只收 `ast.Ident` 漏了 `ast.BasicLit`，变异测试当场抓出，已修）。
 
-**back 侧同步**（用户裁定：删掉 `action` 字段）：`NodeHeartbeatController` 的
+**后端侧同步**（用户裁定：删掉 `action` 字段）：`NodeHeartbeatController` 的
 `COMMAND_ACTION_MAP` 与 `mapCommandToAction()` 已删除，响应不再带 `action`。
-删除前已确认无消费方（mynet_gui 零命中、mynet_agent 零命中、back 测试零断言）。
+删除前已确认无消费方（mynet_gui 零命中、mynet_agent 零命中、后端测试零断言）。
 新增 `PendingCommandsContractTest`（5 测试 / 19 断言）锁响应形状，
 与 agent 侧 `TestPullPendingCommandsParsesNumericIDs` **两端互锁**。
 
@@ -370,10 +370,10 @@ gateway: result 已转发 path=/api/v1/monitor/commands/9007199254740993/result 
 #### V1-7 实测证据（2026-09-24）与一处架构澄清
 
 **单元测试**：`cmd/mynetd` 15 项（含用 **C-2 双端互认向量密钥**验签，证明结果帧的签名就是
-back 会接受的那一个，而非自证）、`mynetd/transport` 全绿、`gateway` 33 项，**`-race` 干净**，
+后端会接受的那一个，而非自证）、`mynetd/transport` 全绿、`gateway` 33 项，**`-race` 干净**，
 `make check` 通过（16 包 ok）。
 
-**真二进制冒烟**（真 `mynet_gateway` + 真 `mynetd` + 真 `mynet`，上游用会回 `X-Node-Verified` 的假 back）：
+**真二进制冒烟**（真 `mynet_gateway` + 真 `mynetd` + 真 `mynet`，上游用会回 `X-Node-Verified` 的假后端）：
 
 ```
 mynetd : transport: 节点面签名就绪（node_id=1245816621804034, conf=…/conf/mynet.conf）
@@ -386,8 +386,8 @@ gateway: result 目标不在节点面白名单内 path=/api/v1/monitor/commands/
 ```
 
 **⚠️ 架构澄清（冒烟测出来的，此前无人记录）**：网关下发的是**事件信封** `{event, data}`
-（back 的 `GatewayNotifier` 只发 `command_queued` / `bundle_changed` / `route_changed`，
-且 `data` 仅带定位信息），**不是命令本身**；命令要节点自己回 back 拉
+（后端的 `GatewayNotifier` 只发 `command_queued` / `bundle_changed` / `route_changed`，
+且 `data` 仅带定位信息），**不是命令本身**；命令要节点自己回后端拉
 （`GET /api/v1/monitor/commands`，即 pull 模型）。
 
 而 `transport.HandleFrame` 此前把**每一帧**都当 `commands.Request{id,op,args}` 解析，
@@ -412,7 +412,7 @@ gateway: result 目标不在节点面白名单内 path=/api/v1/monitor/commands/
 **C-4 闭环**（上游回 `X-Node-Verified` → 该连接被置位）、SSRF host 逃逸拒绝、query 保留。
 `TestC7_RelayExists`（把恒 502 判为 PASS，D3 反面教材）已删除并替换。
 
-**对真 back 实测**（gateway `-upstream http://127.0.0.1:8080`，非 mock）：
+**对真后端实测**（gateway `-upstream http://127.0.0.1:8080`，非 mock）：
 
 ```
 POST /v1/relay?path=/api/v1/auth/login      → 200，拿到真 token（51 字符）
@@ -422,7 +422,7 @@ GET  /v1/relay?path=/admin/dashboard         → 403，gateway 侧就拦掉并�
      gateway: relay 拒绝（白名单外）path=/admin/dashboard from=127.0.0.1:62694
 ```
 
-> 注：这四条正是 `spec/local-api.md:19` 声称「已对真 back 实测」的判据。
+> 注：这四条正是 `spec/local-api.md:19` 声称「已对真后端实测」的判据。
 > **该声明此前是假的**（V2 树里 relay 域根本不存在，见 V1-8）；gateway 侧现在才真的成立。
 
 **dist 产物**（`make dist`，五平台均含三个二进制）：
@@ -532,7 +532,7 @@ $ MYNET_APPS_INDEX=http://127.0.0.1:18090 mynet update
    **20 个 error，全部是 `MissingAppKey`** —— 本仓也没有 `.env`。
 
 这与 mynet_api 的 **CPI-23 同源**：**两个 PHP 仓都缺 `.env`，而两边的门禁都发现不了**
-（back 是 phpunit.xml 自带 env 所以测试全绿；ctl 是静默跳过）。
+（后端是 phpunit.xml 自带 env 所以测试全绿；ctl 是静默跳过）。
 已分别建本地 dev `.env`（两个仓的 `.gitignore` 都已挡住）。
 
 > ⚠️ **教训**：「无工具时跳过」型门禁等于没有门禁 —— 它把「环境没装好」伪装成「检查通过」。
@@ -553,10 +553,10 @@ $ MYNET_APPS_INDEX=http://127.0.0.1:18090 mynet update
 | V3-4 | ~~compose healthcheck~~ **随 V3-0 作废**；健康检查改由 nginx 的 `/up` 与脚本 verify 承担 | V3-0 | `curl https://api.mynet.club/up` → 200 | ✅ 已并入 V3-1 的 verify_deployment |
 | V3-5 | **重做 T3-3**：备份加密 + 恢复脚本 + **恢复演练** + 密码不走命令行 + cron 真装（原先是明文 tar.gz、无 restore、`-p"$DB_PASSWORD"` 进 `ps`、cron 只在 README 注释里） | — | 从备份**真恢复出一个可用库**；`ps` 里看不到密码 | ✅ 2026-09-24。新增 `deploy/{restore.sh,backup-drill.sh,install-cron.sh}` 并重写 `backup.sh`。演练在**隔离临时 MySQL 实例**里跑：造库→加密备份→恢复→**逐表 7/5/2 行数一致 + 内容一致**；另两条断言（备份确实加密、DB 口令不在 `mysqldump` argv）各做了一次**变异测试**，注入「不加密」与「口令进 argv」后都被抓住（见 §V3-5 实测证据） |
 | V3-6a | **按 H7 裁定把 `back_priv` 改为 0600 文件**：文件优先，**权限过宽即拒绝且不回退 env** | H7 ✅ | 代码只从文件读；权限实测；缺/空文件明确报错 | ✅ 2026-09-24（10 测试；「不回退」那条是被测试抓出来的） |
-| V3-6b | **补 `spec/node-keying.md` 的 back_priv 条目**（原先该文件 grep 0 命中 → 规范缺位）：形态、权限、轮换、泄露处置、为什么保护等级高于节点私钥 | V3-6a | 规范与实现一致 | ✅ 2026-09-24。新增 **§4.6 `back_face` 密钥**：形态与权限（含「权限过宽即拒绝」）、**不回退 env 的四种走向**（这条是控制成败所在）、轮换、泄露处置、以及为什么它比节点私钥更该保护。⚠️ 明确写出**轮换能力尚未实现**（无新旧并存、无工具），不含糊过去。顺带修 §5.2「back 侧尚未校验」（与 §4.5 矛盾）与 §8 一条已落地的待决 |
+| V3-6b | **补 `spec/node-keying.md` 的 back_priv 条目**（原先该文件 grep 0 命中 → 规范缺位）：形态、权限、轮换、泄露处置、为什么保护等级高于节点私钥 | V3-6a | 规范与实现一致 | ✅ 2026-09-24。新增 **§4.6 `back_face` 密钥**：形态与权限（含「权限过宽即拒绝」）、**不回退 env 的四种走向**（这条是控制成败所在）、轮换、泄露处置、以及为什么它比节点私钥更该保护。⚠️ 明确写出**轮换能力尚未实现**（无新旧并存、无工具），不含糊过去。顺带修 §5.2「后端侧尚未校验」（与 §4.5 矛盾）与 §8 一条已落地的待决 |
 | V3-6 | `back_priv`/`back_pub` 生成并入 `crt` 凭证库、注入生产 | H6, V3-6a | 节点面 DH+HMAC 在生产真验通过 | 真机心跳 200 | ☐（需 H6） |
-| V3-7 | 补 `deployment-registry.md` 的 stale 项 + 按 H4 把 back 管理面从 `admin` 改称 `console`（原估要同步 3 处） | V3-1..6 | 文档每条都能在盘上找到对应物；子域命名全库一致 | ✅ 2026-09-24。registry **重写**：逐条 `ls` 核对，**5 条路径根本不存在**（含两个退役仓的）→ 删除；矩阵补上 agent / openwrt / desktop / gnb / utc 与「分发到节点」这一类；退役仓单列并写明承接者；**7 处 `<待补>`** 改为如实描述（监控面整体**未建立**，不是「已有什么只是没填」）。命名同步 **5 处**（比预估多 2 处：`ecosystem.md:65` 与 `projects/mynet_api.md:6`）；两个历史文档只加说明、不改原文 |
-| V3-8 | **T3-4 真机注册**：非 VM 真机走完「注册→密钥→连接→互通」 | H2, H5, H6, H8, V1, V3-6 | 真机 `node_id` 落库、心跳在线、与另一节点互通 | 真机实测 + back 数据 | ☐（需人工闸门） |
+| V3-7 | 补 `deployment-registry.md` 的 stale 项 + 按 H4 把后端管理面从 `admin` 改称 `console`（原估要同步 3 处） | V3-1..6 | 文档每条都能在盘上找到对应物；子域命名全库一致 | ✅ 2026-09-24。registry **重写**：逐条 `ls` 核对，**5 条路径根本不存在**（含两个退役仓的）→ 删除；矩阵补上 agent / openwrt / desktop / gnb / utc 与「分发到节点」这一类；退役仓单列并写明承接者；**7 处 `<待补>`** 改为如实描述（监控面整体**未建立**，不是「已有什么只是没填」）。命名同步 **5 处**（比预估多 2 处：`ecosystem.md:65` 与 `projects/mynet_api.md:6`）；两个历史文档只加说明、不改原文 |
+| V3-8 | **T3-4 真机注册**：非 VM 真机走完「注册→密钥→连接→互通」 | H2, H5, H6, H8, V1, V3-6 | 真机 `node_id` 落库、心跳在线、与另一节点互通 | 真机实测 + 后端数据 | ☐（需人工闸门） |
 | V3-9 | **G4**：外网可注册、可互通、`mynet update` 升级不断线 | V2-8, V3-8 | `long-range-plan-t.md:121-123` 三条判据全过 | 外网实测 | ☐（需人工闸门） |
 
 > **V3-3 的一处判据更正（2026-09-24，做 V3-3a 时核出来的）**：
@@ -600,10 +600,10 @@ $ MYNET_APPS_INDEX=http://127.0.0.1:18090 mynet update
 | ID | 内容 | 前置 | 验收判据 | 证据形式 |
 |---|---|---|---|---|
 | V4-1 | **先补采集**（指标源头现在是空的）：`CPUPercent`/`InterfaceUp`/`Peers`/`PeersUp`/`Addrs` 真赋值；`metrics_vpn.go:20-30` 解析落地（现在 `_ = fields` 空转）；darwin 分支真读（现在读了就丢 → macOS 全 0） | — | 五个平台字段在 linux/darwin 上均非 0 且与 `gnb_ctl -s`/`wg show` 一致 | ⚠️ **V4-1a 部分达成**（2026-09-24）。**darwin 侧真机实测通过**：`mynet metrics --json` 六字段全非 0，且 `mem_total_mb=16384` 与 `sysctl hw.memsize` 一致、`load1` 与 `vm.loadavg` 一致、`interface_up=27` 与 `ifconfig -lu` 去掉 lo0 后一致；两次变异测试（换回空壳 / 不跳过本机）都被测试抓住。**未达成**：① linux 侧代码写了但开发机是 macOS，未实测；② `gnb_ctl -s` 的解析只有**按上游源码 `gnb_ctl_dump.c:38-180` 推导的夹具**（gnb_ctl 是 Linux 二进制，本机 `exec format error`）；③ wg 侧本机 `wg show <iface> dump` 需 root（实测 Permission denied），只复用了 driver 已有的 `TestParseWGDump`。按 §7.1 纪律**不勾原 ID** |
-| V4-2 | **心跳真上报**：`cmd/mynetd/main.go` 原来采完 `_ = out` 丢弃；WS 只发 `{"t":"ping"}` | V4-1, V1-2 | back `monitor/heartbeat` 收到真指标并落 Redis | ✅ 2026-09-24（agent `141b9ed`）。真 back（Laravel + sqlite）+ 真 gateway + 真 mynetd **全链路跑通**，状态码演进 `401 → 422 → 500 → 200` 每一步都对应一个真问题（见 CPI-37 / CPI-38 与提交说明）。**Redis DB1 核对**：`node:status:<id>` 里 `status=online`、`cpu_usage=31.78`、`memory_usage=75.1`、`disk_usage=6`、`TTL=1103`，zset `node:status:all` 含该节点；sqlite `node_monitor_snapshots` 落 `uptime_seconds=179293`（本机真值）。15 个新测试 + `go test -race ./...` 全绿 |
+| V4-2 | **心跳真上报**：`cmd/mynetd/main.go` 原来采完 `_ = out` 丢弃；WS 只发 `{"t":"ping"}` | V4-1, V1-2 | 后端 `monitor/heartbeat` 收到真指标并落 Redis | ✅ 2026-09-24（agent `141b9ed`）。真后端（Laravel + sqlite）+ 真 gateway + 真 mynetd **全链路跑通**，状态码演进 `401 → 422 → 500 → 200` 每一步都对应一个真问题（见 CPI-37 / CPI-38 与提交说明）。**Redis DB1 核对**：`node:status:<id>` 里 `status=online`、`cpu_usage=31.78`、`memory_usage=75.1`、`disk_usage=6`、`TTL=1103`，zset `node:status:all` 含该节点；sqlite `node_monitor_snapshots` 落 `uptime_seconds=179293`（本机真值）。15 个新测试 + `go test -race ./...` 全绿 |
 | V4-3 | metrics 端点：localapi 现在只绑 `127.0.0.1:8096`（`server.go:18`）→ 远端不可抓取。需决定暴露方式（gateway 代理 / 独立端口 / push） | V4-1 | 远端可抓到指标 | 跨机 `curl` 实测 |
-| V4-4 | 结构化日志：`shared/logger` 原来**零消费者**（各处实际都是裸的 `fmt.Fprintf(os.Stderr,…)`）；back `config/logging.php` 无 json 通道 | — | 关键路径日志可被机器解析 | ✅ 2026-09-24。**agent 侧**：`shared/logger` 重写为 `log/slog` 封装（text=logfmt / json 双模，默认 stderr 以便进 journald），接入 mynetd 与 mynet_gateway 的关键路径。实测样本：json 模式 **3/3 行合法 JSON**，text 模式是 logfmt，且 `source` 指向真正的调用方（`main.go:55`）而不是 logger 自身 —— 后者是测试抓出来的（包装函数被内联，slog 的 AddSource 会偏）。**back 侧**：新增 `json` 通道（`JsonFormatter` + `BATCH_MODE_NEWLINES`，一行一条），实测 **9/9 行合法 JSON** 且 `context` 带上结构化字段。8 个 logger 测试，含「未 Init 也能用」与「配错格式必须报错而不是静默用默认」 |
-| V4-5 | **presence 真接线**（重做 C-6）：`Registry.SetPresence` 无调用方、`Notify` 从不调 `presence.Publish`、`NewRedisPresence` 仅被测试调用 → 实际恒内存 presence | V1, Redis 部署 | 节点连 A、back 通知 B → **B 能推达**（现在必 404，`server.go` 的 `Notify`） | ✅ 2026-09-24（agent `9255f40`）。**根因不止「漏接线」，是接口设计缺陷**：`Subscribe`/`Publish` 的通道元素是 `struct{}`、`Publish` 还硬编码 `{"event":"queued"}`、`Subscribe` 收到消息后 `_ = msg` 丢弃 —— 跨实例只能传「有事」传不了「什么事」，A 收到信号也拼不出要推的帧（而 back 是发起方、没有「拉取事件」的接口）。已改为带帧原文（`{event,data}`），并补上 `Register`→`SetOnline`、`Unregister`→`SetOffline`、gateway main 读 `MYNET_GATEWAY_REDIS_*` 建 presence。**判据实测**：`gateway/cross_instance_test.go` 用两个 Registry（= 两实例）**共用真 Redis**（6379/DB2），节点连 A + MarkVerified → B（本地无连接）Notify → A 的 `conn.send` 收到完整帧（含 `command_id`），`--- PASS: TestCrossInstanceNotifyDelivers (0.21s)`；把跨实例分支短路的变异测试报 `errNotOnline → node not online` 即还原前的原行为。⚠️ 证据形式说明：这是**单进程双 Registry + 真 Redis pub/sub**，pub/sub 链路真跑通了；**进程级双实例**（两个 gw 进程）待 gw1/gw2 裁定后补 —— 那属于 V4-6 的范畴。另两条守住边界的测试：离线仍 404、本实例连接直接投递不绕 Redis |
+| V4-4 | 结构化日志：`shared/logger` 原来**零消费者**（各处实际都是裸的 `fmt.Fprintf(os.Stderr,…)`）；后端 `config/logging.php` 无 json 通道 | — | 关键路径日志可被机器解析 | ✅ 2026-09-24。**agent 侧**：`shared/logger` 重写为 `log/slog` 封装（text=logfmt / json 双模，默认 stderr 以便进 journald），接入 mynetd 与 mynet_gateway 的关键路径。实测样本：json 模式 **3/3 行合法 JSON**，text 模式是 logfmt，且 `source` 指向真正的调用方（`main.go:55`）而不是 logger 自身 —— 后者是测试抓出来的（包装函数被内联，slog 的 AddSource 会偏）。**后端侧**：新增 `json` 通道（`JsonFormatter` + `BATCH_MODE_NEWLINES`，一行一条），实测 **9/9 行合法 JSON** 且 `context` 带上结构化字段。8 个 logger 测试，含「未 Init 也能用」与「配错格式必须报错而不是静默用默认」 |
+| V4-5 | **presence 真接线**（重做 C-6）：`Registry.SetPresence` 无调用方、`Notify` 从不调 `presence.Publish`、`NewRedisPresence` 仅被测试调用 → 实际恒内存 presence | V1, Redis 部署 | 节点连 A、后端通知 B → **B 能推达**（现在必 404，`server.go` 的 `Notify`） | ✅ 2026-09-24（agent `9255f40`）。**根因不止「漏接线」，是接口设计缺陷**：`Subscribe`/`Publish` 的通道元素是 `struct{}`、`Publish` 还硬编码 `{"event":"queued"}`、`Subscribe` 收到消息后 `_ = msg` 丢弃 —— 跨实例只能传「有事」传不了「什么事」，A 收到信号也拼不出要推的帧（而后端是发起方、没有「拉取事件」的接口）。已改为带帧原文（`{event,data}`），并补上 `Register`→`SetOnline`、`Unregister`→`SetOffline`、gateway main 读 `MYNET_GATEWAY_REDIS_*` 建 presence。**判据实测**：`gateway/cross_instance_test.go` 用两个 Registry（= 两实例）**共用真 Redis**（6379/DB2），节点连 A + MarkVerified → B（本地无连接）Notify → A 的 `conn.send` 收到完整帧（含 `command_id`），`--- PASS: TestCrossInstanceNotifyDelivers (0.21s)`；把跨实例分支短路的变异测试报 `errNotOnline → node not online` 即还原前的原行为。⚠️ 证据形式说明：这是**单进程双 Registry + 真 Redis pub/sub**，pub/sub 链路真跑通了；**进程级双实例**（两个 gw 进程）待 gw1/gw2 裁定后补 —— 那属于 V4-6 的范畴。另两条守住边界的测试：离线仍 404、本实例连接直接投递不绕 Redis |
 | V4-6 | 双 gateway 其余三处：`Verified` 不共享（`MarkVerified` 只写本地）、`Register` 踢旧连接只本地生效（同节点双注册不去重）；原写的第三处「compose 里**无 redis 服务**」**随 V3-0 撤 compose 已不适用**（主机部署下 redis 由主机提供） | V4-5 | 两实例下：鉴权状态一致、同节点重复连接被去重 | 双实例 e2e |
 | V4-7 | 真 Redis 的 HSet/Publish/Subscribe **零测试**（现在只覆盖降级路径）→ 补集成测试 | V4-5 | 真 Redis 下测试通过（非 mock） | 测试实测输出 |
 | V4-8 | 告警：全仓 **0 处**。至少覆盖节点离线、心跳超时、命令失败率 | V4-2 | 触发条件下真发出告警 | 演练记录 |
@@ -615,7 +615,7 @@ $ MYNET_APPS_INDEX=http://127.0.0.1:18090 mynet update
 |---|---|---|---|
 | V5-1 | **T5-2 macOS launchd**：plist 已存在但 `mynet install` 不装 unit、不 `launchctl load`（`cmd_install.go:45` 只打印「请按平台执行」）；`uninstall` 是 print-only 空操作 | V4-1（否则装上也是瞎的，darwin metrics 全 0） | ✅ **当前就是 darwin/arm64 开发机** |
 | V5-2 | **T5-1 Windows**：dist 不构建 windows；`routing_win.go:46` 硬编码 stub、`:45` netstat 输出被丢弃；无 `firewall_win.go`/`service_win.go`；install/uninstall 无 windows 分支；无任何安装器（.msi/.nsis） | H9 | ⚠️ **2026-09-25 H9 已到位（arthur@192.168.0.5，Win10 LTSC 19044 x64）→ T5-1a+ 真机实测**。已达成：① 三平台交叉编译 0 error；② `make dist` 产出 `mynet_agent_windows_amd64_*.zip`（含 mynet.exe/mynetd.exe/mynet_gateway.exe）；③ 真机 `mynet detector --force` → hostname=DESKTOP-SQO1919、distribution=Windows 10 企业版 LTSC、kernel=10.0.19044、default_gateway=192.168.0.2、interfaces/routes 来自 `Get-NetRoute`；④ `mynet metrics --json` 真值 cpu_percent=2.58、mem 2543/4090MB、disk 40.63%、uptime 524741s；⑤ mynetd console 起在 127.0.0.1:8096，`/api/v1/status` 与 `/api/v1/metrics` 200（经 mynetd 分派到同目录 mynet.exe）；⑥ `/ui/` embed 200；⑦ `mynet install --gateways … --prefix C:\mynet-test` 真装出 bin/conf/var/mynetd.env。**仍未达成**（故不勾 T5-1）：无防火墙/服务探测（仍 stub）、Windows 服务注册未实现（install 明说不做假成功）、gnb/wg 驱动未在 Windows 建隧道、无 .msi/.nsis。gnb 纸面调研结论：上游有 `Makefile.mingw_x86_64` + CI `build_windows.yml`（mingw-w64 交叉编译，wintun 驱动）→ **Windows 构建路径存在** |
-| V5-3 | **T5-3 移动 relay**：spec 要求的是 **mynetd 侧** `GET /api/v1/relay?path=`（`control-plane.md:278-289`），但 localapi 路由表（`server.go:55-67`）里没有；移动端载体只有 cordova/capacitor 配置壳 | V1-4, G4 | ⚠️ gateway+back 同机可验转发；「移动端」需真机+公网 |
+| V5-3 | **T5-3 移动 relay**：spec 要求的是 **mynetd 侧** `GET /api/v1/relay?path=`（`control-plane.md:278-289`），但 localapi 路由表（`server.go:55-67`）里没有；移动端载体只有 cordova/capacitor 配置壳 | V1-4, G4 | ⚠️ gateway+后端同机可验转发；「移动端」需真机+公网 |
 | V5-4 | **T5-4 用户文档**：help 索引 47 引用 / 5 实存；无安装指南 | V5-1（安装流程要真） | ✅ 完全可本地完成 |
 | V5-5 | **T5-5 公测清单**：`security_audit.sh` 7 组中 6 组已复核通过，但**都是字符串 grep**（E 项靠注释即通过，不代表行为正确）；F 项未跑；无隐私政策 | G4, H12 | ❌ 需生产 + 人工法务 |
 
@@ -627,7 +627,7 @@ $ MYNET_APPS_INDEX=http://127.0.0.1:18090 mynet update
 
 | 项 | 硬约束 | 本地等价物（可做） | 真验证（需人工条件） | 勾选规则 |
 |---|---|---|---|---|
-| **T4-6** 真 50+ 节点心跳 | 真实资产仅 **3 台**（`scripts/inventory/hosts.sh:3`）；现有 `bench_1k.go` 是进程内合成，与心跳无关 | 容器化起 50 个 mynetd 实例连本地 gateway，测**连接数与心跳吞吐**（需 V1 + V4-2 先完成） | 50+ 真设备或等价集群 + 类生产 back（H10） | 等价物跑通 → 记为 **T4-6a（合成）**；真集群跑通 → 才勾 **T4-6** |
+| **T4-6** 真 50+ 节点心跳 | 真实资产仅 **3 台**（`scripts/inventory/hosts.sh:3`）；现有 `bench_1k.go` 是进程内合成，与心跳无关 | 容器化起 50 个 mynetd 实例连本地 gateway，测**连接数与心跳吞吐**（需 V1 + V4-2 先完成） | 50+ 真设备或等价集群 + 类生产后端（H10） | 等价物跑通 → 记为 **T4-6a（合成）**；真集群跑通 → 才勾 **T4-6** |
 | **T5-1** Windows | 无 Windows 主机；且 gnb/wireguard 在 Windows 的驱动可用性**未证** | 交叉编译出包 + 静态检查 + 在 CI 的 windows runner 上跑单测 | Windows 真机装载、起服务、建隧道（H9） | 出包 → 记为 **T5-1a（可构建）**；真机跑通 → 才勾 **T5-1** |
 | **T5-5** 公测清单 | 需生产环境 + 外网域名/证书 + 法务 | `security_audit.sh` 从**字符串 grep 升级为行为断言**（现在 E 项靠注释即通过）；补隐私政策草稿 | 生产环境安全复检 + 法务签署（H12） | 审计升级 + 草稿 → 记为 **T5-5a**；生产复检 0 高危 + 法务过 → 才勾 **T5-5** |
 
@@ -664,7 +664,7 @@ $ MYNET_APPS_INDEX=http://127.0.0.1:18090 mynet update
 | **gateway 是全新工程量，不是补完** | V1 六项里 V1-2（真 WS 握手）与 V1-4（relay 转发 + 白名单）是从零写，估时容易乐观 | V1 内部再切小步：先 V1-1+V1-3（能起、状态表真）→ 再 V1-2（握手）→ 再 V1-4（relay）。每步独立可验 |
 | **修 apps.json 形状会同时动 ctl 与 agent** | V2-2 两端契约变更，改一边漏一边就静默失效 | 以 **ctl 服务端为准**改 Go 解析器；同一次改动里让 `apps_index_test.go` 打真端点（D2），形状分歧即刻暴露 |
 | ~~生产 nginx 与 Caddy 冲突未裁定就先做部署物~~ | ✅ **已解除**：H1 裁定复用现有 nginx，V3-2 已改为 nginx server block 路线，Caddy 方案归档 | — |
-| **子域改名波及多处文档** | H4 把 back 管理面从 `admin` 改称 `console`，`deployment-registry.md:13` / `ecosystem.md:125` / `brand-guide.md:152` 三处仍是旧写法，漏改会导致部署与文档不一致 | V3-7 里一次性同步，并用 grep 全库核对 `admin.mynet.club` 的每处出现 |
+| **子域改名波及多处文档** | H4 把后端管理面从 `admin` 改称 `console`，`deployment-registry.md:13` / `ecosystem.md:125` / `brand-guide.md:152` 三处仍是旧写法，漏改会导致部署与文档不一致 | V3-7 里一次性同步，并用 grep 全库核对 `admin.mynet.club` 的每处出现 |
 | **撤勾引起进度观感倒退** | 计划表从「R/T 段几乎全绿」变成「多处红」 | 这是**校正而非倒退**：假绿会让每个后续会话基于错误基线决策，代价远高于观感。撤勾处均已注明「→ 见 `long-range-plan-deep.md` §0」 |
 | **框架上游不修** | CPI-34（`route:list` 崩）/ CPI-35（通知面不可用）长期挂着 | 两条都不在关键路径上（GUI 已降级、路由可 grep）。**不在 vendor 打补丁**（§1.8），定期跟进上游 |
 | **Windows 驱动可用性未证** | 即使补完代码，gnb/wg 在 Windows 可能根本跑不起来 | H9 之前先做**纸面调研**（gnb 上游有无 windows 构建、wg 在 windows 的官方支持），结论写进 T5-1 前置 |
@@ -678,9 +678,9 @@ $ MYNET_APPS_INDEX=http://127.0.0.1:18090 mynet update
 | ① P2P UDP 真通 | ✅ 已达成（T1 全段，三场景 e2e） |
 | ② gnb/wg 双实现 | ✅ 已达成（T1-2..6） |
 | ③ 协议/目录不破坏 | ✅ 全程 guard B1 有效 |
-| ④ back 社区链接 | ✅ 已达成（T2-2/2-3，实测落库） |
+| ④ 后端社区链接 | ✅ 已达成（T2-2/2-3，实测落库） |
 | ⑤ agent 自动化 | ⚠️ **半成**：命令链在本地 e2e 通，但**在线升级是纸面**（V2）、**gateway 不存在**（V1） |
-| ⑥ 本机 UI → gateway → back | ⚠️ **半成**：GUI → back 直连已通（T2-6），但**经 gateway 的那条通路不存在**（V1） |
+| ⑥ 本机 UI → gateway → 后端 | ⚠️ **半成**：GUI → 后端直连已通（T2-6），但**经 gateway 的那条通路不存在**（V1） |
 | ⑦ proxy | ⚠️ gnb 原生 proxy 意图链已落（R5-3），但 **relay 域恒 502、白名单未接线**（V1-4） |
 | ⑧ 节点服务 | ✅ 域层与 HTTP 层实测通（T2-4，本日 20 项测试） |
 | ⑨ 多平台 | ❌ **linux/openwrt 真通，darwin 半成，windows 纸面**（V5-1/V5-2） |

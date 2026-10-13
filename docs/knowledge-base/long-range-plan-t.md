@@ -17,7 +17,7 @@
 | 社区 | 领域服务 + 单测 | **加好友→连接→授权→互通** 全流程 |
 | 界面 | 壳 + 本机 API | **Quasar 真 UI**，向导可走完 |
 | 服务/proxy | 建模 + 意图 | **真访问到节点上的 web** |
-| 部署 | 本机/QEMU | **back+gateway 上线**，域名/证书 |
+| 部署 | 本机/QEMU | **后端+gateway 上线**，域名/证书 |
 | 交付 | make dist | **CI 出包 → ctl 发布 → 在线升级** |
 | 规模 | 1k 会话合成 | **真集群**、多 gateway、可观测 |
 
@@ -51,14 +51,14 @@ T1 真连通 ──────────────► G3：双节点 gnb/wg
 | 4 | | T1-4 | wg 最小互联（第二节点 wg0 对打） | T1-1 | ☑ |
 | 5 | | T1-5 | 跨驱动：A(gnb)↔C↔B(wg) 真路由互通 | T1-3, T1-4 | ☑ |
 | 6 | | T1-6 | **G3**：三场景真隧道 e2e（非 dry-run） | T1-2..5 | ☑ |
-| 7 | **T2 产品闭环** | T2-1 | back 本地起（sqlite/pgsql）+ gateway 同机 | T1-1 | ☑ |
+| 7 | **T2 产品闭环** | T2-1 | 后端本地起（sqlite/pgsql）+ gateway 同机 | T1-1 | ☑ |
 | 8 | | T2-2 | 注册/登录 → 建节点 → 公钥登记（KeyExchange） | T2-1 | ☑ |
 | 9 | | T2-3 | 加好友 → 连接请求 → 授权 → Bundle 下发 | T2-2 | ☑ |
 | 10 | | T2-4 | 节点服务：发布 web → 访问控制 → 浏览器可达 | T1-3, T2-3 | ☑ |
 | 11 | | T2-5 | proxy 意图：经 gnb 节点访问对方内网段 | T1-3 | ☑ |
 | 12 | | T2-6 | Quasar 真 UI：登录/向导/节点/好友四页走通（**载体 = `mynet_gui`**，非 mynet_web） | T2-3 | ☑ |
 | 13 | | T2-7 | **演示脚本** `demo_t2.sh` 一键全程 | T2-4..6 | ☑ |
-| 14 | **T3 生产** | T3-1 | back+gateway 部署清单（**主机 + nginx + rsync**；原写「compose/systemd」，compose 路线已于 V3-0 撤） | T2-1 | ⚠️ 部分（V3-1 已补 `manage-prod.sh` + `deploy/nginx.conf`；gateway 侧主机部署待 V3-3） |
+| 14 | **T3 生产** | T3-1 | 后端+gateway 部署清单（**主机 + nginx + rsync**；原写「compose/systemd」，compose 路线已于 V3-0 撤） | T2-1 | ⚠️ 部分（V3-1 已补 `manage-prod.sh` + `deploy/nginx.conf`；gateway 侧主机部署待 V3-3） |
 | 15 | | T3-2 | 域名 + TLS：`api/gw/ctl.mynet.club` | T3-1 | ☐ |
 | 16 | | T3-3 | 备份/恢复：DB + 密钥（back_priv 高保护） | T3-1 | ☐ **撤勾** |
 | 17 | | T3-4 | 真机注册一台（非 VM）走完 T2 流程 | T3-2 | ☐ |
@@ -90,7 +90,7 @@ T1 真连通 ──────────────► G3：双节点 gnb/wg
 > 详见 `long-range-plan-deep.md` §0/§1/§2（拱顶石 = gateway 可执行化）。
 > （V1-1..V1-5 已把它做成真二进制；compose 文件本身已于 V3-0 删除，部署改走主机。）
 >
-> **T2-6 已达成**（2026-09-24）：四页真打通新 back，证据见本文件 §3。
+> **T2-6 已达成**（2026-09-24）：四页真打通新后端，证据见本文件 §3。
 
 ---
 
@@ -104,12 +104,12 @@ T1 真连通 ──────────────► G3：双节点 gnb/wg
 
 ### T2-6 四页走通（2026-09-24 实测，载体 = `mynet_gui`）
 
-真浏览器（Playwright）+ 真 back（`127.0.0.1:8080`，sqlite）逐页验证：
+真浏览器（Playwright）+ 真后端（`127.0.0.1:8080`，sqlite）逐页验证：
 
 | 页 | 路径 | 判据 |
 |---|---|---|
 | 登录 | `/auth/login` | 提交后跳 `/app/dashboard`；控制台 `Raw login response: {success: true}`，token 刷新已排程 |
-| 节点 | `/app/nodes` | 控制台 `节点列表API响应: {success: true, code: 200}`，列表为 back 真数据 |
+| 节点 | `/app/nodes` | 控制台 `节点列表API响应: {success: true, code: 200}`，列表为后端真数据 |
 | 好友 | `/app/social/friends` | `GET /api/v1/social/friends` 200，「好友列表」渲染出真好友 UserB |
 | 向导 | `/app/routes/create/prev_1..4` | 四步全走通：选好友（`设备: 1`）→ 选好友设备（`t23-b · online`）→ 选我的设备（`t23-a`）→ 提交申请 |
 
@@ -152,7 +152,7 @@ T1 真连通 ──────────────► G3：双节点 gnb/wg
 | ③ 协议/目录不破坏 | 全程 guard B1 |
 | ④ 社区链接 | **T2-2/2-3** |
 | ⑤ 自动化 | T2-3 Bundle · T4-3 升级 |
-| ⑥ 本机 UI → gateway → back | T2-1 · T2-6 |
+| ⑥ 本机 UI → gateway → 后端 | T2-1 · T2-6 |
 | ⑦ proxy | T2-5 |
 | ⑧ 节点服务 | T2-4 |
 | ⑨ 多平台 | **T5** 全段 |

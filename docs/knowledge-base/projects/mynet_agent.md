@@ -16,7 +16,7 @@ shared/     共享：domain(BundleEnvelope) · config · logger · errors · uti
 ```
 
 - `mynetd/` **不得**依赖系统能力（`make guard` B2 红线）
-- `gateway` **不做鉴权**，鉴权归 back
+- `gateway` **不做鉴权**，鉴权归后端
 - `relaypolicy` **只做路径白名单**
 
 ## WebUI 三态

@@ -100,11 +100,17 @@ $MYNET_HOME/                         # Store Root（真相源根；由服务单�
 
 ## 3. 平台默认 Store Root（仅 install 时写入，之后以 env 为准）
 
-| 平台 | 默认 | 备注 |
+> **默认 home 的 SSOT 是代码**：`mynet_agent/shared/utils/paths.go` 的 `PlatformDefaultHome()`
+> （darwin/linux = `/var/lib/mynet`、windows = `C:\ProgramData\MyNet`），与
+> [`lifecycle-contract.md`](lifecycle-contract.md) §3（G-14 关闭记录）同一口径。
+> 下表右列是 **2026-09-30 实测的现场多树现状**（与 §4「各节点活主体」同源）——
+> 收敛前排障按右列认树，新装/写默认值一律按左列。
+
+| 平台 | 默认 home（SSOT） | 现场多树现状（历史，待收敛） |
 |---|---|---|
-| Linux / OpenWrt | `/var/lib/mynet` 或 `/etc/mynet` | OpenWrt 常用 `/etc/mynet`（182 实测） |
-| macOS | `/usr/local/opt/mynet` 或 `/var/lib/mynet` | 多树并存是历史问题，要收敛 |
-| Windows | `C:\mynet` | 183 实测；勿用 `Program Files`（权限） |
+| Linux / OpenWrt | `/var/lib/mynet` | OpenWrt 常用 `/etc/mynet`（182 实测）；另有 `/opt/mynet`（188 实测） |
+| macOS | `/var/lib/mynet` | `/usr/local/opt/mynet` 或 `/var/lib/mynet` 多树并存（181 实测） |
+| Windows | `C:\ProgramData\MyNet` | `C:\mynet`（183 实测）；勿把 prefix `C:\Program Files\MyNet` 当 home（权限） |
 
 **收敛目标**：每机只剩一个 Store Root，其余改名 `*.legacy-YYYYMMDD` 或移入 backup。
 
@@ -148,7 +154,7 @@ $MYNET_HOME/                         # Store Root（真相源根；由服务单�
 |---|---|---|
 | 位置 | `conf/**`（含 `conf/mode.json`） | `driver/**` |
 | 格式 | JSON schema v2（密钥材料除外） | gnb 文本 / wg INI |
-| 写入者 | 用户 / back / wizard | **仅 `driver.Apply`** |
+| 写入者 | 用户 / 后端 / wizard | **仅 `driver.Apply`** |
 | 手改 | 可 | **禁**（会被 apply 覆盖） |
 | 真相 | 是 | 否（产物） |
 

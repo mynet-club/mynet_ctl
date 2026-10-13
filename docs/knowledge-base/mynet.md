@@ -27,8 +27,8 @@ gnb_root/
         │   ├── {peerNodeId}.public  # 对等节点公钥（多个）
         │   └── ...
         ├── security/          # 密钥目录
-        │   ├── {nodeId}.private     # 自身私钥（128 字节 hex）
-        │   └── {nodeId}.public      # 自身公钥（64 字节 hex）
+        │   ├── {nodeId}.private     # 自身私钥（128 个 hex 字符 = 64 字节，clamp(SHA512(seed))）
+        │   └── {nodeId}.public      # 自身公钥（64 个 hex 字符 = 32 字节）
         ├── gnb.map            # 运行时生成的节点映射表
         └── gnb.pid            # 运行时 PID 文件
 ```
@@ -104,7 +104,8 @@ e9ca457c243383bc68a6ab2635867986ec386e2f0faff5bc3394c78fc7f64bc3
 
 #### security/{nodeId}.private — 私钥文件
 
-Ed25519 完整密钥的 hex 字符串（128 个 hex 字符 = 64 字节，含 seed + 公钥）：
+GNB 非标准 Ed25519 私钥的 hex 字符串：`clamp(SHA512(seed))`，128 个 hex 字符 = 64 字节
+（**不是** `seed‖pub` 布局，拿 stdlib 的 `seed‖pub` 去算会签错，见 AGENTS §4 坑表第 2 条）：
 
 ```
 48973280e7ae2c6bfbb6103387f0566361f91a3528c57a3ad240334a3a6c9e60a49e4acf3d8dceaa0cb8fc49b494f9e1f3b6d39caf3c920a5194a819d83ce793

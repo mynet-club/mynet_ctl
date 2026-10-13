@@ -2,7 +2,7 @@
 
 > **SSOT 位置**：`mynet_ctl/docs/knowledge-base/spec/`  
 > **上次更新**：2026-10-04  
-> **适用项目**：**mynet_agent**（`mynetd`，跨端一致逻辑的唯一实现）；`mynet_ui` / `mynet_openwrt` / `mynet_desktop`（只调不改的壳）  
+> **适用项目**：**mynet_agent**（`mynetd`，跨端一致逻辑的唯一实现）；`mynet_gui`（浏览器壳）/ `mynet_openwrt` / `mynet_desktop`（只调不改的壳）。`mynet_ui` 是历史仓（不在 workspace，页面素材已进 `mynet_web`）  
 > 旧线口径（`mynet_lua` / `mynet_client`）已冻结，见 [`../integration-plan-v2.md`](../integration-plan-v2.md) §2。
 
 ---
@@ -17,7 +17,7 @@
 | 角色 | 仓 | 职责 |
 |------|----|------|
 | **唯一实现** | `mynet_agent`（`mynetd`） | spec 定义的业务逻辑在此实现 |
-| 桌面 UI | `mynet_ui` | 只调 agent 本机 API（HTTP/ubus），不含业务 |
+| 桌面 UI | `mynet_gui` | 只调 agent 本机 API（HTTP/ubus），不含业务。`mynet_ui` 为历史仓（不在 workspace，页面素材已进 `mynet_web`） |
 | 路由器壳 | `mynet_openwrt` | LuCI 菜单 / rpcd ACL，业务经 ubus 转 mynetd |
 | 平台胶水 | `mynet_desktop` | 安装 / 服务 / 打包，不含业务 |
 
@@ -36,8 +36,8 @@
 | [node-upgrade-runbook-180-182.md](node-upgrade-runbook-180-182.md) | **今晚升级 Runbook（H6）**：开工前决策、commit 锚点、出包/取证/备份/步骤/验证/回滚/Go-NoGo/记录表 | **可执行清单，未执行**（2026-10-10 夜） |
 | [schemas/bundle-envelope-v2.schema.json](schemas/bundle-envelope-v2.schema.json) | R2 线格式 SSOT：BundleEnvelope + NetworkIntent + GnbIntent + WireGuardIntent | 机器可读契约 |
 | [fixtures/bundle-envelope-v2/](fixtures/bundle-envelope-v2/) | R2 双端互解 fixtures（Go/PHP 共用，7 场景） | 共享测试数据 |
-| [v1-permission-matrix.md](v1-permission-matrix.md) | **权限矩阵（P0 冻结件）**：R1–R6 边界规则 + 六表面×操作域判据 + 9 条实测洞 | 全线（back / agent / 壳） |
-| [v1-error-codes.md](v1-error-codes.md) | **稳定错误码清单（P0 冻结件）**：7 套信封现状 + 现有码注册表 + 死码与分叉 + 冻结口径 | 全线（back / agent / 壳） |
+| [v1-permission-matrix.md](v1-permission-matrix.md) | **权限矩阵（P0 冻结件）**：R1–R6 边界规则 + 六表面×操作域判据 + 9 条实测洞 | 全线（后端 / agent / 壳） |
+| [v1-error-codes.md](v1-error-codes.md) | **稳定错误码清单（P0 冻结件）**：7 套信封现状 + 现有码注册表 + 死码与分叉 + 冻结口径 | 全线（后端 / agent / 壳） |
 | [local-api.md](local-api.md) | 本机能力面：mynetd HTTP/ubus 契约（GUI/OpenWrt 壳只调不改） | 目标线 ⚠️ 信封口径与代码不符，见 [v1-error-codes.md](v1-error-codes.md) §3-5 |
 | [data-models.md](data-models.md) | 所有数据结构（JSON/conf 格式，唯一定义处） | 目标线 |
 | [auth.md](auth.md) | 登录 / 登出 / Token 刷新 | ⚠️ **冻结（旧线）** |
@@ -55,11 +55,11 @@
 > 这层标注是必须的：本索引声明唯一实现是 `mynet_agent`，而此前翻到 `service.md`
 > 之类会读到一个已经没人维护的旧线做法，照着实现就会做出旧形态。
 
-### back 侧专项（实现进度类）
+### 后端侧专项（实现进度类）
 
 | 文件 | 内容 |
 |------|------|
-| [back-baggage-cleanup.md](back-baggage-cleanup.md) | back 历史包袱清理执行进度与决策记录 |
+| [back-baggage-cleanup.md](back-baggage-cleanup.md) | 后端历史包袱清理执行进度与决策记录 |
 | [back-primary-key-migration.md](back-primary-key-migration.md) | 主键改造：全局 ID 直接作 PK |
 
 ---

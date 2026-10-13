@@ -11,7 +11,7 @@
 **B-3 未执行**（`invitations` 尚有 1 行，存量码处置未裁 —— E 栏第 3 条）。C/D/E 栏见各自条目。
 下表「状态」原文的「全部未执行」已不成立，保留此句作对照。
 
-**状态（原文）**：全部**未执行**。back 侧（本仓）够不到现网 MySQL，也 never 上过生产机。
+**状态（原文）**：全部**未执行**。后端侧（本仓）够不到现网 MySQL，也 never 上过生产机。
 **为什么现在需要这份工单**：2026-10-04/05 那批收口时，多处文档写着「由 DBA 手工执行」，
 但**既没有一份按顺序可执行的清单，也出现过「文档指向一个不存在的脚本」**（A5 那条，已补件）。
 所以本工单的第一条纪律是：**每一项都必须指出一个仓库里真实存在的文件**。
@@ -24,7 +24,7 @@ A 栏全是 `SELECT` / `SHOW`，不改数据，可以一次跑完贴回。
 
 | # | 取证什么 | 用什么物件 | 结果决定 |
 |---|---|---|---|
-| **A-1** | 现网库到底有哪些表 | `SELECT table_name, table_rows FROM information_schema.tables WHERE table_schema='<现网库>' ORDER BY table_name` | B-4/B-5 要不要跑；E1 那条硬口径「**DDL ≠ 现网**」的落地判据（back 启用的 74 张 vs 现网实际） |
+| **A-1** | 现网库到底有哪些表 | `SELECT table_name, table_rows FROM information_schema.tables WHERE table_schema='<现网库>' ORDER BY table_name` | B-4/B-5 要不要跑；E1 那条硬口径「**DDL ≠ 现网**」的落地判据（后端启用的 74 张 vs 现网实际） |
 | **A-2** | 7 处归属列还有多少无主行 + 各自可推断到哪一档 | **`mynet_api/database/sql/2026_10_04_owner_columns_null_inventory.sql`**（10 段，全只读） | B-1 的回填范围；`node_route_requests.target_user_id` 与 `ip_pools` 那两档要不要单独处理 |
 | **A-3** | `invitations` 表在不在、有几行、谁还在用 | **`mynet_api/database/sql/2026_10_04_drop_invitations_table.sql`** 文件头的「执行前取证（必做）」三条 SELECT | B-3 能不能执行（G-8b 的现网行数取证**至今没做**） |
 | **A-4** | `personal_access_tokens.device_fingerprint` 列在不在 | `SHOW COLUMNS FROM personal_access_tokens LIKE 'device_fingerprint'` | B-5 要不要跑 |
@@ -97,7 +97,7 @@ A-x / B-x：
 | 「0 号归属行谁能改」 | 若 A-2 出现三档都覆盖不到的剩余行：`OwnerGuard::owns()` 对 NULL 与 0 给的是**同一个答案（拒）**，填 0 只是换个写法 ⇒ 必须先定「console/运营面按租户管理员放行、用户面继续 fail-closed」这条规则才允许选 0 |
 | 旧 `invitations` 存量码重铸成框架码 | G-8b 留的可选项，至今没裁；裁之前 B-3 只能「行数 0」才敢跑 |
 | `node_ips.user_id` / `service_connection_logs.user_id` | A5 已裁「**保留可空 + 登记语义**」⇒ 本工单**不收**这两列，也别顺手收 |
-| Operator 自我隔离 **F-18** / 被邀请人不在列表 **F-16** | 未裁，且都在框架侧（back 只上报）。开 console 给运营等于把这些面打开 ⇒ 上线前至少知道自己在承担哪条 |
+| Operator 自我隔离 **F-18** / 被邀请人不在列表 **F-16** | 未裁，且都在框架侧（后端只上报）。开 console 给运营等于把这些面打开 ⇒ 上线前至少知道自己在承担哪条 |
 | gnb 节点私钥轮换 | 事故件（2026-10-04 泄露），10-04 裁定「暂缓，只挂风险」；归属用户/运维，不在 DBA 工单里 |
 | 生产 Redis 是否常驻、`console.mynet.club` DNS、有没有可用 Operator 账号 | 三条本机取证不到，登记在 `deployment-registry.md` §8.7；上机时一条命令即可收口 |
 
@@ -124,7 +124,7 @@ A-x / B-x：
 
 | # | 结果 | 决定 |
 |---|---|---|
-| **A-1** | `mynet_back` = **121 张**表 | 与 E1「back 启用 74 张」对照：现网另有 47 张框架下游表 |
+| **A-1** | `mynet_back` = **121 张**表 | 与 E1「后端启用 74 张」对照：现网另有 47 张框架下游表 |
 | **A-2** | 7 处归属列**无主行全为 0**（`nodes`=73、`routes`=56、`node_route_requests`=8、`ip_pools`=16 行，`connections`/`connection_grants` 为 0 行空表） | **B-1 回填是空操作** ⇒ 直接跑 B-2 |
 | A-2 §9 | `node_ips.user_id` 70 行 / 0 NULL / 0 零；`service_connection_logs` 0 行 | 与「保留可空 + 登记语义」一致，不动 |
 | **A-3** | `invitations` = **1 行** | **B-3（DROP）不执行** —— 行数非 0 且存量码重铸未裁 |

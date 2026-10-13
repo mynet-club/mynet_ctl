@@ -20,9 +20,9 @@
 
 | # | 面 | 实际形状 | 出处 | 谁消费 |
 |---|---|---|---|---|
-| E1 | back **用户面 + console 面** | `{success, code(HTTP), message, data, timestamp[, errors][, error_code]}` | `app/Modules/VPN/Controllers/Api/V1/BaseApiController.php:35-48,58-79` | **22 个控制器**继承它（`grep -c 'extends BaseApiController' app` = 22）；GUI `src/services/api.ts` |
-| E2 | back **老 trait**（框架别名的那套） | `{success, message, data}` —— **没有 `code`，也没有 `error_code`** | `app/Http/Controllers/Concerns/ApiResponse.php:17-27,50-59`；vendor 同名 trait `vendor/dsplat/multi-tenant-saas/src/Http/Concerns/ApiResponse.php:19-29,52-62` | 未被 back 控制器引用（`grep -rl 'use App\\Http\\Controllers\\Concerns\\ApiResponse' app` = 0）；**vendor 反向 import back 的 trait**（`.../Http/Controllers/ModuleController.php:5` 等 9 处）⇒ 命名方向是反的 |
-| E3 | back **节点面**（agent 消费的那组） | `{success:false, error:"英文或中文自由文本"}` —— **无 code** | `NodeMonitorController.php:66,76,96,131,156`、`NodeHeartbeatController.php:160,245,263,317`、`Middleware/NodeHeartbeatAuthMiddleware.php:206-208` | `mynet_agent/mynet/credential.go:266-289`（`backClient.envelope` 只读 `success/code/message`，**`error` 键根本不读**） |
+| E1 | 后端 **用户面 + console 面** | `{success, code(HTTP), message, data, timestamp[, errors][, error_code]}` | `app/Modules/VPN/Controllers/Api/V1/BaseApiController.php:35-48,58-79` | **22 个控制器**继承它（`grep -c 'extends BaseApiController' app` = 22）；GUI `src/services/api.ts` |
+| E2 | 后端 **老 trait**（框架别名的那套） | `{success, message, data}` —— **没有 `code`，也没有 `error_code`** | `app/Http/Controllers/Concerns/ApiResponse.php:17-27,50-59`；vendor 同名 trait `vendor/dsplat/multi-tenant-saas/src/Http/Concerns/ApiResponse.php:19-29,52-62` | 未被后端控制器引用（`grep -rl 'use App\\Http\\Controllers\\Concerns\\ApiResponse' app` = 0）；**vendor 反向 import 后端的 trait**（`.../Http/Controllers/ModuleController.php:5` 等 9 处）⇒ 命名方向是反的 |
+| E3 | 后端 **节点面**（agent 消费的那组） | `{success:false, error:"英文或中文自由文本"}` —— **无 code** | `NodeMonitorController.php:66,76,96,131,156`、`NodeHeartbeatController.php:160,245,263,317`、`Middleware/NodeHeartbeatAuthMiddleware.php:206-208` | `mynet_agent/mynet/credential.go:266-289`（`backClient.envelope` 只读 `success/code/message`，**`error` 键根本不读**） |
 | E4 | **异常兜底** | `{success:false, message, errors}` —— 无 `code`、无 `error_code` | `app/Exceptions/Handler.php:127-134`（422）、`:141-146`（404 ModelNotFound）、`:154-256` 其余分支 | GUI：落 `api.ts:216` 的 `default: data?.message` |
 | E5 | **mynetd localapi / gateway / relay** | `{success, message, data[, stage][, need_login][, warning]}` | `mynet_agent/mynetd/localapi/{config_api.go:45,55,290,318,329,334, wizard.go:152,181, relay.go:35}`、`gateway/{ws.go:38-41, server.go:396}` | 节点自带 WebUI（`localapi/webui/index.html`）、`mynet_desktop`、`mynet_gui` 的本机探测 |
 | E6 | **OpenWrt Lua** | `{success:false, message}` + HTTP 码（`json_err`，`luasrc/controller/mynet.lua:303-307`）／ `{success:false, message, detail, code}`，**`code` = shell 退出码**（`mynet.lua:1304,1318`；取不到时 `-1`，`luasrc/model/.../util.lua:213,218`） | 同左 | LuCI 页面 |
@@ -35,7 +35,7 @@
 
 命名口径：`error_code`（字符串，大写下划线）只在 **E1 的第三参显式传入时**才出现在响应里。
 
-### 2.1 back：领域异常类别（唯一成体系的一组）
+### 2.1 后端：领域异常类别（唯一成体系的一组）
 
 | `error_code` | HTTP | 含义 | 出处 | 消费者 |
 |---|---|---|---|---|
@@ -45,7 +45,7 @@
 | `DOMAIN_FORBIDDEN` | 403 | 越权/租户拒绝 | 同上 | 同上 |
 | `INTERNAL_ERROR` | 500 | 兜底（`CATEGORY_UNEXPECTED`） | 同上 | 同上 |
 
-### 2.2 back：控制器层通用码（与 2.1 **同一情形两套码**）
+### 2.2 后端：控制器层通用码（与 2.1 **同一情形两套码**）
 
 | `error_code` | HTTP | 出处 |
 |---|---|---|
@@ -53,7 +53,7 @@
 
 ⇒ 越权既可能是 `DOMAIN_FORBIDDEN`（走领域异常）也可能是 `FORBIDDEN`（走 helper），**GUI 无法写一个稳定分支**。
 
-### 2.3 back：租户识别中间件（**⚠️ 整组死码 —— 发码的中间件从未接线**）
+### 2.3 后端：租户识别中间件（**⚠️ 整组死码 —— 发码的中间件从未接线**）
 
 `MISSING_TENANT_HEADER` / `INVALID_TENANT_ID` / `TENANT_NOT_FOUND` / `TENANT_ID_MISMATCH` / `TENANT_ACCESS_DENIED`
 写在 `app/Modules/VPN/Middleware/ApiTenantMiddleware.php:54,69,82,100,117`
@@ -67,7 +67,7 @@
 > 记这条不是为了清码，是因为它证明了一件事：**「有错误码注册表」≠「有防线」**。
 > 权限矩阵 §4-4 实测用户面连 `tenant.identify` 都不挂，所以这组码即便接线也管不到用户面。
 
-### 2.4 back：会话/刷新链路
+### 2.4 后端：会话/刷新链路
 
 | `error_code` | 文案 | 出处 |
 |---|---|---|
@@ -75,13 +75,13 @@
 | `SESSION_USER_GONE` | — | `SessionRefreshService.php:67` |
 | `BACK_FACE_KEY_UNAVAILABLE` | **中文长句焊死在控制器** | `MyNetController.php:177-181` |
 
-### 2.5 框架侧（vendor，back 目前一条都没主动用）
+### 2.5 框架侧（vendor，后端目前一条都没主动用）
 
 `MODULE_DISABLED`（`.../Http/Middleware/EnsureModuleEnabled.php:65`）、`IP_NOT_ALLOWED`（`CheckIpWhitelist.php:50`）、
 `FEATURE_FLAG_DISABLED`（`CheckFeatureFlag.php:92`）、`SMS_CHANNEL_UNAVAILABLE`（`module-auth/.../UserAuthController.php:211`）。
 另有 **snake_case 枚举** `vendor/dsplat/multi-tenant-saas/src/Enums/ErrorCode.php:10-22`
 （`insufficient_credits`/`guest_limit_exceeded`/`wechat_not_registered`/`wechat_auth_failed`/`conversation_busy`）
-⇒ 与 back 的 `UPPER_SNAKE` 口径**大小写不一致**，且这些值属已砍模块，back 侧零消费。
+⇒ 与后端的 `UPPER_SNAKE` 口径**大小写不一致**，且这些值属已砍模块，后端侧零消费。
 
 ## 3. 死码 / 悬空 / 分叉（必须清，逐条带证据）
 
@@ -150,9 +150,9 @@
 | C1 | **一个响应信封**：E1 `{success, code(HTTP 整数), message, error_code?, data, timestamp}` 为唯一 HTTP 信封；E2 trait 删除或改名以免与 E1 混淆；E3 节点面必须补 `error_code`（见 C4） | **已裁（B1）**：认 C1，**只对新代码硬约束**，存量 7 套按 §2 登记不动；E2 trait 在落码时定删或改名 |
 | C2 | **`code` 只放 HTTP 整数**；业务码一律 `error_code`，字符串、`UPPER_SNAKE`，**不含模块名、不复用语义、只增不改**（改名视为新增 + 旧值标 deprecated） | 建议即刻生效（新代码遵守；存量按 §2 登记） |
 | C3 | **`message` 不得作为判据**：客户端只允许读 `error_code`；文案进 i18n（后端出 key 或前端按码取词），中文不再是协议 | 建议即刻生效 |
-| C4 | **节点面（agent ↔ back）最小码集冻结**：验签失败 / 时间戳过期 / 重放 / 节点不存在 / bundle 版本不支持 / bundle 校验和不符 —— 六条必须是码而不是文本；当前实现全是自由文本（§1-E3） | ⏸ 需实现（P2/P3 前置） |
+| C4 | **节点面（agent ↔ 后端）最小码集冻结**：验签失败 / 时间戳过期 / 重放 / 节点不存在 / bundle 版本不支持 / bundle 校验和不符 —— 六条必须是码而不是文本；当前实现全是自由文本（§1-E3） | ⏸ 需实现（P2/P3 前置） |
 | C5 | **本机面（8096）码表冻结**：`need_login` / `not_running` / `unsupported` / `preflight_failed` / `port_conflict` —— 现在这些语义只存在于字符串里（`config_api.go:42` 用 `strings.Contains(err.Error(),"need_login")` 分类；Lua 用 `_svc_error_hint` 匹配 `private_key`/`node.conf`/`gnb_ctl`/`kmod-tun`，`mynet.lua:332-352`） | **已裁（B2）**：本机面走「改文档承认现状」，这张码表随 `spec/local-api.md` 重写时一并决定是否补进代码 |
-| C6 | **死码清理**：GUI `4031/4032`、agent `shared/errors`、`utils.BaseResponse`、`errors.md`/`api-specification.md` 两份旧清单 —— 要么补上真实 emit，要么删干净。**back 侧两处已清**（2026-10-04：§3-8 那两个零注册的租户中间件连同其 5 个 `TENANT_*` 码一起删） | 可执行，无需裁定 |
+| C6 | **死码清理**：GUI `4031/4032`、agent `shared/errors`、`utils.BaseResponse`、`errors.md`/`api-specification.md` 两份旧清单 —— 要么补上真实 emit，要么删干净。**后端侧两处已清**（2026-10-04：§3-8 那两个零注册的租户中间件连同其 5 个 `TENANT_*` 码一起删） | 可执行，无需裁定 |
 
 ## 6. 复现口径
 

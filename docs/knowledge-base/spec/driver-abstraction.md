@@ -35,7 +35,7 @@ VPNDriverFactory = { CreateDriver, DetectDriver }
 
 | # | 泄漏点 | 位置 | 症状 |
 |---|--------|------|------|
-| **L1** | 配置包生成 gnb 原生格式 | `back` config-bundle → `files["node.conf"/"address.conf"/"route.conf"]` | back 必须知道 gnb 文件格式 |
+| **L1** | 配置包生成 gnb 原生格式 | `back` config-bundle → `files["node.conf"/"address.conf"/"route.conf"]` | 后端必须知道 gnb 文件格式 |
 | **L2** | 热重启机制 | `agent`：`gnb_ctl -b gnb.map -w core.flag=2`，回落 SIGHUP，再冷启 | 重载逻辑写死 gnb 工具链 |
 | **L3** | 分发产品名 | `ctl` manifest 的 `gnb` 条目、`conventions.md` 产品表 | 无 wireguard 产品位 |
 | **L4** | 格式定义 | `spec/data-models.md` §4/§9 | 抽象与 gnb 原生混写在一节 |
@@ -253,8 +253,8 @@ VPNDriver
 | **D3** | 当前生产链仍是 `node.refresh` / `route.refresh` 分散拉取文本、分别写盘、冷重启；`address.conf` 无运行时刷新 | 迁移必须建立原子 bundle、generation、last-known-good，不能直接接上新写入者 |
 | **D4** | `node.conf` 至少 3 个写入者；`route.conf` 至少 2 个；keys 也有多写者，last-writer-wins | 先收敛配置写入权，再接 bundle |
 | **D5** | GNBRunner 有实现但生产零调用；应用层 StartNode 是返回 nil 的占位；系统服务/命令链/PID 文件并存 | 生命周期没有唯一权威 |
-| **D6** | ctl `ConfigPackService` 消费旧 `files/keys.ed25519/keys.security`，且请求 `/api/v2`；back 当前模块路由是 `/api/v1` | 新旧契约尚未贯通，成功响应也可能产空 ZIP |
-| **D7** | back route 数据混合 `node_ip/vpn_ip/lan_ip/wan_ip/endpoint_ip`；旧 GNB renderer 一律写固定 `/24` | 不能机械生成 WG AllowedIPs；也需修正 GNB route 数据模型 |
+| **D6** | ctl `ConfigPackService` 消费旧 `files/keys.ed25519/keys.security`，且请求 `/api/v2`；后端当前模块路由是 `/api/v1` | 新旧契约尚未贯通，成功响应也可能产空 ZIP |
+| **D7** | 后端 route 数据混合 `node_ip/vpn_ip/lan_ip/wan_ip/endpoint_ip`；旧 GNB renderer 一律写固定 `/24` | 不能机械生成 WG AllowedIPs；也需修正 GNB route 数据模型 |
 | **D8** | `mynet_gnb/src` 本身含一条可疑热重启路径；生产发布语义来自 CI 打补丁后的产物 | 测试必须针对发布二进制，不可只读源码树推断 |
 
 密钥与落盘仍需遵守：GNB `security/*.private` 0600；WireGuard private key/PSK 不得
@@ -264,10 +264,10 @@ VPNDriver
 
 ## 5.1 接口名单权威（`node.interface`）—— 2026-10-01 定稿
 
-**只有一个字段是权威**：`node.interface`。back 侧来源是 `node_configs.config.ifname`
+**只有一个字段是权威**：`node.interface`。后端侧来源是 `node_configs.config.ifname`
 （每节点事实；一台主机可能多个 zone 共存 —— 现网网关 182 的隧道口是 `gnb_tun_16`，
 `gnb_tun` 被另一个 zone 占用），缺省时取驱动声明的默认名（`vpn.gnb…ifname.default`）。
-`gnb.options.ifname` 是**过渡期别名**：back 两处发同一个值，老 agent 只读后者。
+`gnb.options.ifname` 是**过渡期别名**：后端两处发同一个值，老 agent 只读后者。
 
 节点侧统一走 `domain.BundleEnvelope.TunDevice()`（`shared/domain/bundle_envelope.go`）：
 权威缺失 → 暂用别名；两者都有值且不等 → **报错**；名字超 15 字符或含
@@ -279,14 +279,14 @@ VPNDriver
 默认名在单 zone 机器上能用，在 182 这类机器上恰好是别人的接口，而
 `ip route … dev X` 只要 X 存在就执行成功 —— 回退等于把整台机器的流量搬进另一条隧道，
 **且不报错**。宁可 apply 失败、错误可见、该节点停在上一版配置。
-（local 模式例外：没有 back 参与，`driver.WriteIntent` 允许空 ifname 由 gnb 自己决定。）
+（local 模式例外：没有后端参与，`driver.WriteIntent` 允许空 ifname 由 gnb 自己决定。）
 
 两步走的顺序是硬约束，不能颠倒：
 
 | 步 | 动作 | 出口判据 |
 |---|---|---|
-| **B-1**（已完成） | back 单源取值 + 写入门禁（`NodeConfig` 的 `saving`）+ 发布硬失败 + **读侧复用同一算法**（GUI 网络配置回显、`quickCreateNode` 不再种子常量）；agent 建立 `TunDevice()` 权威、仍**同时**发/容 `gnb.options.ifname` | `BundleEnvelopeGnbContractTest`（写入拒绝 422 / 脏值拒发布 / 缺省用默认名）+ `NodeIfnameAuthorityTest`（字段级写路径真的落库、读侧与 bundle 同源、wg 主驱动取 `wg0`）+ `bundle_envelope_tun_device_test.go` + `plan_device_test.go` |
-| **B-2**（待发版后） | back 停发 `gnb.options.ifname`，schema 里删该字段 | 现网 agent 全部 ≥ 带 `TunDevice()` 的版本；否则 182 这类机器会退回 gnb 默认名（= 事故复现） |
+| **B-1**（已完成） | 后端单源取值 + 写入门禁（`NodeConfig` 的 `saving`）+ 发布硬失败 + **读侧复用同一算法**（GUI 网络配置回显、`quickCreateNode` 不再种子常量）；agent 建立 `TunDevice()` 权威、仍**同时**发/容 `gnb.options.ifname` | `BundleEnvelopeGnbContractTest`（写入拒绝 422 / 脏值拒发布 / 缺省用默认名）+ `NodeIfnameAuthorityTest`（字段级写路径真的落库、读侧与 bundle 同源、wg 主驱动取 `wg0`）+ `bundle_envelope_tun_device_test.go` + `plan_device_test.go` |
+| **B-2**（待发版后） | 后端停发 `gnb.options.ifname`，schema 里删该字段 | 现网 agent 全部 ≥ 带 `TunDevice()` 的版本；否则 182 这类机器会退回 gnb 默认名（= 事故复现） |
 
 ---
 
@@ -294,16 +294,16 @@ VPNDriver
 
 | 步 | 动作 | 出口判据 |
 |---|---|---|
-| **R0** | 冻结当前生产链；撤销错误的扁平 VPNBundle 草案 | back/agent/ctl 不再宣称 S6 完成 |
+| **R0** | 冻结当前生产链；撤销错误的扁平 VPNBundle 草案 | 后端/agent/ctl 不再宣称 S6 完成 |
 | **R1** | 建立发布二进制 capability 探测：GNB P1/P2/P3、WG tools/kernel 特性 | 能力来自实测而非 driver 名 |
 | **R2** | 定义 `BundleEnvelope + NetworkIntent + GnbIntent + WireGuardIntent` schema v2 | JSON Schema + 双端 fixture 可互解 ✅ **2026-09-22**：`spec/schemas/bundle-envelope-v2.schema.json` + 7 fixtures；Go `internal/domain/bundle_envelope.go` 与 PHP `App\Modules\VPN\Domain\Bundle` 互解，checksum 一致 |
-| **R3** | 修正 back 业务模型：区分 interface address、advertised prefix、WAN/endpoint、peer relationship、relay/topology、key algorithm | 不再从混合 route 列表猜语义 ✅ **2026-09-22**：`NetworkSemanticsProjector` + 六类 VO；CPI-22 修复 ip_type 分类；明文私钥不进投影 |
+| **R3** | 修正后端业务模型：区分 interface address、advertised prefix、WAN/endpoint、peer relationship、relay/topology、key algorithm | 不再从混合 route 列表猜语义 ✅ **2026-09-22**：`NetworkSemanticsProjector` + 六类 VO；CPI-22 修复 ip_type 分类；明文私钥不进投影 |
 | **R4** | agent 建原子 Apply：stage→validate→write→reload→health-check→commit/rollback；保存 generation 与 last-known-good | 任一步失败不留下半套配置 ✅ **2026-09-22**：`internal/coordinator`（Applier + FuncWriter + journal + 锁）；注入 write/reload/health-check 失败均回滚；`last-known-good.json` + `current_generation`；journal 不含明文私钥。旧 refresh 委托 Apply 属 R5 |
 | **R5** | 收敛配置写入权与生命周期权威；旧 node/route refresh 改为委托 Apply | 每种文件只有一个写入者 ✅ **2026-09-22**：唯一写入口 `coordinator.ApplyFiles`；node/route/address refresh + `GNBDriver.WriteConfig` + `GNBRunner.EnsureConfig` 均已收敛；进程生命周期权威 = `node.GNBRunner`。完整 `BundleApplier.Apply(envelope)` 委托待 R8 有 Envelope 下发后接线 |
 | **R6** | 实现 GNB adapter，完整保留 node.conf 选项、route 节点环/relay、address 角色、keys、P1/P2 能力 | 与现生产链行为对照通过 ✅ **2026-09-22**：`coordinator.GnbAdapter`（Envelope→node/route/address/ed25519/security）；生产形状单测锁定（daemon off / proxy on / i\|0\|host\|port / id\|ip\|mask / 私钥 0600）；via/proxy_fallback 注释段。热重启 Reload 待接 GNBDriver（P1） |
 | **R7** | 实现 WireGuard crypto reconciler + Linux NetworkReconciler | `wg syncconf` 与 address/FIB/rule/firewall 分开验证 ✅ **2026-10-11（crypto 半）**：`WireGuardDriver.SyncFromConfFile` 走 `wg syncconf`——`StripWGQuickKeys` **自剥** wg-quick 专有键（Table/Address/MTU/DNS/钩子；留 FwMark 等 wg 自己的键），**不依赖 `wg-quick strip`**（OpenWrt 没有 wg-quick，用它等于把热同步钉死在有 wg-quick 的平台）；`Reload` 热优先、不可用回落 Stop+Start 且**打日志**；`Capabilities.HotReload` wg=**true**。验证：单测 4 例 + arm64 VM 真机（真函数剥出的配置 `wg syncconf` rc=0、接口公钥与配置私钥推出的一一对应、第 2 个对端**热加**、链路全程 `UP,LOWER_UP`、ifindex 未变）。**network 半（Address/MTU/FIB/rule/firewall）仍归 L6 `mynet apply`** |
-| **R8** | 接 back API/ETag/cache；ctl 安装包复用同一 schema | 在线更新、离线启动、安装包三条链一致 ✅ **2026-09-22**：`config_revisions` + `BundleEnvelopePublisher` + `GET /monitor/node/bundle` & `/nodes/{id}/bundle`（ETag/304）；agent `GetBundle`+`HTTPFetcher`+`handleBundleChanged→Apply`；ctl 安装包含 `bundle.json`（同 schema） |
-| **R9** | 逐步关闭旧分散端点和多写者 | 无 last-writer-wins ✅ **2026-09-22**：`configsync.Sync` 为唯一内容权威（Envelope Apply 优先，旧 text 链仅回落）；心跳命令/控制面/本机 API 均走 Sync；`proxy.writeRouteConf` 收敛到 ApplyFiles；back 旧端点带 `Deprecation` 头。旧端点待旧 agent 退场后删除 |
+| **R8** | 接后端 API/ETag/cache；ctl 安装包复用同一 schema | 在线更新、离线启动、安装包三条链一致 ✅ **2026-09-22**：`config_revisions` + `BundleEnvelopePublisher` + `GET /monitor/node/bundle` & `/nodes/{id}/bundle`（ETag/304）；agent `GetBundle`+`HTTPFetcher`+`handleBundleChanged→Apply`；ctl 安装包含 `bundle.json`（同 schema） |
+| **R9** | 逐步关闭旧分散端点和多写者 | 无 last-writer-wins ✅ **2026-09-22**：`configsync.Sync` 为唯一内容权威（Envelope Apply 优先，旧 text 链仅回落）；心跳命令/控制面/本机 API 均走 Sync；`proxy.writeRouteConf` 收敛到 ApplyFiles；后端旧端点带 `Deprecation` 头。旧端点待旧 agent 退场后删除 |
 
 在 R2–R6 完成前，不应继续实现 `WireGuardDriver`；否则会把错误抽象固化进代码。
 

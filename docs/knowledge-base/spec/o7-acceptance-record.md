@@ -54,7 +54,7 @@
 
 - **数据面允许/拒绝**：授权流量走隧道、未授权拒绝、**撤销后 fail-closed**（不赖回滚旧 bundle 重开）—— 需出口侧（`.180`，生产 proxy server）配合
 - **升级回滚（opkg 级）**：装**新 ipk** → `opkg` 回滚旧 ipk。**现状**：opkg **事务**面已验（reinstall 下 config/身份不漂移，见 §2）；**纯降级回滚**（装旧版本 ipk 回到旧件）仍缺 —— 现网无「旧版本 arm64 ipk」可直接装（VM 原为 `-dirty` 本机构建，ctl 上无对应件）。
-- **WG 独立验收**（借 GNB 通过不算）：**平台数据面 + 跨机真链路均已验**（见 §2）；**驱动路径缺口已裁决并落地**（对齐 gnb、委托 init，`mynet_agent b4a2ee6`）。剩余仅「back 下发 wg bundle → agent 全自动」那条链（现无 wg 节点类型，envelope 里不会有 `wireguard` 段）。
+- **WG 独立验收**（借 GNB 通过不算）：**平台数据面 + 跨机真链路均已验**（见 §2）；**驱动路径缺口已裁决并落地**（对齐 gnb、委托 init，`mynet_agent b4a2ee6`）。剩余仅「后端下发 wg bundle → agent 全自动」那条链（现无 wg 节点类型，envelope 里不会有 `wireguard` 段）。
 - **MIPS 实机资源证据**（本轮搁置）
 - ~~并发护序~~（2026-10-11 完成，见 §2 + 审计）
 

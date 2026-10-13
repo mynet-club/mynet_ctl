@@ -2,7 +2,7 @@
 
 > 更新：2026-09-21
 > 适用：`mynet_gnb`（数据面，**只读参考，不改动**）、`mynet_agent`（`mynetd` 实现）、`mynet_api`（校验端）、`mynet_gateway`
-> 依据：`mynet_gnb/src/libs/ed25519/*`、`mynet_gnb/src/src/gnb_node.c`、`mynet_agent-integration/internal/utils/gnb_ed25519.go`、`mynet_agent-integration/internal/daemon/monitor/monitor.go`、`mynet_tui/internal/{utils,tui}/gnb_ed25519.go`、`spec/plugins.md`
+> 依据：`mynet_gnb/src/libs/ed25519/*`、`mynet_gnb/src/src/gnb_node.c`、`mynet_agent/mynet/keys/{gnb_ed25519.go,gnb_ed25519_sign.go,node_face.go}`（旧仓 `mynet_agent-integration`/`mynet_tui` 的同名依据已不在 workspace，指向它们的取证链作废）、`spec/plugins.md`
 > 状态：**现状契约**（依据源码实测；gateway 鉴权方案见 §5，属设计稿）
 
 ---
@@ -16,7 +16,7 @@
 | **密钥生成** | seed → SHA512 → clamp → `ge_scalarmult_base` 派生公钥（**不是** stdlib 一把梭） | `libs/ed25519/keypair.c` |
 | **GNB 协议控制帧** | `ed25519_sign` / `ed25519_verify`（对 ping/pong/detect/index 等帧签名） | `gnb_node_worker.c` / `gnb_index_worker.c` 等 |
 | **GNB 数据面** | **`ed25519_key_exchange`**：ed25519 私钥 × 对端公钥 → **edwards→montgomery 转换 → X25519 式 DH → `shared_secret`** | `gnb_node.c:74` |
-| **节点 ↔ back 心跳** | **HMAC-SHA256**，密钥 = **GNB 派生出的 32 字节公钥**（**不是** ed25519 签名） | `monitor.go`、`spec/plugins.md:195` |
+| **节点 ↔ 后端心跳** | **HMAC-SHA256**，密钥 = **GNB 派生出的 32 字节公钥**（**不是** ed25519 签名） | `monitor.go`、`spec/plugins.md:195` |
 
 > 用户原话：**「gnb 不是 Ed25519 鉴权，是 Ed25519 后又做了一个操作」** —— 那个操作就是 `ed25519_key_exchange`（同一对 ed25519 密钥，签名之外再做一次 DH 密钥协商）。
 
@@ -170,7 +170,7 @@ shared_secret = x2 · inverse(z2)          // 32B
 
 ---
 
-## 4. 节点 ↔ back 心跳：HMAC-SHA256（不是 ed25519 签名）
+## 4. 节点 ↔ 后端心跳：HMAC-SHA256（不是 ed25519 签名）
 
 ### 4.1 实现（`mynet_agent/internal/daemon/monitor/monitor.go`）
 
@@ -208,7 +208,7 @@ HMAC-SHA256("PATCH|/api/v2/monitor/commands/{id}/result|{ts}|{body_json}", hex_k
 ### 4.4 ⚠️ 安全性质（必须知道）
 
 HMAC 密钥 = **节点公钥**。而公钥：
-- 存在 back 的 `node_keys.public_key`
+- 存在后端的 `node_keys.public_key`
 - 写在节点上 `PublicKeyPath`，权限 **0644（全局可读）**
 
 因此这**不是非对称鉴权，而是「把公钥当共享秘密用」的对称方案**：
@@ -218,7 +218,7 @@ HMAC 密钥 = **节点公钥**。而公钥：
 
 **结论**：现有心跳鉴权的强度 = 「公钥的保密程度」，而公钥按设计是可公开的。这是**已知弱点**，不是实现 bug。
 
-### 4.5 back 侧现状
+### 4.5 后端侧现状
 
 ✅ **已实现**（2026-09）：`App\Modules\VPN\Middleware\NodeHeartbeatAuthMiddleware` 按 §4.1 的方案校验，
 即 `HMAC-SHA256(base64_decode(node_keys.public_key), METHOD|path|timestamp|body)` → base64，
@@ -237,12 +237,12 @@ HMAC 密钥 = **节点公钥**。而公钥：
 
 ### 4.6 `back_face` 密钥（`back_priv` / `back_pub`）
 
-§4.1–4.5 讲的是「节点怎么向 back 证明自己」。这一节讲**back 自己那把**——
+§4.1–4.5 讲的是「节点怎么向后端证明自己」。这一节讲**后端自己那把**——
 两者是**不同的密钥**，但常被混作一谈。
 
 #### 它是什么
 
-`back_face` 是 back 侧的 X25519 密钥对，用于节点面 DH：
+`back_face` 是后端侧的 X25519 密钥对，用于节点面 DH：
 
 ```
 节点持 node_priv / node_pub（= 驱动密钥，见 §1、§6）
@@ -305,7 +305,7 @@ env 会出现在 `docker inspect`、编排文件、`/proc/<pid>/environ` 里，
 
 1. **准备**：生成新密钥对，私钥 `chmod 600` 放临时位置（先不覆盖现有文件）
 2. **先分发公钥**：把新 `back_pub` 下发到所有节点，节点侧新旧并存（需上述未实现能力）
-3. **再换私钥**：确认所有节点已拿到新公钥后，替换 back 侧私钥文件
+3. **再换私钥**：确认所有节点已拿到新公钥后，替换后端侧私钥文件
 4. **验证**：`monitor/heartbeat` 有真实节点鉴权通过（不是「进程还活着」）
 5. **归档旧密钥**：确认无节点再用旧公钥后销毁
 
@@ -313,7 +313,7 @@ env 会出现在 `docker inspect`、编排文件、`/proc/<pid>/environ` 里，
 
 `back_priv` 泄露 = **所有节点可被冒充**。按事故处理，不按「换密码」处理：
 
-1. **立即**生成新密钥对并替换 back 侧私钥（宁可中断，不要继续用泄露的密钥）
+1. **立即**生成新密钥对并替换后端侧私钥（宁可中断，不要继续用泄露的密钥）
 2. 按上面的顺序把新 `back_pub` 分发到所有节点
 3. **查暴露面**：泄露从哪来（env？镜像？日志？备份？）——同一路径上可能还有别的凭据
 4. 记入 `cross-project-issues.md` 台账，并核对「谁可能已经用过它」
@@ -351,13 +351,13 @@ gateway 校验：ed25519_verify(sig, challenge, node_keys.public_key)
 |------|------|---------|
 | **GNB 数据面**（节点↔节点） | `ed25519_key_exchange` → `shared_secret` → `crypto_key` | 密钥协商 + 加密 |
 | **GNB 控制帧**（节点↔节点） | `ed25519_sign` / `verify` | 帧完整性/身份 |
-| **节点 ↔ back/gateway**（控制面） | **目标**：Ed25519 challenge-response<br>**现状**：HMAC-SHA256（公钥作密钥）。back 侧**已实现校验**（§4.5，2026-09），gateway 侧仍是设计稿 | 控制面鉴权 |
+| **节点 ↔ 后端/gateway**（控制面） | **目标**：Ed25519 challenge-response<br>**现状**：HMAC-SHA256（公钥作密钥）。后端侧**已实现校验**（§4.5，2026-09），gateway 侧仍是设计稿 | 控制面鉴权 |
 
 ### 5.3 过渡
 
-1. back 心跳验签：先按**现状方案**实现（HMAC-SHA256 + 公钥），把「不校验」这个洞先堵上
+1. 后端心跳验签：先按**现状方案**实现（HMAC-SHA256 + 公钥），把「不校验」这个洞先堵上
 2. gateway 上线时启用 Ed25519 challenge-response
-3. back 的心跳通道随 gateway 中继一并收敛，HMAC 方案自然退役
+3. 后端的心跳通道随 gateway 中继一并收敛，HMAC 方案自然退役
 
 > 不建议为 HMAC 方案单独投入强化——它本就要被 gateway 替代。先堵洞、再换代。
 
@@ -372,7 +372,7 @@ gateway 校验：ed25519_verify(sig, challenge, node_keys.public_key)
 | 数据面加密 | `crypto_key`(64B) 由 `shared_secret` 派生 | Noise 协议握手 |
 | 控制面心跳签名 | 现状 HMAC-SHA256(公钥)；目标 Ed25519 签名 | 应同样走控制面统一方案，不复用 WG 密钥做控制面鉴权 |
 
-> 控制面鉴权**不应绑定驱动**。节点无论底层是 gnb 还是 wg，对 back/gateway 的身份都应是同一套（建议统一使用节点身份密钥做 Ed25519 challenge-response），驱动密钥只用于数据面。
+> 控制面鉴权**不应绑定驱动**。节点无论底层是 gnb 还是 wg，对后端/gateway 的身份都应是同一套（建议统一使用节点身份密钥做 Ed25519 challenge-response），驱动密钥只用于数据面。
 
 `back` 生成密钥时按 `vpn_type` 分派（见 `NodeKeyDomainService`：`generateGnbKeyPair` / `generateWireGuardKeyPair`）；控制面鉴权密钥的归属需要在 L3 BundleEnvelope 中显式声明，避免混用。
 
@@ -393,7 +393,7 @@ gateway 校验：ed25519_verify(sig, challenge, node_keys.public_key)
 
 - [ ] 控制面身份密钥的归属：是否独立于驱动密钥（建议独立，避免 wg/gnb 混用）
 - [ ] gateway challenge 的参数（nonce 长度、ts 窗口、重放缓存 TTL）
-- [x] ~~back 心跳 HMAC 验签的具体格式确认（base64/hex、消息拼接与 `plugins.md` 对齐）~~ ✅ **已落地**（§4.5，2026-09）：`node_keys.public_key` 是 base64、须 decode 后用；除心跳外的端点签的就是发送体本身，用**原始字节**不重编码
+- [x] ~~后端心跳 HMAC 验签的具体格式确认（base64/hex、消息拼接与 `plugins.md` 对齐）~~ ✅ **已落地**（§4.5，2026-09）：`node_keys.public_key` 是 base64、须 decode 后用；除心跳外的端点签的就是发送体本身，用**原始字节**不重编码
 - [ ] WG 节点接入时控制面鉴权密钥如何下发（BundleEnvelope 字段）
 
 ---

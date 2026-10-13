@@ -20,12 +20,12 @@
 | **mynet_gui** | Vue 3 / Quasar | my.mynet.club | `/data/app/mynet.club/my/public` | `cd mynet_gui && bash deployment.sh` |
 | **mynet_web** | 静态站点 | www.mynet.club | ⚠️ **未建立**（无部署路径记录） | ⚠️ **无部署脚本** |
 
-服务器 **`10.182.236.180`**（公网 `52.77.179.176`）。ctl / back / gui 三者**共置同机、
+服务器 **`10.182.236.180`**（公网 `52.77.179.176`）。ctl / 后端 / gui 三者**共置同机、
 各是独立 nginx server block**；证书在 `/etc/letsencrypt/live/mynet.club/`，
 **主机 nginx 终结 TLS**（H1：不引入 Caddy）。
 
-> **子域命名（H4 裁定，2026-09-24）**：`console.mynet.club` = back 的**租户管理**面；
-> `admin.mynet.club` 让给框架的 platform/operator SPA（**不是** back 的管理面）；
+> **子域命名（H4 裁定，2026-09-24）**：`console.mynet.club` = 后端的**租户管理**面；
+> `admin.mynet.club` 让给框架的 platform/operator SPA（**不是** 后端的管理面）；
 > `adm` 弃用。本文档、`ecosystem.md`、`brand-guide.md`、`projects/mynet_api.md`
 > 已于 V3-7 同步。
 
@@ -66,7 +66,7 @@
 | my.mynet.club | mynet_gui | prod |
 | www.mynet.club | mynet_web | prod |
 | gw.mynet.club | mynet_gateway（节点面入口） | prod |
-| admin.mynet.club | 框架 platform/operator SPA（**非** back） | prod |
+| admin.mynet.club | 框架 platform/operator SPA（**非** 后端） | prod |
 
 ---
 
@@ -123,7 +123,7 @@
 
 | 项目 | 回滚方式 |
 |------|---------|
-| Laravel（ctl / back） | `manage-prod.sh rollback`，或 `git reset --hard <prev_commit>` 后重跑部署脚本 |
+| Laravel（ctl / 后端） | `manage-prod.sh rollback`，或 `git reset --hard <prev_commit>` 后重跑部署脚本 |
 | GUI | rsync 备份的旧 `dist/` 目录回原位置 |
 | 客户端 / OpenWrt | 用户保持旧版本；CTL 不强制更新 |
 | 数据库 | **无自动回滚**。备份见 `mynet_api/deploy/backup.sh`（V3-5），恢复用 `restore.sh`——但那是「恢复到某个时点」，不是回滚一次迁移 |
@@ -140,7 +140,7 @@
 | 服务可用性 | ⚠️ **未建立**。`manage-prod.sh` 只在部署结束时做一次健康检查，没有常驻监控 |
 | 错误日志 | 有：Laravel log（[mynet_api/config/logging.php](../../../mynet_api/config/logging.php) 存在）。**Slack webhook 未接** |
 | 队列堆积 | ⚠️ **未建立**。本文件旧版写的 `scripts/service/queue-monitor-daemon.sh` **在盘上不存在** |
-| 心跳异常 | ⚠️ **无告警**。back 侧有 `monitor/heartbeat` → Redis（全节点 zset + 离线扫描）这条链，但没有任何提醒出口；节点侧指标采集本身也不完整（`long-range-plan-deep.md` §1「可观测性」） |
+| 心跳异常 | ⚠️ **无告警**。后端侧有 `monitor/heartbeat` → Redis（全节点 zset + 离线扫描）这条链，但没有任何提醒出口；节点侧指标采集本身也不完整（`long-range-plan-deep.md` §1「可观测性」） |
 
 **结论**：监控面整体属**未建立**状态，是 V4（规模化与可观测）的内容，不要按本表
 以为生产已有监控。
@@ -224,7 +224,7 @@ cd mynet_api && ./manage-prod.sh deploy
 |---|---|---|
 | `APP_ENV` / `APP_DEBUG` | `production` / `false` | `true` 会把堆栈与配置值直接吐进响应 |
 | **`APP_TIMEZONE`** | **`Asia/Shanghai`** | **G4 裁定**。本仓**没有** `config/app.php`（实测 `ls config/` 无此文件），默认走框架的 `UTC`；⇒ 只加这一条 env 即生效，**不要为此新建一份 `config/app.php`** |
-| ⚠️ 同一行的硬口径 | —— | **框架自带端点返回的时间字符串不带偏移量**（back 自有端点带），它们要按**同一墙钟**解释。前端 `format.ts` 的 `toDate()` 就是这个收口点。**同页混用两种信封而不按本口径读 ⇒ 显示差 8 小时** —— G4 明确要求把这句写进部署清单，就是这一句 |
+| ⚠️ 同一行的硬口径 | —— | **框架自带端点返回的时间字符串不带偏移量**（后端自有端点带），它们要按**同一墙钟**解释。前端 `format.ts` 的 `toDate()` 就是这个收口点。**同页混用两种信封而不按本口径读 ⇒ 显示差 8 小时** —— G4 明确要求把这句写进部署清单，就是这一句 |
 | `SANCTUM_STATEFUL_DOMAINS` | 含 `console.mynet.club` | `.env.example:72` 已带；漏了就是「登录成功但 `/auth/user` 恒 401 ⇒ 无限回登录页」（`bootstrap/app.php:55-58` 记的同一次故障） |
 | `SESSION_DRIVER` | `database`（现状） | ⇒ 库里**必须有 `sessions` 表**；E1 的 74 张里已含（实测 `grep -c "CREATE TABLE \`sessions\`"` = 1）。改成 `redis` 则 §8.7 第 1 条变成硬阻塞 |
 | `SESSION_SAME_SITE` | 保持 `lax` | console 的 POST 走 api 组，而 **api 组没有 `VerifyCsrfToken`** ⇒ 挡 cross-site 的只有这一条（`config/session.php:202`）。改成 `none` 等于只剩浏览器默认值在守 |
@@ -262,7 +262,7 @@ NULL 没被填 0 →回填后跑通→ `information_schema` 复核 7 列全 `NO`
 改变列的可空性在 MySQL 8 走 **COPY**（重建表、期间挡写）⇒ 按现网各表行数选窗口。
 
 **硬口径（E1 立的一条，别在上线时忘掉）**：**DDL ≠ 现网** —— 这份 DDL 只保证
-「back 启用的 74 张」，现网那 **47 张**框架下游表不参与 mynet，本件既不建也不删它们。
+「后端启用的 74 张」，现网那 **47 张**框架下游表不参与 mynet，本件既不建也不删它们。
 
 ✅ **执行状态（2026-10-05，现网实跑）**：本栏两件里**第 2 件（A5 收紧）已执行完毕**，
 工单 B-4 一并落地（B-5 经现网核验**列已存在、无需执行**）；**第 1 件（建库 DDL）按设计未跑**（现网已有库）。执行前已全量备份

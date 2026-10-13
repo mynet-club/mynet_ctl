@@ -1,5 +1,11 @@
 # SPEC: mynet_api 历史包袱清理
 
+> ⚠️ **本文是归档状态的旧结论，其中 RBAC 拆除方向已被 2026-10-01 裁定部分推翻**：
+> `operator` 回装（console 租户后台整条身份链依赖它），`roles` / `operator_tenants` / RBAC
+> 随之落地（`mynet_api/deploy/schema/mynet_back-schema.sql:1082,1269` 建表）——
+> 见 `AGENTS.md` §1.6「2026-10-01 裁定例外」。下文 T50「整套 RBAC/权限子系统拆除」与
+> 「`operator_tenants` 表本就不存在」两处**不再是现行口径**，只作历史对照。
+>
 > 更新：2026-09-21 | 适用：`mynet_api`
 > 状态：**包袱清理系列 + 四项待决项 + 两项新发现（RBAC 拆除 / 迁移归属）均已完成**
 > 依据：本文件全部结论均来自实测（`ClassLoader::findFile` / `information_schema` / PHP fatal），非推断
@@ -8,8 +14,8 @@
 > ① **admin = 平台**（`Operator.scope='platform'`）·
 > ② **operator[tenant] = 租户运营**（**只有 Operator 有 role，才有 RBAC**）·
 > ③ **user = 用户消费层**（`User` 经 `tenant_users` 关联，**没有角色、没有权限概念**）。
-> **back 的实现全部在 ③ user 层**，因此不需要 RBAC，也不该出现「带 role 的 User 管理员」。
-> 平台后台属于 ①，落在框架 platform/operator 模块 + `adm.mynet.club` SPA，不在 back。
+> **后端的实现全部在 ③ user 层**，因此不需要 RBAC，也不该出现「带 role 的 User 管理员」。
+> 平台后台属于 ①，落在框架 platform/operator 模块 + `adm.mynet.club` SPA，不在后端。
 > 详见 `unified-platform-architecture.md` §1.0。
 
 ---
@@ -40,7 +46,7 @@
 
 | # | 问题 | 处置 | 提交 |
 |---|---|---|---|
-| T50 | `RoutePermissionMiddleware` 生产地雷 | **整套 RBAC/权限子系统拆除**：back 是用户消费层，不需要 RBAC 与权限控制 | `bac13e43` |
+| T50 | `RoutePermissionMiddleware` 生产地雷 | **整套 RBAC/权限子系统拆除**：后端是用户消费层，不需要 RBAC 与权限控制 | `bac13e43` |
 | T51 | 框架迁移 vs app 迁移重复建表 | **app 自持 schema**；删两个问题迁移；vendor pending 不跑 | `29053ab9` |
 
 **T50 实测结论与处置**：
@@ -52,12 +58,12 @@
 | `BaseAdminController` | 调 `$currentAdmin->getPermissions()`（User 上无此方法） | 移除视图 `permissions` 注入 |
 | `UserDomainService::getUserPermissions` | 空实现返回 `[]`；`updateUserPermissions` 空实现返回 `true` | 删除 |
 | 框架 `RbacService` | 文档明写「User 不拥有角色，永远无 RBAC 权限」；对非 `Operator` 恒 `false`；`operator_tenants` 表本就不存在 | **不可改接**，排除该方向 |
-| `permissions`/`roles`/`role_permissions` | back **自己**的迁移建的；`tenant_users.role_id` 全 NULL，用户→角色从未接上 | drop 三表 + `tenant_users.role_id` 列 |
+| `permissions`/`roles`/`role_permissions` | 后端 **自己**的迁移建的；`tenant_users.role_id` 全 NULL，用户→角色从未接上 | drop 三表 + `tenant_users.role_id` 列 |
 | `platform_user` | 用户拍板「没有 platform_user」 | 不进 admin 白名单；角色表随 RBAC 一并删除 |
 
 **T51 实测结论与处置**：发现 174 个迁移文件，Ran=131，Pending=43。
 - vendor 侧 pending（`framework_core` + 各模块）**不跑**——`framework_core` 要建的 18 张表里 13 张已由 app 迁移建好，直接 `migrate` 会 "table already exists"
-- back 的迁移只跑 `--path=database/migrations`
+- 后端的迁移只跑 `--path=database/migrations`
 - 已删：`2026_07_13_121224_create_personal_access_tokens_table`（与已 Ran 的同表重复，表已存在 25 行）
 - 已删：`2026_07_13_121223_create_agent_conversations_table`（`laravel/ai` 脚手架，主键 `string('id',36)` 违反全局 ID 约定；表已由 `2026_06_29_000003/000004` 用正确形态建好）
 - **保留**：`2026_07_13_121223_create_health_tables`——`spatie/laravel-health` **已安装且已配置**（`config/health.php` + admin health-check 路由），先前「未使用该包」的判断是错的
@@ -68,14 +74,14 @@
 ### 八 · T52 身份模型落地（用户明确硬规则）
 
 > **一套代码三重角色都在**；**所有角色与权限一律由框架实现**；
-> back 侧任何与之冲突的自建实现**直接删掉**。
+> 后端侧任何与之冲突的自建实现**直接删掉**。
 > 业务域字段（`participants.role`/`agents.role`/消息 `role`）不是鉴权角色，保留。
 
 框架模型（`CheckPermission` / `RbacService` 源码，非推断）：
 ① **admin = 平台**（`Operator.scope='platform'`）·
 ② **operator[tenant]**（`operator_tenants.role_id`，**只有 Operator 有 role**）·
 ③ **user = 用户消费层**（`User` ← `tenant_users`，**无角色、无权限概念**）。
-**back 全部在 ③**。
+**后端全部在 ③**。
 
 | 删除项 | 说明 | 提交 |
 |---|---|---|
@@ -85,7 +91,7 @@
 | 6 个领域服务里的 `isAdmin()` 租户旁路 | 「管理员看全量」不存在——user 层一律按 `users.tenant_id` 收敛 | 同上 |
 | DTO/Resource/校验/blade/前端 store 里的角色字段 | `user_role`/`is_admin`/`isSuperAdmin` 全清 | 同上 |
 | `Admin\UserController::bulkUpdate` + 路由 | 调用的 `bulkUpdateUserStatus` 在两个 UserService 上都不存在 | 同上 |
-| `users.role` / `tenant_users.role` 两列 | 框架 Auth `User::$fillable` 无 role，此两列是 back 自加 | 同上 |
+| `users.role` / `tenant_users.role` 两列 | 框架 Auth `User::$fillable` 无 role，此两列是后端自加 | 同上 |
 
 **更新后基线**：`route:list` = **1065** · `php -l` 全过 · 外键 **101** 个 **0 违规** · `User` 上已无 `isAdmin`/`isSuperAdmin`。
 
@@ -110,13 +116,13 @@
 
 **删除动机（实测）**：事件系统拆除后邮件路径已无发送方；且唯一残留的 `->notify()`
 指向不存在的 `App\Notifications\NewUserRegistered`——那条路径**必然 fatal**。
-框架本就有完整实现，back 这份是既重复又跑不通的副本。
+框架本就有完整实现，后端这份是既重复又跑不通的副本。
 
 > **后续（2026-10-04）**：上表「邀请奖励与好友关系逻辑保留」里保留的旧 `invitations`
 > 邀请码实现，已按当日裁定整体下架（邀请码统一走框架 `invite_codes`，好友关系逻辑仍在），
 > 见 `dev-plan.md` G-7 / G-8。本表是 `b8c7b973` 那轮的记录，原文不改。
 
-**消费者层现状（back 只剩业务）**：
+**消费者层现状（后端只剩业务）**：
 - **109 条业务路由**：nodes / route / ippools / services / social / notifications /
   users / ids / tenants / mynet stats / monitor 心跳
 - **身份路由 26 条**：全部来自框架 `api/v1/auth/*`
@@ -180,7 +186,7 @@
 **不按「严重度」排，按「是否在 WG 关键路径上」排。**
 
 原因：`MonitorRtCmd` 加载即 fatal，而它被 `NodeHeartbeatController` / `NodeActionController` /
-`MonitorCommandService` 引用 —— 而**节点配置分发正是走心跳命令链**（back → heartbeat →
+`MonitorCommandService` 引用 —— 而**节点配置分发正是走心跳命令链**（后端 → heartbeat →
 `node.refresh` / `route.refresh`）。所以它不是"清理"，是 WG 的**前置**。
 
 ### 第一阶段执行结果 ✅

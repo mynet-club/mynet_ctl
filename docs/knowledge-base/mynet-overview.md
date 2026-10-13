@@ -36,9 +36,9 @@
 | 1 | 底层逻辑是 P2P UDP 组网 | `mynet_gnb`（opengnb） | **成熟**（1.6.8 + 本地补丁） |
 | 2 | gnb / wireguard 两种 P2P 实现 | `mynet_agent/driver/{gnb,wireguard}` | gnb **落地**；**wireguard 未实现** |
 | 3 | 各自协议与目录结构不破坏 | 补丁包机制 + 驱动写入边界 | **扎实** |
-| 4 | back 中心化社区化链接、交换公钥 | `mynet_api` + `mynet_gui` | **成熟**（含安全隐患，见 §11） |
+| 4 | 后端中心化社区化链接、交换公钥 | `mynet_api` + `mynet_gui` | **成熟**（含安全隐患，见 §11） |
 | 5 | 自动发现 / 自动更新 | `mynet_agent`（mynetd/mynet）+ `mynet_ctl` | **基本落地** |
-| 6 | 界面交给本地：mynetd→gateway→back | `mynet_agent`（gateway 已实现） | agent 段**已实现**；**UI→mynetd 未接** |
+| 6 | 界面交给本地：mynetd→gateway→后端 | `mynet_agent`（gateway 已实现） | agent 段**已实现**；**UI→mynetd 未接** |
 | 7 | 通过部分节点访问到不了的地方（proxy） | gnb `proxy on` / `mynet_proxy` | **两代并存，新线已定** |
 | 8 | 节点提供服务（如 web） | `mynet_api` 的 `services` 建模 | **已建模**，节点侧靠外部服务 + 路由 |
 | 9 | 支持更多平台/终端 | `mynet_openwrt` / `mynet_desktop` | OpenWrt **成熟**；desktop **占位** |
@@ -57,8 +57,8 @@
 | `mynet_agent` | Go | 控制面：`mynetd` + `mynet` CLI + `mynet_gateway` + `mynet_proxy` + `mynet-updater` |
 | `mynet_api` | Laravel 13 / PHP | 业务权威：用户/租户/节点/路由/密钥/服务/社交 |
 | `mynet_ctl` | Laravel | 分发中心 + **知识库中枢** |
-| `mynet_ui` | Vue 3 + Vite + Tailwind | 本机 WebUI（静态） |
-| `mynet_gui` | Vue 3 + Quasar | 云端社区管理前端（服务 back） |
+| `mynet_ui` | Vue 3 + Vite + Tailwind | **历史仓**（不在 workspace；页面素材已作 `mynet_web` 素材，见 §15 D-4） |
+| `mynet_gui` | Vue 3 + Quasar | 云端社区管理前端（服务后端） |
 | `mynet_desktop` | Shell | 非 OpenWrt 平台适配（**占位**） |
 | `mynet_openwrt` | Lua / LuCI | OpenWrt 适配（**最成熟**） |
 | `mynet_utc` | C | UDP→TCP 隧道转换器（可选组件） |
@@ -68,7 +68,7 @@
 `mynet_back_20250904`、`mynet_backup_20250610_155701`。
 
 > `ecosystem.md` 的目标线修订（2026-09）明确了「**产品本体与平台适配分离**」：
-> 产品本体 = `mynet_agent` + `mynet_ui`（只写一份）；平台适配 = `mynet_desktop` + `mynet_openwrt`（一平台一份）。
+> 产品本体 = `mynet_agent` + 本机 WebUI（`mynet_ui` 为历史仓，现为 mynetd 内嵌 WebUI + `mynet_gui`，只写一份）；平台适配 = `mynet_desktop` + `mynet_openwrt`（一平台一份）。
 
 ### 2.2 域名与部署
 
@@ -79,14 +79,14 @@
 | `my.mynet.club` | `mynet_gui`（**用户交互前端**） |
 | `www.mynet.club` | `mynet_web`（官网 / 项目主页） |
 | `idx.mynet.club` | GNB index 节点（`address.conf` 里的索引服务） |
-| `console.mynet.club` | **租户管理**（= back 的管理面） |
+| `console.mynet.club` | **租户管理**（= 后端的管理面） |
 | `admin.mynet.club` | **平台管理**（框架 platform/operator SPA） |
 | `gw.mynet.club` | `mynet_gateway` 公网入口（单入口；多实例时再开 `gw1`/`gw2`） |
 
 ⚠️ **2026-09-24 裁定（H4）**：`console` = 租户管理，`admin` = 平台管理。
-此前 `deployment-registry.md:13` / `ecosystem.md:125` / `brand-guide.md:152` 把 **back 管理面**
+此前 `deployment-registry.md:13` / `ecosystem.md:125` / `brand-guide.md:152` 把 **后端管理面**
 写作 `admin`，与 `unified-platform-architecture.md:100,130`（`adm` = 框架 platform/operator SPA，
-「不在 back」）冲突。裁定后：**back 管理面改称 `console`**，`admin` 让给平台管理，`adm` 弃用。
+「不在后端」）冲突。裁定后：**后端管理面改称 `console`**，`admin` 让给平台管理，`adm` 弃用。
 上述三处文档待同步。
 
 ⚠️ **2026-09-24 裁定（H1）**：生产入口**复用现有 nginx**（`172.26.3.227:443`，前置公网 LB，
@@ -102,7 +102,7 @@ api/gw/console 各加 nginx server block。
 数据面**完全由 gnb 承担**，MyNet 自己的代码不碰 UDP 组网逻辑。这一点在各层都有明确表述：
 
 - `mynet_api` 不碰数据面。`routes` 表只是「源节点 → 目标节点 + 可访问前缀」的**授权记录**，
-  back 把它投影成配置包下发给 agent，转发由节点自行 P2P 完成。
+  后端把它投影成配置包下发给 agent，转发由节点自行 P2P 完成。
 - `mynet_agent` 只生成 `node.conf` / `route.conf` / `address.conf` 驱动 gnb，
   数据面二进制在 `driver/gnb/bin/gnb`。
 - `mynet_gnb` 就是 opengnb 本体（fork），协议细节见 [`refs/opengnb.md`](refs/opengnb.md)。
@@ -219,10 +219,10 @@ driver/gnb/
 
 ---
 
-## 6. ④ back 的中心化社区化链接
+## 6. ④ 后端的中心化社区化链接
 
 这是 **MyNet 的核心价值**：数据面是 P2P，但「**找到谁、和谁连、拿到谁的公钥**」
-全部靠 back 这个中心撮合点。
+全部靠后端这个中心撮合点。
 
 ### 6.1 「链接」分两层
 
@@ -255,7 +255,7 @@ driver/gnb/
             → 投影成 BundleEnvelope → 下发节点 → 写入 gnb 配置
 ```
 
-所以 back 持有的是**社交图 + 路由授权**，数据面仍 P2P。
+所以后端持有的是**社交图 + 路由授权**，数据面仍 P2P。
 
 ### 6.3 公钥交换
 
@@ -271,7 +271,7 @@ driver/gnb/
 （`getRouterKeys` 只返回 `public_key`）→ 写入 `ed25519/{peerNodeId}.public`，
 增量更新（内容相同不覆盖）。
 
-⚠️ **私钥确实存在 back 里**，且有明确证据：`node_keys.private_key` 列存在（`private_key text`），
+⚠️ **私钥确实存在后端里**，且有明确证据：`node_keys.private_key` 列存在（`private_key text`），
 `NodeKeyDomainService::saveNodeKeys` 把明文落库并**明文返回**，
 `generateNodeKeys` 还会把 `private_key` 组装进邮件数据**发出去**。
 这与「私钥永不出节点」的安全目标相冲突，是明确的风险点（见 §11）。
@@ -284,7 +284,7 @@ driver/gnb/
 
 | 产物 | 说明 |
 |---|---|
-| `mynetd` | 常驻守护：心跳遥测 + 执行 back 命令 + 网关长连接 + 本机 HTTP API |
+| `mynetd` | 常驻守护：心跳遥测 + 执行后端命令 + 网关长连接 + 本机 HTTP API |
 | `mynet` | **配置工具 + 系统能力**（执行器）：`setup`/`install`/`uninstall`/`update`/`config`、`detector`/`metrics`/`apply`/`service`/`driver`、以及 `status`/`monitor`/`refresh-*` 等运维子命令 |
 | `mynet_gateway` | 边缘网关（节点面唯一公网入口） |
 | `mynet_proxy` | 代理辅助二进制（**在新线上下架**，见 §10） |
@@ -378,7 +378,7 @@ mynet_agent
 
 ---
 
-## 8. ⑥ 本地界面 → mynetd → gateway → back
+## 8. ⑥ 本地界面 → mynetd → gateway → 后端
 
 这是**用户昨天刚定的方向**，也是**现状与目标态差距最大**的一条。
 
@@ -393,17 +393,17 @@ mynetd ═══════ WebSocket ═══════> gateway ── 内
 
 | 跳 | 组件 | 职责 | 不做什么 |
 |---|---|---|---|
-| ① 本机 | `mynetd` httpd | 对 GUI 提供本机能力面；对需要 back 数据的查询做**中继** | 不直连 back；不持有 back 凭据 |
+| ① 本机 | `mynetd` httpd | 对 GUI 提供本机能力面；对需要后端数据的查询做**中继** | 不直连后端；不持有后端凭据 |
 | ② 边缘 | `mynet-gateway` | 节点鉴权、连接注册、presence、通知推送、**字节中继** | 不解析业务载荷；不存业务数据 |
 | ③ 内网 | `mynet_api` | 业务权威 | **对节点不可达** |
 
 **为什么这样切**（规范列出的收益）：
 
-- **back 对节点的攻击面归零**——节点只需知道 gateway 地址，`/api/v1/monitor/*`、
+- **后端对节点的攻击面归零**——节点只需知道 gateway 地址，`/api/v1/monitor/*`、
   admin、用户 API 全部退内网；
 - **鉴权边界唯一**——节点身份验证只在 gateway 做一处；
 - **暴露面是小靶子**——对外只剩一个 Go 二进制，而不是整个 Laravel（含 vendor 数百条路由）；
-- **GUI 零信任边界**——浏览器永不接触 back，凭据与会话都在本机 mynetd 侧；
+- **GUI 零信任边界**——浏览器永不接触后端，凭据与会话都在本机 mynetd 侧；
 - **gateway 可水平扩展**——无业务状态，可多点部署就近接入。
 
 **关键约束**：`mynet_gnb` 不被触碰——gateway 对的是 `mynetd`，不是 gnb 进程。
@@ -414,16 +414,16 @@ mynetd ═══════ WebSocket ═══════> gateway ── 内
 
 - `mynet_gateway` 代码存在（`cmd/mynet_gateway` + `internal/gateway`），
   监听 `/v1/node/connect`（节点 WS 长连接）、`/v1/presence/{node_id}`、`/v1/notify`；
-- **mynetd 主动**以 WebSocket 连 gateway（back 不直连节点）；
+- **mynetd 主动**以 WebSocket 连 gateway（后端不直连节点）；
 - 握手是 **Ed25519 challenge-response**：签名覆盖
   `mynet-gateway-v1\n<node_id>\n<ts>\n<nonce>`，`ts` 偏差 > 300s 拒绝（防重放）；
 - gateway 只做**字节中继**：`fetch` 携带 method/path/headers/body，
-  gateway 转成对 back 的一次内网 HTTP 调用，**不解析载荷**，且只放行**白名单路径**；
-- **心跳也默认走网关**（`relay_heartbeat=true`），所以「back 对节点不可达」成立；
+  gateway 转成对后端的一次内网 HTTP 调用，**不解析载荷**，且只放行**白名单路径**；
+- **心跳也默认走网关**（`relay_heartbeat=true`），所以「后端对节点不可达」成立；
 - 本机 API（`localapi`）监听 `127.0.0.1:8096`，Bearer 本机 token（落盘 0600），
   提供 `/status`、`/logs`、`/service/{start,stop,reload}`、`/config/{sync,refresh}`、
   `/peers`、`/proxy[/enable|disable]`、`/zones[/switch]`、`/nodes`、`/relay`；
-- `/relay` 就是 GUI 取平台态的通道，经 `localRelay → ControlPlane → gatewayclient` 中继到 back。
+- `/relay` 就是 GUI 取平台态的通道，经 `localRelay → ControlPlane → gatewayclient` 中继到后端。
 
 **未落地**：
 
@@ -434,8 +434,8 @@ mynetd ═══════ WebSocket ═══════> gateway ── 内
 - **OpenWrt 侧反而禁用了 mynetd**：postinst 主动 `pkill -x mynetd`，
   改用 cron 每 5 分钟心跳替代，`mynet.*` ubus 对象**未注册**。
 
-**结论**：「UI → mynetd → gateway → back」这条链中，
-**mynetd → gateway → back 已通，UI → mynetd 与 OpenWrt 段还没接上**。
+**结论**：「UI → mynetd → gateway → 后端」这条链中，
+**mynetd → gateway → 后端已通，UI → mynetd 与 OpenWrt 段还没接上**。
 
 ### 8.3 路径白名单（安全咽喉点）
 
@@ -447,7 +447,7 @@ mynetd ═══════ WebSocket ═══════> gateway ── 内
   `/password`、`/reset`、`/token`、`/activate`、`/billing`、`/commerce`、`/orders`；
 - 含 `%` 一律拒绝（防 `%2f` 绕过）。
 
-这个白名单是**防止节点越权访问 back 的 admin/身份接口**的关键，
+这个白名单是**防止节点越权访问后端的 admin/身份接口**的关键，
 所以它必须与 gateway 同源，不能各写一份。
 
 ---
@@ -495,8 +495,8 @@ LAN 客户端请求
 |---|---|
 | 未登记目的地走代理 | **L2 TransportPolicy → L3 BundleEnvelope → L5 Driver**（gnb：`proxy on` + 指定出口=下一跳；wg：`AllowedIPs`） |
 | OS 策略路由 | **L6 NetworkBackend**（驱动无关：`ip route`/pf 对 gnb0 与 wg0 一视同仁） |
-| IP 段列表 / 地域分流 | **L2 TransportPolicy 的输入**（谁走谁是业务决策，back 算好随 envelope 下发） |
-| `proxy_role.conf` 等节点本地状态 | **消亡**（角色与拓扑是 back 的 L1/L2 数据） |
+| IP 段列表 / 地域分流 | **L2 TransportPolicy 的输入**（谁走谁是业务决策，后端算好随 envelope 下发） |
+| `proxy_role.conf` 等节点本地状态 | **消亡**（角色与拓扑是后端的 L1/L2 数据） |
 
 **用户原话的机制澄清**（规范里明确引用）：
 
@@ -512,8 +512,8 @@ LAN 客户端请求
 |---|---|---|
 | 模式 | `gnb_native`（恒为此值） | CIDR 注入 |
 | 做什么 | 只维护 `node.conf` 的 `proxy on\|off` | 灌 712 条 `/8` 路由 + nft 策略路由 |
-| 权威 | **back 持有**（`node_configs.config` 的 `proxy`），node.conf 只是投影 | 节点本地 |
-| 读/写 | 经中继问 back / 改 back 后刷新 node.conf | 直接改本地文件 |
+| 权威 | **后端持有**（`node_configs.config` 的 `proxy`），node.conf 只是投影 | 节点本地 |
+| 读/写 | 经中继问后端 / 改后端后刷新 node.conf | 直接改本地文件 |
 
 `DriverCaps.Proxy` 由 gnb 二进制是否带 P2 补丁决定。
 
@@ -521,9 +521,9 @@ LAN 客户端请求
 
 ## 10. ⑧ 节点提供服务（如 web）
 
-**这条在 back 侧已建模，在节点侧靠外部服务 + 路由。**
+**这条在后端侧已建模，在节点侧靠外部服务 + 路由。**
 
-### 10.1 back 侧建模
+### 10.1 后端侧建模
 
 `services` + `node_services` + `service_shares` + `service_approvals`：
 
@@ -550,7 +550,7 @@ API 面：`/services/{my,public,friends,anonymous,show,create,update,delete,shar
 - mynetd **不内嵌 WebUI 供其他节点访问**（localapi 只有 JSON API，无静态托管）；
 - desktop / openwrt **无端口映射/dnat 发布脚本**。
 
-**所以准确说法是**：back 提供服务的**注册、授权、分享、审批**模型，
+**所以准确说法是**：后端提供服务的**注册、授权、分享、审批**模型，
 真正的服务运行与流量引导靠节点上的外部服务 + gnb 路由能力。
 
 ---
@@ -591,9 +591,9 @@ API 面：`/services/{my,public,friends,anonymous,show,create,update,delete,shar
 
 | 层 | 归属 | 职责 | 核心对象 |
 |---|---|---|---|
-| **L1 业务域** | back | 好友、连接生命周期、密钥、授权/撤销——**不含任何驱动术语** | `NodeIdentity` / `Friendship` / `ConnectionRequest` / `Connection` / `ConnectionGrant` / `KeyExchange` |
-| **L2 拓扑与策略** | back | 把 Connection 翻译成「怎样通信」，仍不生成驱动配置 | `TransportPolicy`（`mode`: direct/proxy/relay/auto/disabled）、`NodeCapability`、`TransportPlanner`（**纯函数**）、`TransportPlan`（`active_path` / `fallback_path`） |
-| **L3 配置发布** | back → agent | 序列化为 `BundleEnvelope`，管理版本与发布 | `BundleEnvelope` + `GnbIntent` / `WireGuardIntent` / `NetworkIntent`；`secret://` 引用 |
+| **L1 业务域** | 后端 | 好友、连接生命周期、密钥、授权/撤销——**不含任何驱动术语** | `NodeIdentity` / `Friendship` / `ConnectionRequest` / `Connection` / `ConnectionGrant` / `KeyExchange` |
+| **L2 拓扑与策略** | 后端 | 把 Connection 翻译成「怎样通信」，仍不生成驱动配置 | `TransportPolicy`（`mode`: direct/proxy/relay/auto/disabled）、`NodeCapability`、`TransportPlanner`（**纯函数**）、`TransportPlan`（`active_path` / `fallback_path`） |
+| **L3 配置发布** | 后端 → agent | 序列化为 `BundleEnvelope`，管理版本与发布 | `BundleEnvelope` + `GnbIntent` / `WireGuardIntent` / `NetworkIntent`；`secret://` 引用 |
 | **L4 Agent 协调** | agent | 拉取 → 校验 → 原子 Apply → 健康检查 → Commit/Rollback | `BundleFetcher` / `BundleValidator` / `BundleApplier` |
 | **L5 驱动适配** | agent | 把 driver intent 翻译为原生配置 + 管进程生命周期 | 统一驱动接口；`GnbDriver` / `WireGuardDriver` |
 | **L6 系统网络** | agent | OS 路由/防火墙/NAT（**驱动无关**） | `NetworkBackend` |
@@ -618,7 +618,7 @@ KeyExchange       key_id / node_id / algorithm(ed25519|curve25519) / public_key 
 
 ### 12.2 与现有实现的映射（过渡期）
 
-| 新对象 | 现有 back 模型 | 现有 agent 行为 |
+| 新对象 | 现有后端模型 | 现有 agent 行为 |
 |---|---|---|
 | `NodeIdentity` | `nodes` 表 | — |
 | `Friendship` | `friendships` / `friend_requests` | — |
@@ -655,7 +655,7 @@ gnb 靠协议层自己兜底，wg 必须靠上层观测切换。硬压成一套�
 ### 已完成（有代码与测试）
 
 - gnb 补丁包机制（P1/P2/P3）与源码同步流程
-- back 的社交图 + 路由授权 + 公钥目录 + 心跳落库
+- 后端的社交图 + 路由授权 + 公钥目录 + 心跳落库
 - agent 的 `coordinator.ApplyFiles` 原子写入（快照 + 回滚 + journal + 并发锁）
 - `GnbAdapter`：`BundleEnvelope` → gnb 原生文件集
 - **gateway 代码**（WS + Ed25519 握手 + 字节中继 + 白名单）
@@ -691,7 +691,7 @@ gnb 靠协议层自己兜底，wg 必须靠上层观测切换。硬压成一套�
 
 ### 14.1 安全
 
-**① 私钥明文存在 back，且存在外发路径**
+**① 私钥明文存在后端，且存在外发路径**
 `node_keys.private_key` 明文落库（`NodeKey.php:24` 在 `$fillable` 里），
 `NodeKeyDomainService::saveNodeKeys` 明文返回，
 `generateNodeKeys` 把它组装进邮件数据发出去。
@@ -706,7 +706,7 @@ gnb 靠协议层自己兜底，wg 必须靠上层观测切换。硬压成一套�
   `GET /nodes/{id}/keys`（`getNodeKeyInfo`）也**不含私钥**。
 
 **风险点在于**：产品上既然存在「服务端生成密钥」这条路径，
-私钥就会在 back 落库、经 API 明文返回、并可能进入邮件正文。
+私钥就会在后端落库、经 API 明文返回、并可能进入邮件正文。
 这与 `control-plane.md` 声称的「**私钥永不出节点**」在方向上冲突——
 该规范描述的是目标态，而现状保留了服务端持钥的分支。
 
@@ -714,7 +714,7 @@ gnb 靠协议层自己兜底，wg 必须靠上层观测切换。硬压成一套�
 `signature = base64(HMAC-SHA256(key = base64_decode(node_keys.public_key), message))`，
 `message = METHOD|path|timestamp|body`，容忍窗口 300s。
 
-**公钥按设计是公开的**（back 的 `node_keys` 表、节点上 0644 的公钥文件），
+**公钥按设计是公开的**（后端的 `node_keys` 表、节点上 0644 的公钥文件），
 所以「强度 = 公钥的保密程度」——**任何能读到公钥的一方都能伪造该节点的心跳**。
 
 这一条要公允地说明：**代码里自己就写清楚了这是已知弱点、不是实现 bug**，
@@ -723,7 +723,7 @@ gnb 靠协议层自己兜底，wg 必须靠上层观测切换。硬压成一套�
 `node-keying.md` §5 有对应设计）。
 所以风险的性质是「**迁移尚未完成期间的窗口期暴露**」，
 而不是设计疏漏。但 gateway 目前只覆盖节点↔gateway 这一跳，
-**节点↔back 的心跳仍是 HMAC**，且 back 侧没有 gateway 时心跳会直接暴露在旧路径上。
+**节点↔后端的心跳仍是 HMAC**，且后端侧没有 gateway 时心跳会直接暴露在旧路径上。
 
 **③ 公钥编码有三种假设（这条是真隐患）**
 同一列 `node_keys.public_key` 上有三套互不兼容的假设：
@@ -739,7 +739,7 @@ gnb 靠协议层自己兜底，wg 必须靠上层观测切换。硬压成一套�
 即**密钥编码不一致会让节点无法上报心跳**，且表现为鉴权失败而非编码错误，不易定位。
 
 **④ BundleEnvelope 内含明文私钥**
-`secret://node_keys/1001/private` 只是 back 内部生成流程的引用，
+`secret://node_keys/1001/private` 只是后端内部生成流程的引用，
 **下发时明文写入 envelope 的 driver intent 字段**，`secret://` 引用不下发。
 规范把它列为「迁移路径」，后续阶段可改为 agent 自行从安全存储读取。
 
@@ -747,7 +747,7 @@ gnb 靠协议层自己兜底，wg 必须靠上层观测切换。硬压成一套�
 
 | 位置 | 文档说 | 实际 |
 |---|---|---|
-| `mynet_ctl/docs/knowledge-base/mynet.md` | gnb 私钥是「seed + 公钥」64 字节 | **是 `SHA512(seed)`**（`keypair.c:9-12`），拿不到 seed |
+| `mynet_ctl/docs/knowledge-base/mynet.md` | gnb 私钥是「seed + 公钥」64 字节 | **是 `clamp(SHA512(seed))`**（`keypair.c:9-12`），拿不到 seed。（2026-10-13 已修：mynet.md 已按此改写） |
 | `HEARTBEAT_API_SPEC.md` | `POST /api/v1/heartbeat` | 实际 `POST /api/v1/monitor/heartbeat` |
 | `HEARTBEAT_IMPLEMENTATION_SUMMARY` | 「Ed25519 签名验证」 | 实现是 HMAC |
 | `control-plane.md` | 状态「gateway 未实现」 | **代码已存在** |
@@ -763,12 +763,13 @@ gnb 靠协议层自己兜底，wg 必须靠上层观测切换。硬压成一套�
 - **平台适配重复两份**（Node 脚本 vs Lua），无共享控制面；
 - **死代码**：`internal/legacy`、`internal/checker`、`internal/detector`、`internal/interfaces`
   在 agent 仓全无 import；`internal/tui/viewmodel` 仍是活代码（TUI 界面已谢幕，但 viewmodel 服务 CLI/WebUI 后端）；
-- **gnb conf 目录里有 Go 格式化 bug 产物（已实测确认）**：
-  `driver/gnb/conf/4147069894021819/ed25519/` 下同时存在两组文件——
+- **gnb conf 目录里有 Go 格式化 bug 产物（旧树/生产节点实测，本 workspace 无命中）**：
+  旧树 `driver/gnb/conf/4147069894021819/ed25519/`（181 等 5 个节点各一份）曾同时存在两组文件——
   正确的 `{nodeid}.public`（65 字节）与 **`%!d(string={nodeid}).pub`**（同样 65 字节）。
-  5 个节点各有这样一份重复。`%!d(string=...)` 是 Go 把 `%d` 用在字符串上的产物，
+  `%!d(string=...)` 是 Go 把 `%d` 用在字符串上的产物，
   说明**写对端公钥时有格式串不匹配的缺陷**，且旧产物没有被清理。
   危害有限（正确文件也在），但会让目录变脏、并掩盖真实的写入错误；
+  搬运时**不搬**（AGENTS §3 红线）；在本 workspace 按 nodeId 检索 0 命中，别在这儿找。
 - **`mynet_agent` 根目录有名为「生成配置 功能」的游离文件**（含换行/特殊字符）。
 
 ---
@@ -783,22 +784,22 @@ gnb 靠协议层自己兜底，wg 必须靠上层观测切换。硬压成一套�
 | **gnb 改动走补丁包** | 不直接改 `src/`，用 format-patch + rebase |
 | **服务端渲染 node.conf** | 客户端不本地拼装 GNB 配置，直接写服务端返回的纯文本 |
 | **写入权收敛** | 每个配置文件的写入者收敛为唯一的 `driver.Apply` / `NetworkBackend.Apply` |
-| **back 对节点不可达** | gateway 是节点面唯一入口 |
-| **GUI 只谈本机** | 浏览器 → `127.0.0.1:mynetd` → gateway → back，GUI 零持有 back 凭据 |
+| **后端对节点不可达** | gateway 是节点面唯一入口 |
+| **GUI 只谈本机** | 浏览器 → `127.0.0.1:mynetd` → gateway → 后端，GUI 零持有后端凭据 |
 | **`mynet_proxy` 下架** | 职责被 gnb 原生 `proxy on` 取代；能力归宿 = L2→L3→L5 + L6 |
 | **proxy 是业务意图** | 不是「CLI 去调驱动」，而是「意图在上、落地在 driver，中间经 envelope」 |
 | **mynetd 纯通信，系统能力在执行器**（2026-09-23） | mynetd 不含探测/写入/驱动/进程管理；`mynet` 承载系统能力，`mynet detector` 产出 `system.json` 供双端消费 |
 | **平台执行器对称**（2026-09-23） | 桌面 `exec mynet <子命令>`、OpenWrt `lua -e "..."`；**同一套 mynetd 通信层** |
 | **身份生命周期交给框架** |
-| **back 全部在 user 层** | 不用 RBAC；admin 是平台层（框架 platform 模块），不属于 back |
+| **后端全部在 user 层** | 不用 RBAC；admin 是平台层（框架 platform 模块），不属于后端 |
 | **节点直连 = 智能同类型**（2026-09-23） | 节点↔节点**只同类型直连**（一节点一网卡）；双驱动节点可分别与 gnb/wg 建连；**gnb-only ↔ wg-only 不直连**。跨驱动互通 = 经双驱动节点的 **L6 路由桥**（apply 一条 route），不是节点间建连 |
 | **多节点并行分两步**（2026-09-23） | 短期互斥切换 `POST /api/v1/nodes/switch`；并行作为后续增量，不阻塞 M0–M1 |
-| **连接「已鉴权」置位时机**（2026-09-23） | gateway 维护连接状态表；back 验证通过**任意一次**节点通道请求即置位。回传机制：back 响应头 `X-Node-Verified: <node_id>`，gateway 解析后置位；伪造 node_id 不被置位 |
+| **连接「已鉴权」置位时机**（2026-09-23） | gateway 维护连接状态表；后端验证通过**任意一次**节点通道请求即置位。回传机制：后端响应头 `X-Node-Verified: <node_id>`，gateway 解析后置位；伪造 node_id 不被置位 |
 | **mynet_api 按需 module 砍 logging**（2026-09-23） | 只留 `multi-tenant-saas` + `infrastructure` + `auth`；MyNet 不用审计日志，`logging` 一并砍 |
 | **D-4 作废：`mynet_gui` 才是用户交互前端**（2026-09-24） | `mynet_web` 只是**官网/项目主页**（`www.mynet.club`），`mynet_gui`（`my.mynet.club`，Vue3+Quasar，102 个页面）才是真正提供给用户交互的地方。原「合并 `mynet_ui`+`mynet_gui` → `mynet_web` 一份 WebUI」的 D-4 **作废**；S 段只搬了 `mynet_ui` 的 `local/` 6 页进 `mynet_web`，`mynet_gui` 一页未搬。**T2-6 的载体是 `mynet_gui`**，已挂载进 workspace（origin 原指 `luoyueliang/mynet_gui`、当时裁定「不新建 org 仓」；**2026-09-24 该仓已 transfer 到 `mynet-club/mynet_gui`**，本地 remote 已同步。是转移不是新建，见下方同日的新条目） |
 | **multi_tenant_saas 框架只使用不修改**（2026-09-24） | `vendor/dsplat/**` 只读。框架缺陷或新需求**回上游 `github.com/dsplat/*` 改**，这边 `composer update` 拉进来。定位问题先判根因在 `app/`（可改）还是 `vendor/dsplat/`（只出报告），别把框架 bug 当自己的 bug 绕过去。详见 `AGENTS.md` §1.8 |
 | **H1 生产入口复用现有 nginx，不引入 Caddy**（2026-09-24） | 生产已有 nginx（`listen 172.26.3.227:443`，前置公网 LB）+ Let's Encrypt 证书（`/etc/letsencrypt/live/mynet.club/`）。`deploy/caddy-compose.yml` 直接占宿主 80/443 与该拓扑冲突，且该文件本身是坏的（跨文件 `depends_on` 报 `invalid compose project`）。→ 只加 server block，Caddy 方案**已删除**（V3-0：`deploy/{Caddyfile,caddy-compose.yml}` 一并撤） |
-| **H4 `console` = 租户管理，`admin` = 平台管理**（2026-09-24） | 用户原话：「back管理是租户管理，租户管理是console，admin 是平台管理」。→ back 管理面称 `console.mynet.club`；`admin.mynet.club` 让给框架 platform/operator SPA；`adm` 弃用。`deployment-registry.md:13` / `ecosystem.md:125` / `brand-guide.md:152` 三处待同步 |
+| **H4 `console` = 租户管理，`admin` = 平台管理**（2026-09-24） | 用户原话：「后端管理是租户管理，租户管理是console，admin 是平台管理」。→ 后端管理面称 `console.mynet.club`；`admin.mynet.club` 让给框架 platform/operator SPA；`adm` 弃用。`deployment-registry.md:13` / `ecosystem.md:125` / `brand-guide.md:152` 三处待同步 |
 | **H7 `back_priv` 用 0600 文件，不用 env**（2026-09-24） | 按原规范（`product-form/index.html:1121,1134`：不进代码库、不进 BundleEnvelope、有条件上 KMS）。原先是 env 注入（`config/mynet.php`）**与规范不符，已改**：新增 `App\Modules\VPN\Domain\Services\BackFaceKeys`，**文件优先**且**权限过宽即拒绝、不回退到 env**（否则这条控制可被「顺手在 env 里再放一份」绕过）。理由：`back_priv` 保护等级**高于**节点私钥（泄露可冒充**所有**节点），而 env 会出现在容器编排工具的 inspect、compose 文件与 `/proc/<pid>/environ` 里。`spec/node-keying.md` 原无 back_priv 条目，**已补**（V3-6b：§4.6，含形态/权限/不回退 env 的四种走向/轮换/泄露处置） |
 | **`mynet_gui` 归入 `mynet-club` org**（2026-09-24） | 用户裁定：`luoyueliang/mynet_gui` → `mynet-club/mynet_gui`（GitHub **transfer**，不是新建仓，所以早先「不新建 org 仓」那条裁定并未被违反，只是被事实超越）。本地 remote 已 `set-url` 并验证 fetch 可用。至此 workspace **9 个仓全部在 org 下**。⚠️ 连带核实过、**不要顺手一起改**的：`mynet_gnb` 的上游 fork `luoyueliang/opengnb` 没有跟着迁（实测 org 下 not found、旧地址仍有 `main`/`dev-2026-01`），所以 `mynet_ctl/scripts/import_gnb_*.sh` 与 `mynet_openwrt/docs/bugs.md` 里的 `GH_BASE` 仍指个人仓，改了下载就 404；`mynet_utc` 文档里的 `luoyueliang/mynet_utc` 同理属上游项目地址 |
 | **V3-0 撤掉 Docker 路线，生产走主机 + nginx + rsync**（2026-09-24） | 用户问「我们为什么使用 docker」后核查发现：**Docker 不是本项目的部署模型**。`deployment-registry.md` 写的是主机 `10.182.236.180`、三个项目各是独立 nginx server block、证书在 `/etc/letsencrypt/live/mynet.club/`、部署命令是 rsync。原 `deploy/docker-compose.yml` + `caddy-compose.yml` + `Caddyfile` 与此拓扑不符（caddy 直接占宿主 80/443，与现有 `listen 172.26.3.227:443` + 前置 LB 冲突，H1 已裁定复用现有 nginx）。→ 三个文件删除；Caddyfile 的意图（TLS + api/gw 反代 + 安全头）转为 `deploy/nginx.conf`；补上 registry 声称「推荐」却**不存在**的 `manage-prod.sh`。**教训：先确认技术选型是否成立再补实现——计划表里的条目也可能定错，不是免检的** |
@@ -811,7 +812,7 @@ gnb 靠协议层自己兜底，wg 必须靠上层观测切换。硬压成一套�
 `mynet_api` 做中心撮合（社交图 + 路由授权 + 公钥目录），
 `mynet_agent` 做节点侧自动化——`mynetd` 是**纯通信层**（心跳、指令、WS、经网关回连），\n系统能力（探测/写入/配置/驱动）由**执行器**承载（桌面 `mynet`、OpenWrt Lua），
 `mynet_gnb`（opengnb）做真正的 UDP P2P 穿透与转发，
-`mynet_ctl` 做分发与文档中枢，`mynet_ui`/`mynet_gui` 分别做本机控制台与云端社区前端。
+`mynet_ctl` 做分发与文档中枢，`mynet_gui` 做用户交互前端（`mynet_ui` 为历史仓，不在 workspace）。
 
 **架构设计是自洽且相当克制的**——L1–L7 分层、驱动差异不下泄、写入权收敛、
 补丁包隔离上游，这些都体现了清晰的边界意识。
@@ -824,6 +825,6 @@ gnb 靠协议层自己兜底，wg 必须靠上层观测切换。硬压成一套�
 另有三处需要处理的安全问题，按性质排列：
 
 1. **公钥编码三种假设冲突**（真隐患，且会以「鉴权失败」而非「编码错误」的形式暴露）；
-2. **私钥明文存在 back 且有外发路径**（现状保留了服务端持钥分支，与目标态冲突）；
+2. **私钥明文存在后端且有外发路径**（现状保留了服务端持钥分支，与目标态冲突）；
 3. **心跳用公钥当 HMAC 密钥**（代码已自认是已知弱点，性质是迁移未完成的窗口期暴露，
    而非设计疏漏）。

@@ -13,20 +13,23 @@
 
 ## 当前基线（本地提交取证，非本轮测试或线上验收）
 
-**2026-10-10 刷新（与 HEAD 对齐）**：
+**2026-10-13 刷新（G1-d 治理批实测；G1-a/b/c 批并行进行中，其未提交改动如实记）**：
 
-| 项目 | HEAD | 未推送 | 最新事实 |
-|---|---|---|---|
-| mynet_agent | db398d2 | 0 | 出口 NAT/ACL 隔离+作用域清理与回滚、旧 generation 重放门禁、一键接入设备、升级按 OS/架构选包、绑定 v0.1.2 内置 GUI |
-| mynet_api | 76e1214 | 0 | 出口授权写面原子化 + 跨租户/并发/合同门禁；首次创建设备自动分配地址池与默认配置 |
-| mynet_ctl | 8fc5e6e | 0 | P4 出口授权小闭环合同锁定与验收记录、localapi 简化接入合同、v0.1.1 体验发布记录 |
-| mynet_gui | 26d8562 | 0 | 简化设备与连接流程、生产 API 代理回环与 WS 域名修正、首建/首载引导区分 |
-| mynet_desktop | 4ed21f2 | 0 | 三平台安装器已落码，真实安装与发布证据另验 |
-| mynet_openwrt | f7c956e | **10** | 指纹绑定、路由唯一写入者、procd 启停；Proxy 仍有旧 Lua 路径 |
-| mynet_gnb | 8734260 | **2** | 裸仓 + 工作树 `.wt/gnb-actions`；两条未推送全是 guard 模板同步 |
-| mynet_web | dc3ad08 | — | 近期主要守护更新 |
+| 项目 | HEAD | 未推送 | 工作树 | 最新事实 |
+|---|---|---|---|---|
+| mynet_agent | ceb1a5f（10-12） | 0 | **8 项未提交**（G1-c 清理批进行中，非本轮） | UCI include 用命名段（fw4 不认 name option）；G1-c 批未提交 |
+| mynet_api | 5a1f4b5（10-13） | 0 | 干净 | pint 格式收尾；G1-a 清理批并行 |
+| mynet_ctl | aa7a54a（10-13） | 1（含本表的文档批提交后为 2） | 知识库文档批（本表）+ **审计依据文件未入库**（`docs/knowledge-base/audit-2026-10-13*`、`governance-plan-2026-10-13.md`，冻结件） | G1-d：下载页产品面改 SSOT 派生（+4 测试）、删零消费者 `scripts/install.sh`/`upgrade.sh`、db-setup 口令下命令行、deploy.sh 整仓覆盖警示；B2 文档漂移 16+ 条修正 |
+| mynet_gui | 0dfd6f2（10-13） | 7 | 干净 | G1-b 清理批提交中 |
+| mynet_desktop | 786d9ca（10-11） | 0 | 干净 | ctl 每 platform+arch 只发一件（dmg+pkg 撞 500 已修） |
+| mynet_openwrt | 62911e6（10-13） | 2 | 干净 | G1-d：删 guest.htm.bak、O0 矩阵命名批；route.conf 注入退役归 G3 两侧行动 |
+| mynet_gnb | 8734260（10-04） | **2** | 裸仓（工作树 `.wt/gnb-actions`） | 两条未推送全是 guard 模板同步 |
+| mynet_utc | 79443b6（10-04） | 1 | **7 项未提交**（gateway_session 进行中，不属本轮） | 搁置口径不变；工作树另有他人进行中变更 |
+| mynet_web | dc3ad08（10-04） | 1 | **1 项他人未提交改动（`.githooks/guard.sh`）** | 本轮不动 web（他人在改） |
 
-上表各仓无脏改动、无 stash（`mynet_gnb` 是**裸仓**，其工作树为 `.wt/gnb-actions`，同样干净）。**除 openwrt（10 条）与 gnb（2 条）外全部已推送**；这两条线的分叉点是 `de765cf`（09-30）与 `3991970`（10-04），自 10-04 起未再动。
+上表取自 `git log`/`git status` 实测（2026-10-13）。**mynet_gnb 是裸仓**（工作树 `.wt/gnb-actions`）。
+未推送口径 = `git log --branches --not --remotes`。G1-a/b/c 三个清理批并行进行中，
+其未提交/未推送量会继续变化，**读表先重跑 `git status`**。
 
 **本机测试（2026-10-10）**：api `make test`（=`--testsuite Default`）**471 tests / 4690
 assertions / 1 skip**（skip = sqlite 并发，需 MySQL 双连接）、`make test-mysql` **172 passed /
@@ -51,7 +54,7 @@ GUI 的 20 测试通过与类型基线 202 错误/39 文件来自既有实施记
 
 **H1 编译与平台入口（2026-10-10 本轮，agent 仓）**：
 - 平台安装器文件按 build tag 互斥：新增 `cmd_install_systemd.go`(`linux && !openwrt`) / `cmd_install_unsupported.go`；`cmd_install_launchd.go`→`darwin`、`cmd_install_win.go`→`windows`、`cmd_install_openwrt.go`→**`linux && openwrt`**；`isOpenWrt()` 移到共享 `openwrt_detect.go`(`linux`)。
-- **收严（用户质疑后自纠，2026-10-10）**：OpenWrt 与通用 Linux 装配**不共享**（目录/服务/防火墙都不同），OpenWrt 后端不再夹带进通用 Linux 二进制；通用 Linux 包在 OpenWrt 上**拒绝装配并给指引**。补上漏掉的接线：OpenWrt 产物构建改用 `-tags openwrt`（`build_openwrt.yml`），并加 fixture `TestOpenWrtBuildUsesOpenWrtTag` 锁住。
+- **收严（2026-10-10）**：OpenWrt 与通用 Linux 装配**不共享**（目录/服务/防火墙都不同），OpenWrt 后端不再夹带进通用 Linux 二进制；通用 Linux 包在 OpenWrt 上**拒绝装配并给指引**。补上漏掉的接线：OpenWrt 产物构建改用 `-tags openwrt`（`build_openwrt.yml`），并加 fixture `TestOpenWrtBuildUsesOpenWrtTag` 锁住。
 - 共享入口 `cmd_install.go` 收敛为「解析 + 校验 + 委派」`platformInstall/platformUninstall`；新增 `platform_descriptor.go` 的 `PlatformDescriptor` 并接入 `mynet platform`（多打 platform/pkg/service/capab 行）。
 - 新增 fixture `mynet/platform_filetags_test.go`：`go list` 断言每平台恰一个入口文件、共享入口恒在。测试按平台拆到 `cmd_install_{systemd,launchd}_test.go`，openwrt 测试加 `linux` tag。
 - 验证（本机 darwin）：`go build ./...` + `go test ./...` 全绿；`make guard` 通过；gofmt 干净；**四平台交叉编译与测试面编译**（linux/linux+openwrt/darwin/windows）通过。**未实机**：linux/Windows 测试仅交叉编译未运行；未动 Windows/macOS 安装器接线。
@@ -96,7 +99,7 @@ GUI 的 20 测试通过与类型基线 202 错误/39 文件来自既有实施记
 
 **今晚升级 Runbook（2026-10-10 夜）**：[spec/node-upgrade-runbook-180-182.md](spec/node-upgrade-runbook-180-182.md) —— 含开工前决策 P-1…P-5、commit 锚点与待提交清单、CI 出包与校验、S0 取证、备份（含私钥）、`.180`/`.182` 步骤、验证 A/B、回滚、Go/No-Go、窗口记录表。⚠️ 两条硬提醒：**改动未提交/未推送 → CI 出包不含 G-11 等修复**；`.182` 的 **LuCI 入口层今晚不验**（H5 另补）。
 
-**节点升级部署计划（2026-10-10，H6 仅计划，**口径已定稿**）**：`.180`(api.mynet.club / proxy server / Lightsail) 与 `.182`(192.168.0.2 / 本地旁路网关 / proxy client / ImmortalWrt x86_64) → [spec/node-upgrade-plan-180-182.md](spec/node-upgrade-plan-180-182.md)。裁定：**D1** `.182`=本地(home)旁路网关（旧「公司整网网关」为误读，**已回改**各仓 guard.sh / AGENTS.md / 一处 PHP 注释）·**D2** 本次**不轮换密钥**（继续挂风险）·**D3** 走 **CI 产物**·**D4** `.182` 用 **ipk**·**D5** `.182` 已非活路径（主网关切到 `.1`）窗口压力低。产物：`.180`←`mynet_agent_linux_amd64`(build.yml)、`.182`←`openwrt-ipk-amd64`(build_openwrt.yml，矩阵已有 x86/64)。**未执行**。新发现：`build.yml` 的 `openwrt:true` 条目未带 `-tags openwrt`、产物名 `linux_*` → 收严后在 OpenWrt 会被拒装 → **已按 H4 构建输入修**：linux 条目去 `openwrt:true`、mynetd 统一 `-tags embed`（与 `make dist` 一致），OpenWrt 归 `build_openwrt.yml` 的 ipk；fixture `TestBuildWorkflowDoesNotFakeOpenWrt` 锁住。**H4 desktop 发行 workflow（2026-10-10，G-12 关闭）**：`mynet_desktop/.github/workflows/release.yml` 的 `build-binaries` 新增 **mynet_gui checkout + setup-node + `npm ci` + embed 构建**（`.env.embed` → `.env.prod`/`.env.local.prod`，断言 `dist/spa/index.html` 含 `/gui/assets/`）**再** `make dist`；**删除「agent ref 失败退默认分支」兜底**，改为明确失败并给指引（合同 §4.3「锁两仓 SHA」）；新增 `gui_ref` 输入。⚠️ **`GUI_REPO` 默认写 `mynet-club/mynet_gui-V2`**（本仓 workflow 从未出现过 GUI 仓名，按 `-V2` 命名法先填，**需用户确认**；不对则 checkout 明确失败，不静默出包）。⚠️ 行为变更：**tag-only 发布若 agent/gui 无同名 tag 会失败**，须用 workflow_dispatch 显式 pin 两仓 ref。YAML 已校验。
+**节点升级部署计划（2026-10-10，H6 仅计划，**口径已定稿**）**：`.180`(api.mynet.club / proxy server / Lightsail) 与 `.182`(192.168.0.2 / 本地旁路网关 / proxy client / ImmortalWrt x86_64) → [spec/node-upgrade-plan-180-182.md](spec/node-upgrade-plan-180-182.md)。裁定：**D1** `.182`=本地(home)旁路网关（旧「公司整网网关」为误读，**已回改**各仓 guard.sh / AGENTS.md / 一处 PHP 注释）·**D2** 本次**不轮换密钥**（继续挂风险）·**D3** 走 **CI 产物**·**D4** `.182` 用 **ipk**·**D5** `.182` 已非活路径（主网关切到 `.1`）窗口压力低。产物：`.180`←`mynet_agent_linux_amd64`(build.yml)、`.182`←`openwrt-ipk-amd64`(build_openwrt.yml，矩阵已有 x86/64)。**未执行**。新发现：`build.yml` 的 `openwrt:true` 条目未带 `-tags openwrt`、产物名 `linux_*` → 收严后在 OpenWrt 会被拒装 → **已按 H4 构建输入修**：linux 条目去 `openwrt:true`、mynetd 统一 `-tags embed`（与 `make dist` 一致），OpenWrt 归 `build_openwrt.yml` 的 ipk；fixture `TestBuildWorkflowDoesNotFakeOpenWrt` 锁住。**H4 desktop 发行 workflow（2026-10-10，G-12 关闭）**：`mynet_desktop/.github/workflows/release.yml` 的 `build-binaries` 新增 **mynet_gui checkout + setup-node + `npm ci` + embed 构建**（`.env.embed` → `.env.prod`/`.env.local.prod`，断言 `dist/spa/index.html` 含 `/gui/assets/`）**再** `make dist`；**删除「agent ref 失败退默认分支」兜底**，改为明确失败并给指引（合同 §4.3「锁两仓 SHA」）；新增 `gui_ref` 输入。⚠️ **`GUI_REPO` = `mynet-club/mynet_gui`**（用户 2026-10-10 确认，**不带 `-V2`**，见 `mynet_desktop/.github/workflows/release.yml:48`）。⚠️ 行为变更：**tag-only 发布若 agent/gui 无同名 tag 会失败**，须用 workflow_dispatch 显式 pin 两仓 ref。YAML 已校验。
 
 **H4 artifact kind（2026-10-10，mynet_ctl）**：新增**声明式 `kind`** —— 域 `ReleaseDomainService::ARTIFACT_KINDS`（`installer`=exe/dmg/pkg/ipk、`archive`=tgz/zip/tar.gz）为唯一 SSOT；`ReleaseService::upload` 登记时映射一次并落库；**迁移 `2026_10_10_000001_add_kind_to_releases_table.php`（生产部署需跑）**；`Release` fillable + `kind`；`ManifestService` artifact 行输出 `kind`（legacy 行兜底按 ext 推导）；`parseFilename` 亦返回 `kind`。测试 +2（58/467/1skip 全过）。**仍开放**：`/d/` 取文件不带 kind（同 tuple 两件会取错）→ 归运行升级选择器（已搁置）。
 
@@ -117,8 +120,7 @@ L2 独立 gate 两项失败：出口 NAT/ACL 无清理、兜底 DROP 被当 opti
 
 出口 NAT/ACL 两个阻断已落码修复：接口独立 nft 专表/iptables 链、替换/幂等/撤销、故障回退、精确历史规则迁移。独立门禁7例通过，Docker 隔离 Linux 中 nft1.0.9 / iptables1.8.10(nf_tables) 内核测试通过；不再沿用“两项仍失败”的旧状态。当前规则集撤销已验，不代表 conntrack 旧连接、出口离线或 API/gateway 真实流量矩阵已验。完整 L2/L3 与 M4/M6 仍未达成。具体以 playbook §9 为准。
 
-agent 当前 HEAD 已更新为 `3e3d464`（出口 NAT/ACL 专项与前轮 Cloud 撤销修复一起保存为本地提交），工作树干净，未推送。最终 agent make check 与 pre-commit guard 通过；API/ctl 其它变更仍未提交。
-（2026-10-10：该状态已被取代 —— `3e3d464` 及其后续提交均已推送，四仓 0 未推送；见上方「当前基线」表与文末同日段。）
+（历史注：2026-10-08 前后 agent `3e3d464` 一段的「未推送/未提交」状态已被 10-10 之后的基线取代，以上方「当前基线」表为准。）
 
 ## 2026-10-08 L1/L2 收尾（代码结构闭环）
 

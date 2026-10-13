@@ -1,6 +1,6 @@
 # MyNet 开发 — Agent 规则
 
-> 适用范围：`mynet-club/` workspace 及其下 8 个 repo 的**全部实现工作**。
+> 适用范围：`mynet-club/` workspace 及其下 9 个 repo 的**全部实现工作**。
 > 这份文件就是开工提示词配置——新会话读完本文件 + §1 的三份文档即可开工。
 >
 > **全局规则仍然有效**（`~/.config/mimocode/AGENTS.md`）：中文沟通、
@@ -61,7 +61,7 @@ mynetd **不含**：探测解析、OS 路由/防火墙写入、驱动配置生�
 
 ### 1.3 relay 不做鉴权
 
-`relaypolicy` 是**纯路径白名单**，鉴权与业务校验**一律归 back**。
+`relaypolicy` 是**纯路径白名单**，鉴权与业务校验**一律归后端**。
 连接层的 Ed25519/X25519 是**寻址与 presence**（门牌号），不是授权。
 
 ⚠️ `IsAllowedWith` **先查 `deniedFragments` 再查 `AllowedPathPrefixes`**——
@@ -73,11 +73,11 @@ mynetd **不含**：探测解析、OS 路由/防火墙写入、驱动配置生�
 | 层 | 谁 ↔ 谁 | 认证 | 凭证 |
 |---|---|---|---|
 | **数据面** | 节点 ↔ 节点 | gnb / wg 自己的加密 | **驱动密钥**（gnb 非标准 ed25519 / wg X25519） |
-| **节点面** | 节点 ↔ back | X25519 DH + HMAC | **复用驱动密钥**（同一套） |
-| **用户面** | 用户/桌面 ↔ back | **cookie / 登录会话** | 无密钥 |
+| **节点面** | 节点 ↔ 后端 | X25519 DH + HMAC | **复用驱动密钥**（同一套） |
+| **用户面** | 用户/桌面 ↔ 后端 | **cookie / 登录会话** | 无密钥 |
 
 - 人用会话（cookie），机器用密钥。
-- **gateway 不鉴权**——纯透传 + 连接状态表（像 TCP 握手），鉴权归 back。
+- **gateway 不鉴权**——纯透传 + 连接状态表（像 TCP 握手），鉴权归后端。
 - **X25519 签不了名**——所以节点面走 **DH 不走签名**，这样一套驱动密钥通吃 gnb/wg。
 - **编码（hex）与布局（`seed‖pub` vs `SHA512`）是正交的两维**——别因为「统一 hex」就以为布局也要跟 gnb。
   `node_keys` 存 hex；写 wg 配置时转 base64 44 字符（wg 原生格式）。
@@ -86,7 +86,7 @@ mynetd **不含**：探测解析、OS 路由/防火墙写入、驱动配置生�
 
 - 产物前缀 **`mynet_agent_*`**（不是 `agent_*`）。
 - 本机 API / WebUI 端口 **8096**（8192 被 IANA 的 `spytechphone` 与 `mynet_utc` 双重占用）。
-- gateway 默认 8710；back 内网地址是**部署配置**，不下发。
+- gateway 默认 8710；后端内网地址是**部署配置**，不下发。
 
 ### 1.6 mynet_api 按需 module
 
@@ -265,13 +265,15 @@ operator / platform / plugin / ticket / sms / form / knowledge / conversation �
 | **embed WebUI 必须校验 `Origin`/`Host`** | 任何网页都能让浏览器请求 `127.0.0.1:8096`。不校验来源 = DNS rebinding |
 | **本地 token 用 HttpOnly + SameSite=Strict** | 防 XSS 读取与 CSRF |
 | **禁止按名字杀进程** | 多实例 gnb / procd / systemd 可同名并存。用 init 系统或 **pidfile+cmdline** 精确停（参照 `node.lua:stop_gnb`）。禁 `pkill -x` / `killall` / `pidof` 取第一个 |
-| **`%!d(string=...)` 这类格式化 bug 产物不进代码库** | `driver/gnb/conf/4147069894021819/ed25519/` 下现有 5 个，搬运时**不搬** |
+| **`%!d(string=...)` 这类格式化 bug 产物不进代码库** | 旧树/181 实测曾有 5 个（`driver/gnb/conf/4147069894021819/ed25519/` 下，本 workspace 无命中），搬运时**不搬** |
 
 ---
 
 ## 4. 坑（开发前必读）
 
-完整 13 条见 `docs/mynet-overview.md` 第九节。**最容易踩的 6 条**：
+坑的**开发向全表就是本节**（26 条：主表 6 + 后端/前端 7 + Go/agent 4 + 网络互通 5 + Shell 4）；
+历史问题与风险全景（安全/漂移/结构三类）见 `docs/mynet-overview.md` §14「发现的问题与风险」。
+**最容易踩的 6 条**：
 
 | 坑 | 后果 |
 |---|---|
@@ -287,7 +289,7 @@ operator / platform / plugin / ticket / sms / form / knowledge / conversation �
 | 坑 | 后果 |
 |---|---|
 | **`mynet_api` 缺 `.env`** | `APP_KEY` 为空 → **全站每个请求 500**（`MissingAppKeyException`），连 `/` 都不通。而 `phpunit` 走 `phpunit.xml` 的 env，**测试全绿也照样发现不了**。新克隆第一步必须 `cp .env.example .env && php artisan key:generate` |
-| **框架默认 `redirectGuestsTo(fn () => route('login'))`** | back 是纯 API 后端、无 `login` 命名路由。`Authenticate.php:104` 仅在请求**未**声明 `expectsJson` 时才调 `redirectTo`，于是**不带 `Accept: application/json` 的未鉴权请求 500 而非 401**。修：`bootstrap/app.php` 里 `$middleware->redirectGuestsTo(null)` |
+| **框架默认 `redirectGuestsTo(fn () => route('login'))`** | 后端是纯 API 后端、无 `login` 命名路由。`Authenticate.php:104` 仅在请求**未**声明 `expectsJson` 时才调 `redirectTo`，于是**不带 `Accept: application/json` 的未鉴权请求 500 而非 401**。修：`bootstrap/app.php` 里 `$middleware->redirectGuestsTo(null)` |
 | **Testbench 不加载 `bootstrap/app.php`** | 测试态与生产态**静默分叉**——`bootstrap/app.php` 里的中间件/异常配置在测试里一律不生效。`tests/TestCase.php` 必须逐条镜像（现有两处：`IdentifyTenant` prepend、`redirectGuestsTo(null)`）。镜像 `redirectGuestsTo` 要走框架的 `(new Middleware)->redirectGuestsTo(null)`，因为它一次设**三个**静态回调（`Middleware.php:571-575`），而异常渲染路径读的是 `AuthenticationException` 那个 |
 | **Quasar 的 env 命名法与优先级都 ≠ Vite 惯例** | ① 命名：`@quasar/app-vite/lib/utils/env.js:31` 是 `buildType = ctx.dev ? 'dev' : 'prod'`，查找序为 `.env → .env.local → .env.dev → .env.local.dev → .env.spa → …`，所以 **`.env.development` / `.env.production` 永远不会被加载**（曾是仓内被跟踪的死文件，已 `git mv` 为 `.env.dev`/`.env.prod`，CPI-30）。② **优先级与 Vite 相反**：`env.js:101-116` 是 `Object.fromEntries(fileList.flatMap(…))`，**后面的覆盖前面的** → `.env.local` 会被 `.env.dev` 压成 no-op，**本地覆盖必须用 `.env.local.dev`**（且 `.gitignore` 的 `.env.*.local` 匹配不到它，需另加 `.env.local.*`） |
 | **`config/cors.php` 默认值对浏览器永远失效** | 默认 `'localhost,127.0.0.1'` 缺 scheme+port，而 `Origin` 头永远是完整的 `http://localhost:5173`，精确匹配永不相等 → 预检 204 但**无 `Access-Control-Allow-Origin`**，浏览器全线拦。必须配 `CORS_ALLOWED_ORIGINS` 为完整 origin |
@@ -335,7 +337,7 @@ operator / platform / plugin / ticket / sms / form / knowledge / conversation �
 | repo | 角色 | 决策 |
 |---|---|---|
 | `mynet_agent` | Go — mynetd（纯通信）+ mynet（执行器）+ mynet_gateway + mynet-updater | **新建 + 整理式搬运** |
-| `mynet_gui` | Vue3+Quasar — **用户交互前端**（社区域，服务 back，`my.mynet.club`） | **挂载，不动结构** ⚠️ T2-6 的载体 |
+| `mynet_gui` | Vue3+Quasar — **用户交互前端**（社区域，服务后端，`my.mynet.club`） | **挂载，不动结构** ⚠️ T2-6 的载体 |
 | `mynet_web` | **官网 / 项目主页**（`www.mynet.club`） | 挂载；**不是** WebUI |
 | `mynet_desktop` | 非 OpenWrt 平台适配 | **新建** |
 | `mynet_api` | Laravel — 业务权威 | **新建 + 整理式搬运**，**按需 module（31→3~4）** |

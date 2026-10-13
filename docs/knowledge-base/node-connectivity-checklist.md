@@ -318,7 +318,7 @@ mynet service stop gnb && ls $MYNET_HOME/driver/gnb/conf/<id>/gnb.pid
 | mynetd 薄层 | ✅ | ✅ 同一套 agent | 心跳/命令/relay 归 mynetd |
 | UI | embed WebUI | LuCI（无 embed） | `hasWebUI=false` |
 | **Token Binding** | ✅ device_fingerprint | ✅ **已补** | 登录带指纹；`X-Device-Fingerprint` 随 API |
-| 登录 | 本机弹窗 / CLI | LuCI login 页 | 同 back `/auth/login` |
+| 登录 | 本机弹窗 / CLI | LuCI login 页 | 同后端 `/auth/login` |
 | 对等配置 zip/crypto | `mynet config parity` | **未接 UI** | 可跑 `mynet config parity` |
 | proxy local_only | ✅ 开关 | **未接** | LuCI proxy 是 uci/本地启停 |
 | 备份 export/import | ✅ 列表恢复 | guest_export/import | 路径不同 |

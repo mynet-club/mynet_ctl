@@ -41,7 +41,7 @@ mynet-club/                          workspace（本仓，只放文档与索引�
 ├── index.html                       产品形态（已成文）
 │
 ├── mynet_agent/        [新建 repo]  Go — mynetd（纯通信）+ mynet（执行器）+ mynet_gateway + mynet-updater
-├── mynet_web/          [新建 repo]  Vue3+Quasar — 一份 WebUI（本机域 + 社区域）
+├── mynet_web/          [新建 repo]  Vue3+Quasar — 官网/项目主页（⚠️ D-4 已作废：原「一份 WebUI（本机域+社区域）」合并线作废，用户前端是 mynet_gui，见 §4.3）
 ├── mynet_desktop/      [新建 repo]  非 OpenWrt 平台适配（安装/服务/打包）
 ├── mynet_api/         [新建 repo]  Laravel — 业务权威（按需 module）
 ├── mynet_openwrt/      [改造 repo]  LuCI 壳 + ubus 薄桥 + ipk
@@ -63,7 +63,7 @@ mynet-club/                          workspace（本仓，只放文档与索引�
 | 本地目录 | GitHub repo | 旧代码路径 | 性质 |
 |---|---|---|---|
 | `mynet_agent/` | [`mynet_agent`](https://github.com/mynet-club/mynet_agent) | `lyt.com/mynet_agent`（自 `mynet_tui` 抽出，`detector` 亦源自 tui） | **新建** + 整理式搬运 |
-| `mynet_web/` | [`mynet_web`](https://github.com/mynet-club/mynet_web) | `lyt.com/mynet_gui` + `lyt.com/mynet_ui` | **新建**（合并两仓） |
+| `mynet_web/` | [`mynet_web`](https://github.com/mynet-club/mynet_web) | `lyt.com/mynet_gui` + `lyt.com/mynet_ui` | **新建**（⚠️ D-4 已作废：合并线只落了 `mynet_ui` 的 `local/` 6 页，见 §4.3） |
 | `mynet_desktop/` | [`mynet_desktop`](https://github.com/mynet-club/mynet_desktop) | `lyt.com/mynet_desktop`（7 文件占位） | **新建** |
 | `mynet_api/` | [`mynet_api`](https://github.com/mynet-club/mynet_api) | `lyt.com/mynet_back` | **新建** + 整理式搬运（按需 module） |
 | `mynet_openwrt/` | [`mynet_openwrt`](https://github.com/mynet-club/mynet_openwrt) | `lyt.com/mynet_openwrt` | **改造**（历史保留） |
@@ -92,7 +92,7 @@ mynet-club/                          workspace（本仓，只放文档与索引�
 | `lyt.com/mynet_lua` | OpenWrt LuCI 旧线（已被 `mynet_openwrt` 取代） |
 | `lyt.com/mynet_web` · `mynet_front` | 官网 / 旧前端 |
 | `lyt.com/mynet_main` · `mynet_saas` | 旧 Laravel / 框架相关 |
-| `lyt.com/mynet_back_old` · `mynet_back_20250904` · `mynet_backup_20250610_155701` | back 的历史备份 |
+| `lyt.com/mynet_back_old` · `mynet_back_20250904` · `mynet_backup_20250610_155701` | 后端的历史备份 |
 
 > **命名约定（此后遵守）**：当前服务 = 裸名；历史仓 = `*-legacy` + Archive。
 > 不要再引入 `-V2` 之类代际后缀；需要冻结时用 `-legacy` + Archive，不删仓。
@@ -137,7 +137,7 @@ pre-push 才是「不推坏东西」的关口（DoD 要求「测试通过」，�
 | 项目 | 决策 | 理由 |
 |---|---|---|
 | **mynet_agent** | **新建 + 整理式搬运** | 最乱（死代码 3970 行、重复实现 5300 行）；执行器架构要求模块边界大改，改造 ≈ 重建 |
-| **mynet_web** | **新建**（合并 `mynet_ui` + `mynet_gui`） | 已定合并；以 Quasar 为基线 |
+| **mynet_web** | **新建**（⚠️ D-4 已作废：原定合并 `mynet_ui` + `mynet_gui`，2026-09-24 裁定 `mynet_web` 只是官网、`mynet_gui` 才是用户前端） | 以 Quasar 为基线；见 §4.3 |
 | **mynet_desktop** | **新建** | 现为 7 文件占位、mynet_client 血统，等于没有 |
 | **mynet_api** | **新建 + 整理式搬运** ⚠️ **按需 module** | 31 个框架包里业务只用 3 个（见 §3）；裁掉 27 个后重建成本可控，且能一次性补 create migration |
 | **mynet_openwrt** | **改造** | 12 个 model 全实装、83 路由、ipk 链路通；只需改 procd + Lua 分界 |
@@ -185,7 +185,7 @@ pre-push 才是「不推坏东西」的关口（DoD 要求「测试通过」，�
 ### 3.3 框架中间件别名
 
 `bootstrap/app.php:53` 现注册 `tenant.permission` / `rbac.permission` / `mcp.auth` 三个别名，
-**它们是为框架 vendor 模块路由服务的**（back 自有路由挂载数为 0）。
+**它们是为框架 vendor 模块路由服务的**（后端自有路由挂载数为 0）。
 裁掉 `operator`/`platform`/`ai` 等模块后**这三个别名可一并删除**，只留 `auth:sanctum` / `throttle:api` / `tenant.ensure`。
 
 ---
@@ -257,7 +257,7 @@ pre-push 才是「不推坏东西」的关口（DoD 要求「测试通过」，�
 | 27 个框架模块及其迁移 | 按 §3 裁掉 |
 | `app/Services/ToolRegistry.php` + `tests/Stubs/FakeToolRegistry.php` + `tests/ActionNodeTest.php` | 框架 AI/Workflow 残留；**顺带解掉 P0-1** |
 | `app/Http/Controllers/ConversationController.php` + `tests/Conversation/` | 框架 Conversation 残留 |
-| `routes/admin.php` + `AdminMiddleware` 等自建 admin | 已定：admin 属平台层（框架 platform 模块），不属 back |
+| `routes/admin.php` + `AdminMiddleware` 等自建 admin | 已定：admin 属平台层（框架 platform 模块），不属后端 |
 | `IdPool` 的自增逻辑 | 补齐 HasGlobalId（P0-6） |
 
 **新建**（不存在，对应 `dev-plan.md` 轨道 B）：
@@ -315,10 +315,10 @@ pre-push 才是「不推坏东西」的关口（DoD 要求「测试通过」，�
 | **S2 执行器 mynet** | `mynet_agent/mynet/` | F-1 · F-6 · S2-1 · F-2 · F-4 · F-5 · D-7 | `mynet detector` / `metrics` / `apply` 可用 |
 | **S3 纯通信 mynetd** | `mynet_agent/mynetd/` | D-11 · D-6 · D-1 · D-2 · D-8 · S3-1 | mynetd = 纯通信层 |
 | **S4 gateway** | `mynet_agent/gateway/` | C-3 … C-8 · C-7 · C-6 | gateway 零密码学 + 用户面入口 |
-| **S5 back 业务层** | `mynet_api/app/Modules/` | B-1 … B-9 | create migration + 三个 DomainService |
+| **S5 后端业务层** | `mynet_api/app/Modules/` | B-1 … B-9 | create migration + 三个 DomainService |
 | **S6 驱动** | `mynet_agent/mynet/driver/` | A-1 … A-5 · A-7 · C-1 · C-2 | 双驱动可注册、DH 可用 |
 | **S7 验证** | 跨仓 | F-3 · A-8 | **M1**：三场景全绿 |
-| **S8 mynet_web** | `mynet_web/` | D-3 … D-10 | 一份 UI 两个功能域 |
+| **S8 mynet_web** | `mynet_web/` | D-3 … D-10 | ⚠️ D-4 已作废（「一份 UI 两个功能域」不成立），实际只落 mynet_ui local/ 6 页 |
 | **S9 平台** | `mynet_openwrt/` `mynet_desktop/` | E-1 … E-10 | **M2–M4** |
 
 **依赖要点**（详见顺序表的「前置」列）：

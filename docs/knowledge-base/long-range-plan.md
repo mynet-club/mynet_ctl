@@ -42,7 +42,7 @@ R1 端到端闭环 ──────────────► 双节点 gnb+w
 
 | # | 阶段 | ID | 内容 | 前置 | 状态 |
 |---|---|---|---|---|---|
-| 1 | **R1 闭环** | R1-1 | 集成脚本 `scripts/e2e.sh`：起 back(testbench/sqlite) + gateway + mynetd ×2 | — | ☑ |
+| 1 | **R1 闭环** | R1-1 | 集成脚本 `scripts/e2e.sh`：起后端(testbench/sqlite) + gateway + mynetd ×2 | — | ☑ |
 | 2 | | R1-2 | 节点注册 → 密钥登记（KeyExchange）→ 好友/连接/授权 链 | R1-1 | ☑ |
 | 3 | | R1-3 | BundleEnvelope 下发 → 节点 Apply → `ip route` 可见（可 dry-run） | R1-2 | ☑ |
 | 4 | | R1-4 | 心跳 DH+HMAC 真签真验（Go↔PHP 联测用例） | R1-1 | ☑ |
@@ -91,13 +91,13 @@ R1 端到端闭环 ──────────────► 双节点 gnb+w
 > ⚠️ **2026-09-24 第二次基线校正：R1-5 与 R5-2 撤勾。**
 >
 > - **R1-5（WS 命令下发 → mynet 执行 → 结果回传）**：真二进制冒烟测出**协议错配**——
->   网关下发的是**事件信封** `{event,data}`（back `GatewayNotifier` 只发
+>   网关下发的是**事件信封** `{event,data}`（后端 `GatewayNotifier` 只发
 >   `command_queued`/`bundle_changed`/`route_changed`），而 `transport.HandleFrame`
 >   把每一帧都当 `commands.Request{id,op,args}` 解析 → `id`/`op` 全空、结果恒为
 >   `unknown op: `、回报路径变成 `/api/v1/monitor/commands//result`。
 >   且 `client.go:169` 是 `_ = res`，结果**从不上报**；`Handlers.OnEvent` **从未被调用**。
 >   → 命令链从未真通过。已修错配与结果回传（`long-range-plan-deep.md` V1-7），
->   但**触发方仍缺**：节点侧没有「签名 HTTP 经 gateway 到 back」的客户端，
+>   但**触发方仍缺**：节点侧没有「签名 HTTP 经 gateway 到后端」的客户端，
 >   拉不到待执行命令（V1-9）。
 > - **R5-2（Redis presence 双 gateway 实例推送正确）**：与 `dev-plan.md` 的 C-6 同一事实——
 >   `Registry.SetPresence` 无调用方、`Notify` 从不调 `presence.Publish`、
@@ -133,9 +133,9 @@ R1 端到端闭环 ──────────────► 双节点 gnb+w
 | ① P2P UDP | R1-3/R1-6（Apply 后真通） |
 | ② gnb/wg 双实现 | R1-6 · R5-3 |
 | ③ 不破坏协议/目录 | 全程约束（guard B1） |
-| ④ back 社区链接 | R1-2 · R5-4 |
+| ④ 后端社区链接 | R1-2 · R5-4 |
 | ⑤ agent 自动化 | R2 全段 · R4-3 |
-| ⑥ 本地 UI → gateway → back | R1-5 · R2-1 |
+| ⑥ 本地 UI → gateway → 后端 | R1-5 · R2-1 |
 | ⑦ proxy | R5-3 |
 | ⑧ 节点服务 | R5-4 |
 | ⑨ 多平台 | R3 · R5-7 |

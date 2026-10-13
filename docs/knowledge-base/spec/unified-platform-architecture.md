@@ -54,7 +54,7 @@ flowchart TB
 
 ### 0.1 传输与控制面（横切，不改变业务分层）
 
-L1~L7 是**业务与驱动**分层；节点与 back 之间**怎么连**由
+L1~L7 是**业务与驱动**分层；节点与后端之间**怎么连**由
 [`control-plane.md`](control-plane.md) 单独定义：
 
 ```
@@ -65,7 +65,7 @@ mynetd ══WebSocket══> mynet-gateway ──内网 HTTP──> mynet_api
 
 | 约束 | 说明 |
 |------|------|
-| back 仍是唯一业务权威 | gateway 只做鉴权 / 连接 / presence / **字节中继**，不解析业务载荷 |
+| 后端仍是唯一业务权威 | gateway 只做鉴权 / 连接 / presence / **字节中继**，不解析业务载荷 |
 | L3/L4 语义不变 | `Fetch(nodeID, etag)` 仍成立，只是经 gateway 中继；ETag / checksum / last-known-good 回滚原样保留 |
 | `mynet_gnb` 不被触碰 | gateway 对的是 `mynetd`，不是 gnb 进程 |
 | GUI 只谈本机 | `浏览器 → 127.0.0.1:mynetd httpd → gateway → back`，见 [`local-api.md`](local-api.md) §0 |
@@ -111,22 +111,22 @@ mynetd ══WebSocket══> mynet-gateway ──内网 HTTP──> mynet_api
   **User 不拥有角色（tenant_users 无 role_id 字段），永远无 RBAC 权限**」——`check()` 对非 Operator 直接 `return false`
 - `checkConsoleAccess()`：User 走 console 一律 `tenant_admin_only` 403
 - 平台 admin 路由落在框架 `platform`/`operator` 模块的 `Routes/admin.php`（挂 `rbac.permission:platform.*`），
-  由 `adm.mynet.club` 那个 SPA 承接——**不在 back**
+  由 `adm.mynet.club` 那个 SPA 承接——**不在后端**
 
-**back 的实现全部在 ③ user 层**：节点/连接/密钥/好友挂在 `users.user_id`，全仓不引用 `Operator`。
-user 层**本就没有 role 与 permission 概念**，因此 back 不需要 RBAC，也不该出现
+**后端的实现全部在 ③ user 层**：节点/连接/密钥/好友挂在 `users.user_id`，全仓不引用 `Operator`。
+user 层**本就没有 role 与 permission 概念**，因此后端不需要 RBAC，也不该出现
 「带 role 的 User 管理员」——admin 是平台层（Operator），不是 User。
 
 > **硬规则（用户明确）**：**一套代码里三重角色都在**，但
-> **所有角色与权限一律由框架实现**；back 侧任何与之冲突的自建实现**直接删掉**。
+> **所有角色与权限一律由框架实现**；后端侧任何与之冲突的自建实现**直接删掉**。
 > 业务域里名字叫 `role` 的字段（如 `participants.role`、`agents.role`、消息 `role`）
 > 不是鉴权角色，不受此规则约束。
 
 > **第二条硬规则（用户明确）**：**用户注册、邮箱激活、密码重置等身份生命周期
-> 一律交给框架**；back **只关心业务**。框架 auth 模块已提供完整面
+> 一律交给框架**；后端 **只关心业务**。框架 auth 模块已提供完整面
 > （`api/v1/auth/{login,register,forgot-password,reset-password,verify-email,
 > resend-verification,me,logout,password,profile}` + MFA/SSO/SMS/联系人绑定），
-> back 不得再自建一份。
+> 后端不得再自建一份。
 
 > **第三条（用户明确）**：**先不碰平台与租户，只把消费者层跑通**。
 > admin/operator[tenant] 那些是后事。
@@ -134,17 +134,17 @@ user 层**本就没有 role 与 permission 概念**，因此 back 不需要 RBAC
 > ⚠️ **范围更新（2026-10-01，用户裁定）**：第三条覆盖的是**平台 admin**（`admin.mynet.club`），
 > **`console` 租户后台自 2026-10-01 起开工**——计划见 `dev-plan.md` 轨道 G。
 > 定性：租户/RBAC/Zone 全是框架自带（`TenantDomainService.php:186` 即拿 Tenant 当 Zone），
-> 缺口是 back 只有 **user 作用域**接口、没有**租户作用域**那组
+> 缺口是后端只有 **user 作用域**接口、没有**租户作用域**那组
 > （`NodeController.php:86` 列表硬过滤 `user_id`；本服务 docblock 自陈「不存在『管理员看全量』的旁路」）。
 
 历史上实测确认过边界成立：`tenant.permission` 门禁挂载的路由**全部属 vendor 模块**，
-back 自有 **0 条**。（下文「裁定更新」把这条例外解开，并更正了「三个别名已注册」那句——
+后端自有 **0 条**。（下文「裁定更新」把这条例外解开，并更正了「三个别名已注册」那句——
 实际一条都没注册，`rbac.permission` 因此有 91 条 vendor 路由命中即 500。）
 
-> **裁定更新（2026-10-01，用户）**：「`tenant.permission` 不得挂到 back 自有路由上」随第三条
+> **裁定更新（2026-10-01，用户）**：「`tenant.permission` 不得挂到后端自有路由上」随第三条
 > （先不碰平台与租户）一起生效，console 开工后**只对 `tenant.permission` 解除**——租户面接口就是
 > 「业务叠加在框架 console 面上」，门禁本该用它（上文身份表 ② 行早已写明 `tenant.permission`
-> 仅 `tenant_admin` 可进）。**`rbac.permission`（平台 admin）与 `mcp.auth` 仍不得挂 back 自有路由**，
+> 仅 `tenant_admin` 可进）。**`rbac.permission`（平台 admin）与 `mcp.auth` 仍不得挂后端自有路由**，
 > 本次更新不涉及它们。
 >
 > ⚠️ **同一日再实测更正两处「别名现状」**（原文写「三个别名已为 vendor 模块注册、必须保留」，
@@ -156,20 +156,20 @@ back 自有 **0 条**。（下文「裁定更新」把这条例外解开，并�
 >   别名缺失 → 命中即 `BindingResolutionException: Target class [rbac.permission] does not exist.`
 >   （本机 curl 实测；生产被 `bootstrap/app.php` 的兜底压成 500）。
 >   **待裁定，不在 G-3 范围内**：注册别名等于把这 91 条平台 admin 面接活（与安全口径相悖），
->   不注册则它们恒 500。back 的立场应是「平台 admin 面不出网」，靠路由裁剪而非靠报错。
+>   不注册则它们恒 500。后端的立场应是「平台 admin 面不出网」，靠路由裁剪而非靠报错。
 >
 > **租户面命名 = `/api/v1/console/*`**（业务段直接叠在框架 console 段下；不用产品名 `scrm`，
 > 也不新开 `tenant` 段——`IdentifyDomain`/`CheckPermission` 的口径本来就是 console）。
-> ⚠️ **路径与域名在 back 这里都给不出 `console` 面**（2026-10-01 实测，比原判断更强）：
+> ⚠️ **路径与域名在后端这里都给不出 `console` 面**（2026-10-01 实测，比原判断更强）：
 > · 路径：`IdentifyDomain.php:112-120` 的 `platformPathType` 按 `/admin` → `/console` → `/api`
 >   顺序前缀匹配，`/api/v1/console/*` **先命中 `/api`** → 判成 `api` 面；
 > · 域名：抬到 `console` 面要靠 `config('domain.platform_domains.console')`（`:64-68`），
 >   而 `domain.*` 整组属**未安装的 module-domain**（vendor 与本仓均无 `config/domain.php`）→ 恒 null；
-> · 且 back 本就没挂 `IdentifyDomain`。
+> · 且后端本就没挂 `IdentifyDomain`。
 > · 更关键的是 `CheckPermission.php:33-38` 在 `domainType` 为 **null 时走 default 分支直接放行**（fail-open），
 >   所以「只挂 `tenant.permission`」不构成闸门。
 >
-> **成立的做法（G-3 切片已落地）**：面归属由**路由组自己声明** —— back 侧
+> **成立的做法（G-3 切片已落地）**：面归属由**路由组自己声明** —— 后端侧
 > `App\Http\Middleware\IdentifyConsoleDomain`（别名 `domain.console`）把 `domainType` 定为 `console`，
 > 与 `tenant.permission:tenant_admin` 成对挂 `v1/console` 组，从而走 `checkConsoleAccess`
 > （`:56-97`：Operator 须在 `operator_tenants` 属于当前租户且角色 `tenant_admin`；User 无条件 403）。
@@ -178,11 +178,11 @@ back 自有 **0 条**。（下文「裁定更新」把这条例外解开，并�
 
 > 对本设计的影响：L2～L7 的一切「授权」都基于 `Connection`/`ConnectionGrant` 业务授权，
 > **不依赖**框架的 Operator/RBAC 门禁。不要因为 scrm-platform 在其模块路由上使用
-> `VerifyOperatorTenant` 就照搬——scrm 是面向运营的平台，back 不是。
+> `VerifyOperatorTenant` 就照搬——scrm 是面向运营的平台，后端不是。
 
-> **层错位警示**：back 曾有的 `routes/admin.php` + `AdminMiddleware` + `users.role`
+> **层错位警示**：后端曾有的 `routes/admin.php` + `AdminMiddleware` + `users.role`
 > 是在 user 层里凭空造了一个「admin」，框架模型中没有这一层。平台后台属于
-> ①admin（框架 platform/operator 模块 + `adm.mynet.club` SPA），不属于 back。
+> ①admin（框架 platform/operator 模块 + `adm.mynet.club` SPA），不属于后端。
 > RBAC 三表（`permissions`/`roles`/`role_permissions`）同理——那是 ②operator[tenant] 的资产。
 
 ### 1.1 核心对象
@@ -308,7 +308,7 @@ ConnectionGrant:    active → revoked (终态)
 
 ### 1.4 与现有模型的映射
 
-| 新对象 | 现有 back 模型 | 现有 agent 行为 |
+| 新对象 | 现有后端模型 | 现有 agent 行为 |
 |--------|---------------|----------------|
 | `NodeIdentity` | `nodes` 表 | — |
 | `Friendship` | `friendships`/`friend_requests` 表（仅有 migration，无 Eloquent 模型，由 SocialController 直接操作） | — |
@@ -466,7 +466,7 @@ interface TransportPlannerDomainService
 }
 ```
 
-**NodeCapability 推导数据源**（back 侧）：
+**NodeCapability 推导数据源**（后端侧）：
 
 | 字段 | 来源 |
 |------|------|
@@ -697,7 +697,7 @@ agent 侧:
   - PHP: `mynet_api/app/Modules/VPN/Domain/Bundle/` + `tests/BundleEnvelopeV2Test.php`
   - 两边 checksum 与 fixtures 预计算值一致（canonical JSON 算法已冻结，见 schema `$defs.checksumAlgorithm`）
 - [x] `generation` 单调递增，支持 ETag/304
-  - 2026-09-22：back `config_revisions` + `rev-{YmdHis}-{seq}`；ETag=`"<checksum>"`；`/monitor/node/bundle` 与 `/nodes/{id}/bundle` 支持 If-None-Match→304
+  - 2026-09-22：后端 `config_revisions` + `rev-{YmdHis}-{seq}`；ETag=`"<checksum>"`；`/monitor/node/bundle` 与 `/nodes/{id}/bundle` 支持 If-None-Match→304
 - [x] `checksum` 校验流程有测试覆盖
   - Go `TestBundleEnvelopeFixturesChecksumRoundTrip` / PHP `testComputeChecksumMatchesFixture`
 - [x] 兼容策略的四个场景均有测试覆盖
@@ -1279,7 +1279,7 @@ back 消费:
 - [ ] `auto` 模式在 direct 失败后能自动切换到 proxy（集成测试）
 - [ ] proxy 恢复后能自动重试 direct
 - [ ] heartbeat 上报包含 ObservedState
-- [ ] back 能存储和展示节点观测数据
+- [ ] 后端能存储和展示节点观测数据
 
 ---
 
@@ -1304,15 +1304,15 @@ back 消费:
 
 | 步骤 | 动作 | 负责仓 | 出口判据 |
 |------|------|--------|---------|
-| 1.1 | 定义 `ConnectionDomainService` 接口（PHP） | back | 接口签名冻结 |
-| 1.2 | 定义 `KeyExchangeDomainService` 接口（PHP） | back | 接口签名冻结 |
-| 1.3 | 新增 migration: `ConnectionGrant` 表 | back | migration 可回滚 |
-| 1.4 | 新增 migration: `KeyExchange` 表 + `node_keys` 兼容视图 | back | migration 可回滚 |
-| 1.5 | 实现 `ConnectionDomainService` | back | 单元测试通过 |
-| 1.6 | 实现 `KeyExchangeDomainService` | back | 单元测试通过 |
-| 1.7 | 现有 `routes` 表写入适配（RouteStatus→ConnectionStatus 映射） | back | 不破坏现有 API |
-| 1.8 | 现有 `node_keys` 读取适配（自动填充 algorithm/status） | back | 不破坏现有 API |
-| 1.9 | 实现 `NodeCapability` 推导逻辑（从 nodes+node_ips 推导） | back | 单元测试覆盖 6 个字段 |
+| 1.1 | 定义 `ConnectionDomainService` 接口（PHP） | 后端 | 接口签名冻结 |
+| 1.2 | 定义 `KeyExchangeDomainService` 接口（PHP） | 后端 | 接口签名冻结 |
+| 1.3 | 新增 migration: `ConnectionGrant` 表 | 后端 | migration 可回滚 |
+| 1.4 | 新增 migration: `KeyExchange` 表 + `node_keys` 兼容视图 | 后端 | migration 可回滚 |
+| 1.5 | 实现 `ConnectionDomainService` | 后端 | 单元测试通过 |
+| 1.6 | 实现 `KeyExchangeDomainService` | 后端 | 单元测试通过 |
+| 1.7 | 现有 `routes` 表写入适配（RouteStatus→ConnectionStatus 映射） | 后端 | 不破坏现有 API |
+| 1.8 | 现有 `node_keys` 读取适配（自动填充 algorithm/status） | 后端 | 不破坏现有 API |
+| 1.9 | 实现 `NodeCapability` 推导逻辑（从 nodes+node_ips 推导） | 后端 | 单元测试覆盖 6 个字段 |
 
 **依赖**：无（当前生产链不受影响）
 **回滚策略**：migration down；新 Domain Service 不接入现有调用链
@@ -1324,10 +1324,10 @@ back 消费:
 |------|------|--------|---------|
 | 2.1 | 定义 BundleEnvelope JSON Schema | ctl spec | Schema 文件可校验 fixtures |
 | 2.2 | 创建 PHP/Go 共享 fixtures（至少 6 个场景） | ctl spec | 双端解码一致 |
-| 2.3 | 定义 `TransportPlannerDomainService` 接口 | back | 接口签名冻结 |
-| 2.4 | 实现 TransportPlanner（纯函数，依赖 1.9 的 NodeCapability） | back | 单元测试覆盖 5 种 mode |
-| 2.5 | 实现 BundleEnvelope 生成器 | back | 从 Connection+Grant+TransportPlan 生成 Envelope |
-| 2.6 | 实现 `config_revisions` 表 + ETag | back | API 可返回 Envelope |
+| 2.3 | 定义 `TransportPlannerDomainService` 接口 | 后端 | 接口签名冻结 |
+| 2.4 | 实现 TransportPlanner（纯函数，依赖 1.9 的 NodeCapability） | 后端 | 单元测试覆盖 5 种 mode |
+| 2.5 | 实现 BundleEnvelope 生成器 | 后端 | 从 Connection+Grant+TransportPlan 生成 Envelope |
+| 2.6 | 实现 `config_revisions` 表 + ETag | 后端 | API 可返回 Envelope |
 
 **依赖**：阶段 1 的 Connection/Grant 对象 + NodeCapability（步骤 1.9）
 **回滚策略**：新 API 未接入现有调用链，可安全下线
@@ -1370,7 +1370,7 @@ back 消费:
 |------|------|--------|---------|
 | 5.1 | 实现 FailoverStateMachine（Go） | agent | 状态转换测试 |
 | 5.2 | 实现 ObservedState 采集（agent heartbeat） | agent | heartbeat 包含观测数据 |
-| 5.3 | back 存储 node_observations | back | 可查询 |
+| 5.3 | 后端存储 node_observations | 后端 | 可查询 |
 | 5.4 | auto 模式集成测试（GNB 场景） | agent | direct→proxy 切换测试 |
 
 **依赖**：阶段 4 的 GNB Driver + 阶段 1.9 的 NodeCapability
@@ -1398,7 +1398,7 @@ back 消费:
 |------|------|--------|---------|
 | 7.1 | ctl ConfigPackService 改用 schema v2 | ctl | 安装包包含正确 Envelope |
 | 7.2 | ctl 支持 WG 产品位 | ctl | WG 安装包可用 |
-| 7.3 | 旧分散端点标记 deprecated | back | API 返回 deprecation header |
+| 7.3 | 旧分散端点标记 deprecated | 后端 | API 返回 deprecation header |
 | 7.4 | 移除旧 refresh 的直接文件写入代码 | agent | 仅通过 Apply 写文件 |
 | 7.5 | 移除多写者（旧 GNBRunner.WriteConfig 等） | agent | 每种文件只有一个写入者 |
 | 7.6 | 全链端到端测试（GNB + WG） | 全部 | 两种驱动均通过 |
@@ -1434,7 +1434,7 @@ flowchart LR
 | auto 模式复杂度 | 阶段 5/6 故障切换逻辑可能覆盖不足 | 先实现 GNB auto（GNB 有内建 fallback），WG auto 后补 |
 | 私钥安全 | 配置文件/日志泄露 | secret_ref 机制；私钥永不写入 apply_journal |
 | 并发 Apply | 两个 Apply 同时写文件 | 文件锁 + generation 比较 |
-| PHP↔Go schema 漂移 | 双端 fixtures 通过但生产数据不兼容 | 阶段 2.2 的 fixtures 必须来自真实 back 输出，而非手工构造 |
+| PHP↔Go schema 漂移 | 双端 fixtures 通过但生产数据不兼容 | 阶段 2.2 的 fixtures 必须来自真实后端输出，而非手工构造 |
 | Grant 任意 CIDR vs GNB 限制 | GNB 仅支持 /8/16/24/32，业务层 Grant 可能声明 /27 | TransportPlanner 在生成 GNB route 时检查 CIDR 兼容性，不兼容时降级或警告 |
 | Fetch 端点鉴权 | agent 拉取 Envelope 时的认证/租户隔离 | 复用现有 HMAC/心跳鉴权机制，Envelope 端点不新增认证方式 |
 | node_observations 建表 | 阶段 5.3 缺少 migration | 阶段 5 开始前确认 migration 已创建 |

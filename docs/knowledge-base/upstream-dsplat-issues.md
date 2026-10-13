@@ -13,7 +13,7 @@
 > **本文件在 2026-10-05 补入 `dev-plan.md` 表 F-7…F-21 这批的复核结果**，编号接续既有的
 > 「缺陷 6」，从 **缺陷 7** 起到 **缺陷 18**（共 12 条框架侧缺陷）；`dev-plan` G1 清单的**第 13 条**
 > 不按新缺陷提，写成文末的「对齐请求 1 —— 属主判定（Owner Guard）方法签名」——框架本体仓**已落地**
-> 该判据（`538986f5`）但**尚未随包下发**给 back，这条只剩**签名对齐 + back 侧接线计划**
+> 该判据（`538986f5`）但**尚未随包下发**给后端，这条只剩**签名对齐 + 后端侧接线计划**
 > （等包下发，不是等框架从零实现）。「本批 12 条 + 1 条对齐请求 = 13 条」，
 > 与 `dev-plan.md:528`（G1 行）的口径一一对上。
 > 同一批里既有各条（缺陷 1/2/3/5/6）的**状态行**是本批复核的产物：判据已不成立的写了原因，
@@ -322,13 +322,13 @@ LOG_CHANNEL=json php artisan tinker --execute="Log::info('probe');"
 > `2025_01_01_000008_infrastructure_module.php` 现为 `2025_01_01_000014_infrastructure_module.php`；
 > `2025_01_01_000018_framework_init_data.php` 已不存在，种子并进了上面的
 > `2025_01_02_000000_framework_core_data.php`。
-> back 侧的本地兜底迁移 `database/migrations/2025_01_01_000010_create_subscription_plans_table.php`
+> 后端侧的本地兜底迁移 `database/migrations/2025_01_01_000010_create_subscription_plans_table.php`
 > （`:9` 自陈「已记入本文件的缺陷 3」、`:37` 约定「上游给出**真定义**后以它为准并删除本迁移」）**不能按这条
 > 一并退场** —— 上游给的是**守卫**不是真定义，而兜底今天已不是惰性件：它排在 `000014` 之前，
 > 所以框架那条**条件外键**因此真的建上了，种子也因此真的灌了 4 行
 > （只读实测：`information_schema` 里 `tenants_subscription_plan_id_foreign → subscription_plans` 存在、
 > `subscription_plans` 4 行）。删掉兜底 = 外键不建 + 种子不灌，**是行为变更**，
-> 属 back 侧单独的裁定与验证，本条不在此范围内下结论。
+> 属后端侧单独的裁定与验证，本条不在此范围内下结论。
 
 - **位置**：
   - `vendor/dsplat/multi-tenant-saas-module-infrastructure/Database/migrations/2025_01_01_000008_infrastructure_module.php:235`
@@ -382,8 +382,8 @@ LOG_CHANNEL=json php artisan tinker --execute="Log::info('probe');"
 > `000022_operator_module` FAIL 但报的是那句可读的 DomainException —— 原症状
 > `near "SET": syntax error` 已消失。
 > **残余一条不属于框架**：开上 `TENANCY_SKIP_MYSQL_ONLY_MIGRATIONS=true` 后，框架迁移能过，
-> 挂在 **back 自己的** `database/migrations/2026_09_22_000006_add_tenant_id_to_users.php:32`
-> （裸 `UPDATE users u JOIN …` 是 MySQL 方言）⇒ 这是 back 侧欠账，记一句免得下次算到框架头上。
+> 挂在 **后端自己的** `database/migrations/2026_09_22_000006_add_tenant_id_to_users.php:32`
+> （裸 `UPDATE users u JOIN …` 是 MySQL 方言）⇒ 这是后端侧欠账，记一句免得下次算到框架头上。
 > 下面正文里的两个文件名已漂（`000003_auth_module` → `000004`；`000008_infrastructure_module` → `000014`）。
 
 - **位置**：
@@ -441,7 +441,7 @@ LOG_CHANNEL=json php artisan tinker --execute="Log::info('probe');"
 
 ## 缺陷 6：`platform:init` 的租户 seeder 裸 `new SlugService`，未装 `domain` 包时直接致命
 
-> **状态（2026-10-05）**：本条对应 `dev-plan.md` 的 **F-6**，**back 侧复核已关闭，正文取证保留**
+> **状态（2026-10-05）**：本条对应 `dev-plan.md` 的 **F-6**，**后端侧复核已关闭，正文取证保留**
 > （关闭理由记的是「`platform:init` 路径上的 `new SlugService` 不是绕过闸门的特例，框架自己在
 > `TenantService.php` 里也同样直接 `new`，属既有约定」）。
 > ⚠️ 但**本批复核要把一条事实钉回去：那个关闭理由引述的现状在今天的 vendor 里是反的** ——
@@ -486,10 +486,10 @@ LOG_CHANNEL=json php artisan tinker --execute="Log::info('probe');"
   「不列入本清单的条目」。
 - **编号**：接续本文既有的「缺陷 6」，从 **缺陷 7** 到 **缺陷 18**；`dev-plan` G1 清单的第 13 条
   **不按缺陷提**，写成文末的「对齐请求 1」。
-- **每条固定六节**：现象 → 根因与取证 → 复现方式 → back 现状的兜底 → 要框架定的一件事 → 复核行。
+- **每条固定六节**：现象 → 根因与取证 → 复现方式 → 后端现状的兜底 → 要框架定的一件事 → 复核行。
 - **路径口径**：取证路径一律相对 `mynet_api/`（`vendor/dsplat/...` 是框架，`app/...`、`src/...`、
-  `resources/...`、`bootstrap/...`、`database/...` 是 back）。
-- **行号**：本批 12 条的每一个 `file:line` 都在 2026-10-05 对当前 vendor / back 源码重跑过一遍；
+  `resources/...`、`bootstrap/...`、`database/...` 是后端）。
+- **行号**：本批 12 条的每一个 `file:line` 都在 2026-10-05 对当前 vendor / 后端源码重跑过一遍；
   与 `dev-plan` 原记录不一致的，**以本文为准并在正文标出漂移**。
 - **「全绿而无后果」这一类单独标出来**：**缺陷 8、10、12、13、14、15、16、18** 共八条都不返回错误码 ——
   HTTP / build 全绿而行为没发生（该显示的行不在响应里、该拒的操作放过了、该生效的判定跳过了），
@@ -509,10 +509,10 @@ LOG_CHANNEL=json php artisan tinker --execute="Log::info('probe');"
 | 缺陷 13 | F-16 | Operator 列表把「账户停用」「本区关联失效」「待接受」三层都当过滤 ⇒ 三类人一起消失、操作成了单向门 |
 | 缺陷 14 | F-17 | 列表不带 pivot（角色不在响应里），可分配角色枚举又没有读取端点 |
 | 缺陷 15 | F-18 | Operator 写面没有自我隔离，也没有「本区最后一个 `tenant_admin`」保护；顺带四条端点不按租户收口 |
-| 缺陷 16 | F-19 | 框架模型日期序列化成无偏移的 `Y-m-d H:i:s` ⇒ 与 back 自有端点同页混用差 8 小时 |
+| 缺陷 16 | F-19 | 框架模型日期序列化成无偏移的 `Y-m-d H:i:s` ⇒ 与后端自有端点同页混用差 8 小时 |
 | 缺陷 17 | F-20 | 框架自带前端源在下游 tsconfig 下带 16 条类型错 ⇒ 退出码设不了闸门 |
 | 缺陷 18 | F-21 | 「待接受邀请」多租户语义不一致：接受一次激活全部待接受关联，重发只认账户 |
-| 对齐请求 1 | A1 后半（`dev-plan.md:510`、G1 行 `:528`） | 属主判定（Owner Guard）**方法签名对齐** + back 侧接线计划 |
+| 对齐请求 1 | A1 后半（`dev-plan.md:510`、G1 行 `:528`） | 属主判定（Owner Guard）**方法签名对齐** + 后端侧接线计划 |
 
 ---
 
@@ -522,7 +522,7 @@ LOG_CHANNEL=json php artisan tinker --execute="Log::info('probe');"
 
 同一个码串（例如运营手工建的 `VIP2026`）可以**在 A 区和 B 区各存在一条**。用户拿它入区时
 「这条码属于哪个区」没有唯一答案。框架面**不报任何错**（建码 201、列表 200），冲突推迟到
-下游消费时才暴露 —— back 侧的暴露形式是 HTTP 422「邀请码不唯一，请联系管理员」，把框架的数据模型
+下游消费时才暴露 —— 后端侧的暴露形式是 HTTP 422「邀请码不唯一，请联系管理员」，把框架的数据模型
 缺陷转嫁成了运维工单。
 
 ### 根因与取证
@@ -536,12 +536,12 @@ LOG_CHANNEL=json php artisan tinker --execute="Log::info('probe');"
   `generate()` 只在 `$code === null` 时才随机（`:139`）⇒ **两条区可以填同一个字符串**。
 - **字母表不可注入，原因比「私有」更硬**：`CODE_ALPHABET` 是 `protected const`（`:37`），
   读取用的是 `self::CODE_ALPHABET`（`:224`，`generateCode()` 内）。PHP 的 `self::` 在编译期绑到**定义类**，
-  子类重写常量对父类这段代码无效 ⇒ 「back 继承 `InviteCodeService` 覆盖字母表」这条绕行也不通，
+  子类重写常量对父类这段代码无效 ⇒ 「后端继承 `InviteCodeService` 覆盖字母表」这条绕行也不通，
   除非框架把它改成 `static::`。
-- **本批自纠一处旧口径（长度是可配的）**：`generate()` 读 `$options['length']`，缺省再读**租户级设置**
+- **长度是可配的**（登记此条以免按「无法配长度」的旧说法重查）：`generate()` 读 `$options['length']`，缺省再读**租户级设置**
   `registration.invite_code_length`（`:140-141`），边界常量 `DEFAULT_CODE_LENGTH=8` / `MIN=6` / `MAX=16`
   （`:40`/`:43`/`:46`，均 public），`:142` 用 `max/min` 夹住；另有 `registration.invite_code_prefix`（`:143-144`）。
-  ⇒ 旧记录里「无法配长度」不成立。**行号漂移**：`dev-plan.md:477` 写的是 `:138-142`，
+  ⇒ 「无法配长度」的说法不成立。**行号漂移**：`dev-plan.md:477` 写的是 `:138-142`，
   实际长度那半在 **`:140-142`**（`:138` 是 `$options['code']` 那一行）。
 - **与本题无关但已复核仍在**（记录以免重复排查）：`consume()`（`:295-348`）走事务 +
   `lockForUpdate`（`:301`）+ `(码, 人)` 幂等（`:309-315`）+ 自邀请拦截（`:328-330`）。
@@ -559,7 +559,7 @@ echo json_encode(["fk"=>$fk, "indexes"=>array_map(fn($i)=>$i->Key_name."(".$i->S
 2026-10-05 本机实测输出：`fk` 为 **`[]`**，索引里有
 `invite_codes_tenant_id_code_unique(1)=tenant_id` 与 `(2)=code` ⇒ 唯一性确实只到「区内」。
 
-### back 现状的兜底
+### 后端现状的兜底
 
 `app/Modules/VPN/Domain/Services/ZoneInviteDomainService.php:79-98`（私有 `resolveTenantId()`）：
 按码反查 `tenant_id` 去重（`:81-85`），**空集**判「码不存在」（`:87-89`），
@@ -573,9 +573,9 @@ echo json_encode(["fk"=>$fk, "indexes"=>array_map(fn($i)=>$i->Key_name."(".$i->S
 ### 要框架定的一件事
 
 收敛成一条：**把 `code` 的唯一性提升为全局**（或加 `globally_unique` 开关）。
-⚠️ 这是**破坏性 DDL**（改唯一键要迁移既有 `invite_codes`），back 不擅自动框架表，
+⚠️ 这是**破坏性 DDL**（改唯一键要迁移既有 `invite_codes`），后端不擅自动框架表，
 也**不自研第二张码表**。字母表注入是次要诉求（`self::` → `static::` 一行），可与主诉求分开裁。
-back 现在的兜底是「歧义即拒 + 提示联系管理员」，能用，但把冲突推给了运维。
+后端现在的兜底是「歧义即拒 + 提示联系管理员」，能用，但把冲突推给了运维。
 复核：2026-10-05，行号已对源码验证
 
 ---
@@ -635,24 +635,24 @@ api/v1/tenant/invite-codes    =>  api | auth:sanctum | throttle:api | tenant.ide
 ```
 
 ⚠️ 口径说明：`gatherMiddleware()` 返回**路由自身声明的中间件**，组名 `api` 不展开
-（back 追加的两条在组里，用 `app('router')->getMiddlewareGroups()['api']` 可看到
+（后端追加的两条在组里，用 `app('router')->getMiddlewareGroups()['api']` 可看到
 `EnsureFrontendRequestsAreStateful, SubstituteBindings, ResolveTenantFromUser, ResolveTenantFromInviteCode`）
 ⇒ 上面这列证明的是「框架路由声明里**没有** `tenant.identify`」，登录态两条有它、guest 两条没有。
 
-### back 现状的兜底
+### 后端现状的兜底
 
 - `bootstrap/app.php:50-53` 往 `api` 组**末尾**追加两条：
   `ResolveTenantFromUser`、`ResolveTenantFromInviteCode`（`:45-49` 的注释写明「后者必须排在最后」
   以及为什么：注册三步全读 `request` 属性 `tenant_id`）。
 - `app/Http/Middleware/ResolveTenantFromInviteCode.php` 用**码上的租户**补上下文，
-  类注释 `:13-31` 整段就是本条的 back 侧复述（`:19-21` 点名 `UserAuthController::register():121`、
+  类注释 `:13-31` 整段就是本条的后端侧复述（`:19-21` 点名 `UserAuthController::register():121`、
   `InviteCodeController::verify():222`、`TenantContext.php:65-71`；`:27-31` 写「静默空转而不是报错」）。
 - 登录态那半由 `app/Http/Middleware/ResolveTenantFromUser.php` 兜（见缺陷 9 的兜底段）。
-⇒ **框架若选下面的 A（自己在 register/verify 里按码反查租户并置上下文），back 的
+⇒ **框架若选下面的 A（自己在 register/verify 里按码反查租户并置上下文），后端的
 `ResolveTenantFromInviteCode` 整条应删**（`bootstrap/app.php:52` 那一行同时删）；
-选 B 则这条长期持有，back 只需要框架把归属写成一句话。
+选 B 则这条长期持有，后端只需要框架把归属写成一句话。
 判据逐行核过；触发方式（`mode=invite_only` 下真跑一次填码注册）**未做实测**，
-需要改 `registration.mode` 设置 = 数据动作，back 不动库。
+需要改 `registration.mode` 设置 = 数据动作，后端不动库。
 
 ### 要框架定的一件事
 
@@ -660,10 +660,10 @@ api/v1/tenant/invite-codes    =>  api | auth:sanctum | throttle:api | tenant.ide
 
 - **(A)** 框架自己在 `register` / `verify` 里按 `invite_code` 反查租户并置上下文
   —— 语义正主，`mode=invite_only` 到这一步才算真生效。
-- **(B)** 框架在决策文里**明文声明**「租户上下文由下游提供」，back 的
+- **(B)** 框架在决策文里**明文声明**「租户上下文由下游提供」，后端的
   `ResolveTenantFromInviteCode` 就是那个补丁并长期持有。
 
-当前 back 走自补，能跑，但下次框架改动 register 的读法时 back 无从知晓
+当前后端走自补，能跑，但下次框架改动 register 的读法时后端无从知晓
 —— 要的只是把归属写死一句话。
 复核：2026-10-05，行号已对源码验证
 
@@ -694,9 +694,9 @@ api/v1/tenant/invite-codes    =>  api | auth:sanctum | throttle:api | tenant.ide
   = `tenant_id, user_id, credits, is_active, joined_at` ⇒ 批量赋值传 `role` 会被**静默丢掉**。
   由于该列有库层默认值（见下），旧代码里那句 `'role' => 'end_user'` 丢掉后落库结果仍是对的，
   属「无害但误导」，**不是 bug**，本批不把它列进诉求。
-- **自纠一条旧口径（原 F-9 的另一半作废）**：旧记录写「框架 `tenant_users` 没有 `role` 列」—— **错**。
+- **`tenant_users` 有 `role` 列（原 F-9 的这一半作废；「框架没有 `role` 列」的旧说法不对）**：
   本地 `mynet_api_dev` 只读实测该表 9 列、含 `role varchar(50) NOT NULL DEFAULT 'end_user'`
-  与索引 `tenant_users_role_index`；出处是 back 自己的迁移
+  与索引 `tenant_users_role_index`；出处是后端自己的迁移
   `database/migrations/2026_09_25_000001_add_mynet_columns_to_framework_tables.php:50-61`。
   真正的测试/生产漂移方向相反（`tests/Schema/CoreModule.php` 多建了一条 `tenant_users.role_id`，
   该幽灵列已删，`mynet_api@19a2807`）。⇒ 「role 谁补」这一问作废。
@@ -716,7 +716,7 @@ cd /Users/arthur/Devel/WorkSpaceAI/mynet-club/mynet_api && sed -n '131,145p' ven
 cd /Users/arthur/Devel/WorkSpaceAI/mynet-club/mynet_api && php artisan tinker --execute='echo json_encode(DB::select("SHOW COLUMNS FROM users LIKE \"tenant_id\""));'
 ```
 
-### back 现状的兜底
+### 后端现状的兜底
 
 三处，**框架若把指针写上（下面的 A 向），前两处应退成兼容层**：
 
@@ -744,11 +744,11 @@ cd /Users/arthur/Devel/WorkSpaceAI/mynet-club/mynet_api && php artisan tinker --
 
 收敛成一句（原第 ② 问「role 谁补」已作废，见取证最后一点）：
 **`users.tenant_id`（或等价的「当前工作租户」指针）算不算框架支持的下游判据？**
-- **A**：算 ⇒ 请框架保证注册路径把它写上（back 的监听器 `:35-37` 与 `:60` 就可以退成兼容层）。
-- **B**：不算，要求下游一律走 `tenant_users` ⇒ back 的节点/社交硬闸要改成查成员行，
+- **A**：算 ⇒ 请框架保证注册路径把它写上（后端的监听器 `:35-37` 与 `:60` 就可以退成兼容层）。
+- **B**：不算，要求下游一律走 `tenant_users` ⇒ 后端的节点/社交硬闸要改成查成员行，
   牵动「一个终端配多个网络区」的取向（`dev-plan.md:481` F-11，已由裁定 D1「v1 不做多区自助」收口）。
 
-**back 不自行加列、不擅自动框架表结构。**
+**后端不自行加列、不擅自动框架表结构。**
 
 复核：2026-10-05，行号已对源码验证
 
@@ -778,7 +778,7 @@ cd /Users/arthur/Devel/WorkSpaceAI/mynet-club/mynet_api && php artisan tinker --
   整张表**唯一**一条 FK 是 `:63-64` 的 `invite_code_usages.invite_code_id → invite_codes`）
   ⇒ 插 0 号行静默成功。`usages` 侧同理（`:51` 的 `tenant_id` 也无 FK）。
 - **中间件面救不了它**：`api/v1/app/invite-code` 挂的是框架自己的 `tenant.identify`
-  （复现输出见缺陷 8 的同一条命令），**不是** back 的解析器 ⇒ 对「没有任何活跃成员行」的用户
+  （复现输出见缺陷 8 的同一条命令），**不是** 后端的解析器 ⇒ 对「没有任何活跃成员行」的用户
   上下文照样是 null ⇒ `(int) null = 0` 这条路径真实可达。
 
 ### 复现方式
@@ -796,9 +796,9 @@ echo json_encode(["fk"=>DB::select("SELECT CONSTRAINT_NAME, COLUMN_NAME, REFEREN
 ⚠️ 口径：本批**没有做触发实测** —— 造一条 `tenant_id=0` 的探针行属**数据动作**，
 未请示就不动；上面结论是代码级 + 约束级取证，不是「实测跑出来过」。
 现网是否已有 0 号脏行本机够不到，属「**需 DBA 在现网执行的只读 SQL**」：
-`SELECT COUNT(*) FROM invite_codes WHERE tenant_id = 0;`（清理动作另说，back 不动库）。
+`SELECT COUNT(*) FROM invite_codes WHERE tenant_id = 0;`（清理动作另说，后端不动库）。
 
-### back 现状的兜底
+### 后端现状的兜底
 
 两道，**框架补上 `tenantId <= 0` 的正数校验后第 2 道可留、第 1 道的语义仍要保留**（它管的是归属不是校验）：
 
@@ -808,7 +808,7 @@ echo json_encode(["fk"=>DB::select("SELECT CONSTRAINT_NAME, COLUMN_NAME, REFEREN
    出路写进裁定 A5 的 DBA 回填清单）。上下文为空 ⇒ 框架端点仍会走 0 号，
    所以这条兜底是「**缩小可达面**」而不是「挡住」。
 2. GUI 侧 `useInviteCode.fetchMyCode()` 在当前租户为空时**根本不发请求**
-   （`mynet_gui` 仓；本批只复核到 back 侧代码，GUI 那半**未在代码中逐行验证**，此处按既有记录转述）。
+   （`mynet_gui` 仓；本批只复核到后端侧代码，GUI 那半**未在代码中逐行验证**，此处按既有记录转述）。
 
 `put` 语义不冲突：console 面读的是 `TenantContext::getId()`，不是懒建那条。
 
@@ -816,7 +816,7 @@ echo json_encode(["fk"=>DB::select("SELECT CONSTRAINT_NAME, COLUMN_NAME, REFEREN
 
 `getOrCreateUserCode()` / `listUsagesByInviter()`（以及公开校验端点 `verify()` 的同一判据）
 对 `tenantId <= 0` 或解析不到租户时，应 **抛 `DomainException`（4xx）而不是当成租户 0 继续写表**。
-是否顺带清一次已产生的 0 号脏行属**数据动作** —— back 不擅自动库，需 DBA 走 `database/sql/`。
+是否顺带清一次已产生的 0 号脏行属**数据动作** —— 后端不擅自动库，需 DBA 走 `database/sql/`。
 
 复核：2026-10-05，行号已对源码验证
 
@@ -836,7 +836,7 @@ Could not load …/vendor/dsplat/multi-tenant-saas/src/Modules/Ai/resources/cons
 
 后果是把「可选的 AI 能力」变成「装 console 就必须装 AI」——连带该包的表（生产禁 migration，要走
 `database/sql/`）与路由。本条附带**同源的第二处**：框架自带内容里留着单一客户（`scrm`）的痕迹，
-已被 back 的 console 自动发现并打进构建产物。
+已被后端的 console 自动发现并打进构建产物。
 
 ### 根因与取证
 
@@ -850,7 +850,7 @@ Could not load …/vendor/dsplat/multi-tenant-saas/src/Modules/Ai/resources/cons
   而 `FW_DIR = __dirname`（`:11`，注释 `:9` 点名「this file lives at resources/js/console/vite.config.ts」）
   ⇒ 指向**框架根包的 `src/Modules`**。
 - 实测那个目录**只有 `Contracts` 一个条目**（`ls vendor/dsplat/multi-tenant-saas/src/Modules`）
-  —— AI 前端在拆包 `multi-tenant-saas-module-ai` 里，back 没装（`ls vendor/dsplat` 共 4 个包：
+  —— AI 前端在拆包 `multi-tenant-saas-module-ai` 里，后端没装（`ls vendor/dsplat` 共 4 个包：
   根包 + `module-auth` + `module-infrastructure` + `module-operator`）。
 - **对照取证（这条为什么算例外）**：module-loader 其余部分对缺包是**容错的**——
   走 `import.meta.glob` 发现、装了才挂路由（`resources/js/console/module-loader.ts:28-98` 共 12 条 glob，
@@ -866,7 +866,7 @@ Could not load …/vendor/dsplat/multi-tenant-saas/src/Modules/Ai/resources/cons
 | `vendor/dsplat/multi-tenant-saas-module-auth/Services/IdentityProviderOAuthService.php` | 26 | 类注释示例 `- idp_client_id: "scrm_prod"`（**本批新发现的一处**，dev-plan F-14 未记） |
 | `vendor/dsplat/multi-tenant-saas-module-infrastructure/Http/Middleware/IdentifyTenant.php` | 258 | 注释举例用 `arthur.scrm.com` |
 
-其中 `OAuthSettings.vue` **已被 back 的 console 自动发现并挂上 `/oauth`**，且能在 back 的构建产物里
+其中 `OAuthSettings.vue` **已被后端的 console 自动发现并挂上 `/oauth`**，且能在后端的构建产物里
 grep 到那条串：`public/console/assets/OAuthSettings-B8rgX5Ei.js`、`OAuthSettings-DuO3UUC2.js`
 （本批 `grep -rl "scrm_prod" public/console/assets/` 实测命中这两个文件）。
 
@@ -879,37 +879,37 @@ cd /Users/arthur/Devel/WorkSpaceAI/mynet-club/mynet_api && grep -n "AiAssistant"
 ```
 
 期望读到：`:96` 那条 import + `:81` 使用点，而 `ls` 只出 `Contracts`。
-构建侧当前是**绿的**，因为 back 放了占位件（见下节）；真要复现失败，把
+构建侧当前是**绿的**，因为后端放了占位件（见下节）；真要复现失败，把
 `resources/js/console/vite.config.ts:88-91` 那四行别名临时摘掉再跑
 `cd /Users/arthur/Devel/WorkSpaceAI/mynet-club/mynet_api/resources/js/console && npm run build`
-—— 本批**没有做这个删除动作**（它会改 back 的构建配置），只记录了不摘时的实测输出
+—— 本批**没有做这个删除动作**（它会改后端的构建配置），只记录了不摘时的实测输出
 `✓ built in 3.59s`。
 
 ② 的复现 = `grep -rn "scrm_prod" vendor/dsplat/`（表里三处）+
 `grep -n "'scrm'" vendor/dsplat/multi-tenant-saas/database/migrations/2025_01_02_000000_framework_core_data.php`。
 
-### back 现状的兜底
+### 后端现状的兜底
 
 - `resources/js/console/stubs/AiAssistant.vue`：**零行为占位件**（模板只有 `<span v-if="false" />`，
   文件头 `:1-13` 的注释写清了来由与「裁定落地后这个文件就该删」）。
 - `resources/js/console/vite.config.ts:88-91`：用**精确说明符**别名顶上
   （`find: '@modules/Ai/resources/console/ai-assistant/AiAssistant.vue'`），
   刻意排在通用 `@modules`（`:93`）之前，注释 `:86-87` 说明「不影响按目录生成的 `@modules/<Pascal>`」。
-- scrm 那几处 **back 没有兜底**：视图是框架文件，改它要 fork（不划算，等框架去品牌）；
-  `system_settings` 那 3 行是**数据动作**，back 不动库。
+- scrm 那几处 **后端没有兜底**：视图是框架文件，改它要 fork（不划算，等框架去品牌）；
+  `system_settings` 那 3 行是**数据动作**，后端不动库。
 ⇒ **框架把 AiAssistant 改成可选挂载后，`stubs/AiAssistant.vue` 与 `vite.config.ts:86-91` 这两处应一起删**；
-裁定 G2（`dev-plan.md:529`）已定「不装 module-ai，stub 继续兑」，所以本条在 back 侧无待办。
+裁定 G2（`dev-plan.md:529`）已定「不装 module-ai，stub 继续兑」，所以本条在后端侧无待办。
 
 ### 要框架定的一件事
 
-两问，back 都没自决：
+两问，后端都没自决：
 
 - **① `AiAssistant` 的挂载方式**：**(A)** 改成可选挂载（glob 发现或有则挂、缺包不报错，
   与 module-loader 其余口径一致）；**(B)** 或在文档里明文规定「用 element-plus console 布局
-  必须装 `module-ai`」—— 那 back 就得 composer 装包，连带它的表（生产禁 migration，要走
-  `database/sql/`）与路由，back 不为一个悬浮按钮摊这些。
-- **② 那些 `scrm` 痕迹要不要清**：`placeholder` 属框架视图文案，back 改要 fork 视图文件
-  （不划算，等框架去品牌）；`system_settings` 那 3 行是**数据动作**，back 不动库，
+  必须装 `module-ai`」—— 那后端就得 composer 装包，连带它的表（生产禁 migration，要走
+  `database/sql/`）与路由，后端不为一个悬浮按钮摊这些。
+- **② 那些 `scrm` 痕迹要不要清**：`placeholder` 属框架视图文案，后端改要 fork 视图文件
+  （不划算，等框架去品牌）；`system_settings` 那 3 行是**数据动作**，后端不动库，
   等 F-13 那份 DDL 的交付口径定了以后一起处理。
 复核：2026-10-05，行号已对源码验证
 
@@ -950,7 +950,7 @@ cd /Users/arthur/Devel/WorkSpaceAI/mynet-club/mynet_api && grep -n "AiAssistant"
 - **分组标签那半（顺带复核，属缺陷 12 的同族但不是本条诉求）**：
   `MODULE_LABELS` 常量在 `:275`，本批 grep 确认表里**没有 `VPN` 键**；
   `:335` `if (!route.meta.module) route.meta.module = moduleName` 只在缺失时注入目录名；
-  兜底在 `:532-533`（去连字符 + 首字母大写）⇒ back 那组的组头就是字面 `VPN`。
+  兜底在 `:532-533`（去连字符 + 首字母大写）⇒ 后端那组的组头就是字面 `VPN`。
   这条是**裁定项（dev-plan F-2 / G-5）**，不是框架缺陷，故只在对照处记一句，不另立缺陷。
 
 ### 复现方式
@@ -967,19 +967,19 @@ console.log('uppercase  app/Modules/*/Resources/*.php  ->', fg.sync(['app/Module
 
 2026-10-05 实测：`lowercase -> 0` / `uppercase -> 8` —— 同一个目录，pattern 里那段大小写换一下
 就从「一条不返回」变成「8 条命中」，**这就是 glob 段字面量的效果**（用 PHP 目录演示是因为
-back 的 console 前端刻意没放在 `app/Modules` 下，见下节）。
+后端的 console 前端刻意没放在 `app/Modules` 下，见下节）。
 
-### back 现状的兜底
+### 后端现状的兜底
 
-**没有兜底件，只有落点约束**（这正是 dev-plan 里 back 倾向「① 文档写死」的原因）：
+**没有兜底件，只有落点约束**（这正是 dev-plan 里后端倾向「① 文档写死」的原因）：
 
-- back 的 console 前端全部落在**小写字面量命中**的位置
+- 后端的 console 前端全部落在**小写字面量命中**的位置
   `src/Modules/VPN/resources/console/`（`git ls-files 'src/Modules/*'` = 13 个跟踪文件，
   其中 `.vue` 8 个，本批用上面同一条 fast-glob 探针实测命中 8）。
-- back 的大写 `app/Modules/VPN/Resources/` 里**只放 PHP**（API Resource），
+- 后端的大写 `app/Modules/VPN/Resources/` 里**只放 PHP**（API Resource），
   `git ls-files 'app/Modules/*'` 里 `/Resources/` 命中 8 条、`/resources/` 命中 0 条 ——
   两种拼法在同一个模块目录族里**并存但各管一端**，这是刻意选择，不是巧合。
-⇒ 框架若选「② 代码补一层（`[Rr]esources` 变体）」，back 上面这条落点约束的注释可以放宽，
+⇒ 框架若选「② 代码补一层（`[Rr]esources` 变体）」，后端上面这条落点约束的注释可以放宽，
   但**没有需要删除的兜底件**（约束本身仍是好写法）。
 
 ### 要框架定的一件事
@@ -988,12 +988,12 @@ back 的 console 前端刻意没放在 `app/Modules` 下，见下节）。
 
 - **① 文档写死**：明确「console 前端只能放在**字面小写** `resources/console/` 下；模块旁边若已有
   大写 `Resources`（Laravel API Resource 目录），请把 console 前端放 `src/Modules/<Name>/resources/console/`」
-  —— back 已按这条落（五页在 `src/Modules/`），改动为零。
+  —— 后端已按这条落（五页在 `src/Modules/`），改动为零。
 - **② 代码补一层**：12 条 glob 各加一条 `Resources` 变体，并把 `extractModuleName()`（`:139-148`）
   那四条正则的 `resources` 段改成 `[Rr]esources` —— 这样 `app/Modules/<X>/Resources/console/`
   也能被发现；代价是 glob 数量翻倍、且 `MODULE_LABELS` 的键要同时容两种拼法。
 
-back 倾向 ①（约束小、语义清楚），但**这条口径归框架定**：定了以后 back 照改注释与落点，
+后端倾向 ①（约束小、语义清楚），但**这条口径归框架定**：定了以后后端照改注释与落点，
 不自行改 vendor。
 复核：2026-10-05，行号已对源码验证
 
@@ -1025,7 +1025,7 @@ back 倾向 ①（约束小、语义清楚），但**这条口径归框架定**�
   ⇒ 「这个 Operator 管着哪些区」同样只报活跃的，**两侧都看不见已断开的关联**。
 - **`pending` 与 `disabled` 不可区分**：列表只剩一个布尔，而界面态需要三个来源
   （`operator.is_active` / `operator_tenants.is_active` / `operator_tenants.accepted_at`）才分得开 ——
-  这正是 back 要自己摊的原因（见下节）。
+  这正是后端要自己摊的原因（见下节）。
 
 ### 复现方式
 
@@ -1041,7 +1041,7 @@ cd /Users/arthur/Devel/WorkSpaceAI/mynet-club/mynet_api && sed -n '237,244p;79,8
 现网/开发库存量可只读核对：
 `SELECT COUNT(*) FROM operator_tenants WHERE tenant_id = <区> AND is_active = 0;` —— 大于 0 即列表正在吞行。
 
-### back 现状的兜底
+### 后端现状的兜底
 
 `app/Modules/VPN/Controllers/Console/V1/MemberController.php` —— **只补读模型，不复制第二份写面**
 （类注释 `:20-36` 逐条点名本缺陷）：
@@ -1052,9 +1052,9 @@ cd /Users/arthur/Devel/WorkSpaceAI/mynet-club/mynet_api && sed -n '237,244p;79,8
   再合成界面态 `pending | removed | disabled | active`（`stateOf()` `:111-122`）。
   判定顺序是刻意的：`accepted_at IS NULL` 必须**早于** `! pivot.is_active` 判（注释 `:106-110`）——
   否则没接受过邀请的人会被显示成「已停用」，管理员会去催一个从未进来过的人。
-- 写操作仍一律打框架端点（`api/v1/operators/*`），back 不加恢复端点。
+- 写操作仍一律打框架端点（`api/v1/operators/*`），后端不加恢复端点。
 
-⇒ **框架改成「全量 + 状态位」后，`MemberController::stateOf()` 的三态合成仍要留**（界面态是 back 的语义），
+⇒ **框架改成「全量 + 状态位」后，`MemberController::stateOf()` 的三态合成仍要留**（界面态是后端的语义），
 但 `:59-64` 那条「绕开框架列表、自己查 pivot」的取证理由应改成「按框架状态位过滤」。
 回归锁：`php vendor/bin/phpunit --filter ConsoleTenantMemberTest` → 8 例，第 1 条就锁「七行全摊」
 （含框架列表会吞掉的 `disabled` / `removed` 两档）。
@@ -1063,11 +1063,11 @@ cd /Users/arthur/Devel/WorkSpaceAI/mynet-club/mynet_api && sed -n '237,244p;79,8
 
 ### 要框架定的一件事
 
-两问，back 都没自决：
+两问，后端都没自决：
 
 - **① `GET /api/v1/operators` 是不是该回「全量 + 状态位」**（或加 `?state=` / `?include_inactive=1`），
   让下游能做出恢复入口 —— 现在这三个字面条件把三类人都吞了，下游唯一正确的做法就是**不走这个端点**
-  （back 已经在走自己查 pivot 那条路，这对框架的读面是净流失）。
+  （后端已经在走自己查 pivot 那条路，这对框架的读面是净流失）。
 - **② 「关联失效」与「账户停用」这层语义差别要不要写进 `resources/kb/`** —— 目前只活在代码注释里
   （`OperatorService.php:178-180`），下游只能靠读 vendor 猜。
 
@@ -1086,7 +1086,7 @@ cd /Users/arthur/Devel/WorkSpaceAI/mynet-club/mynet_api && sed -n '237,244p;79,8
 
 - **返回的是 `Operator` 模型集合**：`.../Services/OperatorService.php:238` `listByTenant(): Collection` →
   `:239` `Operator::whereHas('tenants', …)` → `:244` `->get()`；既没有 `with('tenants')` 也没有 `->withPivot()`，
-  而 `role` 挂在 `operator_tenants` 上（框架迁移建表即如此，back 测试 schema 同形：
+  而 `role` 挂在 `operator_tenants` 上（框架迁移建表即如此，后端测试 schema 同形：
   `tests/Schema/OperatorModule.php:48-60`）。写侧则明确按 pivot 走：
   `updateRole()`（`:211-228`）先 `OperatorTenant::where('operator_id')->where('tenant_id')->firstOrFail()`
   （`:213-216`）再 `$ot->update(['role' => $role])`（`:217`）⇒ **读不到、但写得进**。
@@ -1108,17 +1108,17 @@ cd /Users/arthur/Devel/WorkSpaceAI/mynet-club/mynet_api && grep -rn "getValidRol
 期望读到：`getValidRoles` 全 vendor **3 条命中**（定义 `:41` + 校验 `:55`、`:120`）⇒ 没有第四个读取方；
 路由侧只有 `PUT /{operatorId}/role`（写），**没有 `GET …/roles`**。
 
-### back 现状的兜底
+### 后端现状的兜底
 
 `app/Modules/VPN/Controllers/Console/V1/MemberController.php` 两处，都是「补读面、不动写面」：
 
 1. **角色取自 pivot 并回显**：`:94` `'role' => $row->role`（骨架就是 `:59-64` 那条 pivot 查询）。
 2. **可分配角色与框架校验同源**：`assignableRoles()`（`:127-131`）
-   直接 `DB::table('roles')->distinct()->pluck('name')` —— **同一张表、同一列、back 侧不加白名单**，
+   直接 `DB::table('roles')->distinct()->pluck('name')` —— **同一张表、同一列、后端侧不加白名单**，
    理由写在类注释 `:38-42`：下拉藏起一部分选项不会让另外那些变得不能用，只会让页面和后端校验各说一套。
-   ⚠️ **一条 back 侧仍未消除的偏差，记在这里免得被当成已解决**：框架那条读带 1h 缓存（`OperatorController.php:16-18`），
-   back 每请求直查 ⇒ **新建角色后的最长 1 小时内，back 的下拉已列出、框架校验仍拒**，
-   而 back 没有任何失效入口（那是框架的缓存键）。
+   ⚠️ **一条后端侧仍未消除的偏差，记在这里免得被当成已解决**：框架那条读带 1h 缓存（`OperatorController.php:16-18`），
+   后端每请求直查 ⇒ **新建角色后的最长 1 小时内，后端的下拉已列出、框架校验仍拒**，
+   而后端没有任何失效入口（那是框架的缓存键）。
 
 ⇒ **框架补出 `GET …/roles` 后，`assignableRoles()`（`:127-131`）应改成打那个端点**（同源这件事就不再靠
 「碰巧读同一张表」维持）；`role` 的回显在框架列表带 pivot 之前要留着。
@@ -1142,7 +1142,7 @@ cd /Users/arthur/Devel/WorkSpaceAI/mynet-club/mynet_api && grep -rn "getValidRol
 **全绿而该拒的没拒**（本类里最危险的一种，因为它返回的是成功）：
 
 - `PUT /api/v1/operators/{id}/role` 把本区**最后一个** `tenant_admin` 降成 `member` ⇒ **200 `role_updated`**，
-  此后**整区再没有人能进 console**（back 的 console 面唯一门禁角色就是 `tenant_admin`），
+  此后**整区再没有人能进 console**（后端的 console 面唯一门禁角色就是 `tenant_admin`），
   而恢复路径在框架侧也不可见 —— 他从列表里消失了（缺陷 13）。
 - `POST /api/v1/operators/{id}/toggle-status` 可以让**登录者自己停用** ⇒ 200，下一次请求即 401。
 - `DELETE /api/v1/operators/{id}` 可以**自己移除自己** ⇒ 200。
@@ -1168,9 +1168,9 @@ cd /Users/arthur/Devel/WorkSpaceAI/mynet-club/mynet_api && grep -rn "getValidRol
 - **路由形状按「账户」不按「关联」**：`.../Routes/tenant.php:15-25` 全部是 `/operators/{operatorId}…`，
   中间件只有 `rbac.permission:member.{view,create,update,delete}`（`:16-24`）——
   **那是「有没有这个权限位」，不是「这条记录是不是你的」**（权限 ≠ 属主，正是本项目 A1 裁定的那条区分）。
-- **为什么在本项目特别疼**：back 的 console 唯一门禁角色是 `tenant_admin`
+- **为什么在本项目特别疼**：后端的 console 唯一门禁角色是 `tenant_admin`
   （`CheckPermission::checkConsoleAccess` 要求 `role_id` 指向 `name='tenant_admin'` 的角色行），
-  所以这不是「体验瑕疵」而是**一次误点即整区后台不可达**；而 `routes/api.php:36-42` 的 back 侧闸门
+  所以这不是「体验瑕疵」而是**一次误点即整区后台不可达**；而 `routes/api.php:36-42` 的后端侧闸门
   只挡「谁能进 console」，进来之后的这五条框架写端点全在框架自己的闸下。
 
 ### 复现方式
@@ -1188,26 +1188,26 @@ cd /Users/arthur/Devel/WorkSpaceAI/mynet-club/mynet_api && grep -n "auth()->user
 ⚠️ 口径：真造「最后一个 admin 被降权后整区不可达」是**写数据 + 改角色**动作，本批**未做**；
 上面是代码级 + 路由级取证。
 
-### back 现状的兜底
+### 后端现状的兜底
 
-**只有一道前端闸门，back 明说它不是服务端防线**（裁定 G3 已定「只上报，不代做」）：
+**只有一道前端闸门，后端明说它不是服务端防线**（裁定 G3 已定「只上报，不代做」）：
 
 - `Console/V1/MemberController.php:66` 取当前登录 Operator 的 `operator_id`、`:101` 逐行回显 `is_self`；
   `src/Modules/VPN/resources/console/views/TenantMembers.vue` 据此**禁用对自己的**角色下拉 + 停用 + 移出，
-  表尾注释写明「框架服务端没有这道自我隔离」。类注释 `:44-47` 把这条的性质写死在 back 侧源码里。
-- **跨租户那半 back 没有兜底**：这五条都是框架端点，back 不 fork vendor、也不在自己这层再包一份写面
+  表尾注释写明「框架服务端没有这道自我隔离」。类注释 `:44-47` 把这条的性质写死在后端侧源码里。
+- **跨租户那半后端没有兜底**：这五条都是框架端点，后端不 fork vendor、也不在自己这层再包一份写面
   （包了就违反「同一判据两处各写一遍 = 缺陷」的矩阵 R6）。
 - 进 console 的总闸（`routes/api.php:36-42`：`domain.console` + `tenant.permission:tenant_admin`）**管不到这一层** ——
   它判的是「能不能进后台」，不是「这条 operator 记录动不动得」。
 
-⇒ **框架补出服务端判据后，back 的 `is_self` 回显与前端禁用仍保留**（防误点独立有价值），
+⇒ **框架补出服务端判据后，后端的 `is_self` 回显与前端禁用仍保留**（防误点独立有价值），
 但 `MemberController` 类注释 `:44-47` 那段「框架没有这道闸门」的登记应删。
 
 复核：2026-10-05，行号已对源码验证
 
 ### 要框架定的一件事
 
-请在**服务端**补判据（back 不代做，也不在 vendor 里打补丁）；取向可选，也可以都要：
+请在**服务端**补判据（后端不代做，也不在 vendor 里打补丁）；取向可选，也可以都要：
 
 - **① 自我隔离**：拒绝 `operator_id === 调用者` 的自我停用 / 自我降权 / 自我移除。
 - **② 最后一个 admin 保护**：本区只剩一个 `tenant_admin` 时拒降权、拒移出。
@@ -1217,13 +1217,13 @@ cd /Users/arthur/Devel/WorkSpaceAI/mynet-club/mynet_api && grep -n "auth()->user
 
 ---
 
-## 缺陷 16 —— 框架模型日期序列化成**无偏移**的 `Y-m-d H:i:s`：与 back 自有端点同页混用差 8 小时
+## 缺陷 16 —— 框架模型日期序列化成**无偏移**的 `Y-m-d H:i:s`：与后端自有端点同页混用差 8 小时
 
 ### 现象
 
-**全绿而显示错**：同一组 console 页面里，back 自有端点的时间显示对、框架模型的时间**早 8 小时**，
+**全绿而显示错**：同一组 console 页面里，后端自有端点的时间显示对、框架模型的时间**早 8 小时**，
 而错的那批看起来完全合理（`2026-10-04 09:56:23` 这种串没有任何东西提示它不是本地墙钟）。
-2026-10-04 #37 浏览器实测：「租户档案」创建时间显示 **17:20**（back，对），
+2026-10-04 #37 浏览器实测：「租户档案」创建时间显示 **17:20**（后端，对），
 「邀请码」失效时间显示 **09:56**（框架，真实本地时刻 **17:56**）。没有错误码、没有告警，
 只有和同页另一批 ISO 值并排比才露馅 —— 这也是为什么它排在本批「全绿而无后果」那一类里。
 
@@ -1241,12 +1241,12 @@ cd /Users/arthur/Devel/WorkSpaceAI/mynet-club/mynet_api && grep -n "auth()->user
   `module-auth/Models/InviteCode.php:26`、`module-infrastructure/Models/Tenant.php:27` 等 ⇒
   不是个别视图的问题，是框架 JSON 面的统一形状。
 - **应用时区实测为 UTC**：`config('app.timezone')` 运行时取值 **UTC**；本仓 `config/*.php` 里
-  **grep `timezone` 命中 0**（back 无 `config/app.php` 覆盖，Laravel 11 slim skeleton）。
-  于是同一瞬间两种显示：back `toIso8601String()` → `2026-10-04T10:09:59+00:00` →
+  **grep `timezone` 命中 0**（后端无 `config/app.php` 覆盖，Laravel 11 slim skeleton）。
+  于是同一瞬间两种显示：后端 `toIso8601String()` → `2026-10-04T10:09:59+00:00` →
   前端 `toLocaleString('zh-CN')` = **18:09**（对）；框架 `2026-10-04 10:09:59` → 前端 = **10:09**（早 8 小时）。
-- **back 不共享这个形状**：本批复核 `grep -rln "SerializesFriendlyDates" app/` = **0 命中** ⇒
-  back 自有读模型全部显式 `toIso8601String()`（例如 `Console/V1/MemberController.php:98-100`、`:76`）——
-  也就是说**这个差是「框架面 vs back 面」的差，任何把两类端点放进同一页的下游都会撞**。
+- **后端不共享这个形状**：本批复核 `grep -rln "SerializesFriendlyDates" app/` = **0 命中** ⇒
+  后端自有读模型全部显式 `toIso8601String()`（例如 `Console/V1/MemberController.php:98-100`、`:76`）——
+  也就是说**这个差是「框架面 vs 后端面」的差，任何把两类端点放进同一页的下游都会撞**。
 
 ### 复现方式
 
@@ -1261,14 +1261,14 @@ echo json_encode(["tz"=>config("app.timezone"), "wall"=>date_default_timezone_ge
 两者在浏览器里 `new Date()` 之后的本地显示相差访客所在时区的偏移。
 构建面无需触碰；对照读源码：`sed -n '19,22p' vendor/dsplat/multi-tenant-saas/src/Concerns/SerializesFriendlyDates.php`。
 
-### back 现状的兜底
+### 后端现状的兜底
 
-三道，**没有一道能修「归属」，都只把症状压住**（这条的根因判据必须框架定，back 不自定）：
+三道，**没有一道能修「归属」，都只把症状压住**（这条的根因判据必须框架定，后端不自定）：
 
 1. `mynet_gui/src/utils/format.ts` 的 `toDate()` 收口：含 `T` 直接 parse，否则先 `replace(' ', 'T')` ——
    注释里就写明它**只解决能不能 parse，不解决偏移归属**。
-2. back 自有端点一律显式 `toIso8601String()`（`Console/V1/MemberController.php:98-100` 等），
-   保证 back 面内部自洽；框架端点原样透出（back 不改 vendor 的序列化）。
+2. 后端自有端点一律显式 `toIso8601String()`（`Console/V1/MemberController.php:98-100` 等），
+   保证后端面内部自洽；框架端点原样透出（后端不改 vendor 的序列化）。
 3. **裁定 G4**（`dev-plan.md:531`）已定生产 `app.timezone` = **Asia/Shanghai**，随 G-6 部署落：
    两个来源都按东八区墙钟解释 ⇒ **本机访问时 8 小时差消失**。⚠️ 但这只是把两边拉回同一墙钟，
    **不改变「无偏移」这个形状** —— 跨时区访客仍会把框架那批串按自己本地时区解释而读错，
@@ -1281,7 +1281,7 @@ echo json_encode(["tz"=>config("app.timezone"), "wall"=>date_default_timezone_ge
 
 ### 要框架定的一件事
 
-请定一条口径（back 不自定，因为改的是**所有下游都在读**的那一列形状）：
+请定一条口径（后端不自定，因为改的是**所有下游都在读**的那一列形状）：
 
 - **① 推荐**：`serializeDate()` 改回**带偏移的 ISO8601** —— 前端一律能正确还原瞬间，
   `Y-m-d H:i:s` 的人类可读诉求可以在视图层解决。
@@ -1289,7 +1289,7 @@ echo json_encode(["tz"=>config("app.timezone"), "wall"=>date_default_timezone_ge
   并要求 `app.timezone` 与部署时区一致 —— 那下游就都得按「不做时区换算」处理。
 
 **顺带一问（同一条的部署侧）**：`app.timezone` 保持 UTC 是有意取向还是没配过？
-back 生产时区已按裁定 G4 定为 Asia/Shanghai，但这条最好由框架确认「默认 UTC + 无偏移序列化」不是配套设计。
+后端生产时区已按裁定 G4 定为 Asia/Shanghai，但这条最好由框架确认「默认 UTC + 无偏移序列化」不是配套设计。
 
 ---
 
@@ -1337,18 +1337,18 @@ cd /Users/arthur/Devel/WorkSpaceAI/mynet-club/mynet_api/resources/js/console && 
 **计数 16 沿用 2026-10-04 的实测结果**（本批只复核了 ② 两处的 `file:line`，未重跑全量 tsc —— 那条要装依赖、耗时长）；
 `include` 覆盖 vendor 与 `src/Modules/**` 这一形状未变。
 
-### back 现状的兜底
+### 后端现状的兜底
 
 **闸门按路径筛，退出码不作判据**（不改 vendor 一行、不 fork）：
 
 - `make check` 里的类型检查用上面第二条命令的形状 —— `grep -E "src/Modules|app/Modules"` 为空即绿。
-  这条筛法依赖 tsconfig 的 include 形状，**框架侧若调整目录结构，back 的筛法要跟着改**（已登记为脆弱点）。
+  这条筛法依赖 tsconfig 的 include 形状，**框架侧若调整目录结构，后端的筛法要跟着改**（已登记为脆弱点）。
 - ⚠️ **一条仍然敞着的盲区，本批只登记不修**：`vue-tsc` 未装 ⇒ `.vue` 的 `<script>` 块**不在检查范围外**，
   那一段仍靠 `vite build` + 浏览器实测兜（本轮的页面级实测覆盖）。同族盲区在
   `mynet_gui` 的验证工具上另有五条登记（项目记忆），两处不是同一套工具。
 
-⇒ 框架若保证「源可被下游 include 进 typecheck」，back 这条 grep 筛法可以换成退出码闸门，
-  届时要删的是 back 自己的 `make check` 里那段 grep（不在本文档维护）。
+⇒ 框架若保证「源可被下游 include 进 typecheck」，后端这条 grep 筛法可以换成退出码闸门，
+  届时要删的是后端自己的 `make check` 里那段 grep（不在本文档维护）。
 
 复核：2026-10-05，② 两处行号已对源码验证；16 这条计数为 2026-10-04 实测沿用
 
@@ -1412,7 +1412,7 @@ cd /Users/arthur/Devel/WorkSpaceAI/mynet-club/mynet_api && sed -n '110,114p;126,
 ⚠️ 口径：本批**未做触发实测** —— 「造两区 pending 再点 A 的链接」要写 `operators` / `operator_tenants` 两张表，
 属数据动作，未请示就不动；上面是代码级取证。
 
-### back 现状的兜底
+### 后端现状的兜底
 
 **没有兜底件，只有如实回显**（裁定 G3「只上报不代做」+ 不改 vendor、不加假成功）：
 
@@ -1420,9 +1420,9 @@ cd /Users/arthur/Devel/WorkSpaceAI/mynet-club/mynet_api && sed -n '110,114p;126,
   `is_active=false` —— 类注释 `:32-36` 写明后者还包含停用/移出，两者混起来会把停用的成员显示成「等他点邮件」）。
 - `TenantMembers.vue` 对 `pending` 条目给「重发邀请」按钮：对**全新账户**真实可用（这是主用途），
   对**已激活账户的第二条 pending** 注定失败 ⇒ 服务端 `DomainException` 原文回显成 422
-  （`OperatorController.php:221-226`），**back 不自造绕行**（不预筛 `is_active` 把按钮藏掉，那等于替框架掩盖这条）。
+  （`OperatorController.php:221-226`），**后端不自造绕行**（不预筛 `is_active` 把按钮藏掉，那等于替框架掩盖这条）。
 - 多区归属这一取向本身已被裁定 **D1「v1 不做多区自助」**收口（`dev-plan.md:520`）⇒
-  back 侧只按「一个账户在本区一条关联」运作，所以过头那半在 mynet 当前形态下**不可达**，
+  后端侧只按「一个账户在本区一条关联」运作，所以过头那半在 mynet 当前形态下**不可达**，
   而**不够**那半可达（同一个 Operator 被两个区邀请是 console 运营会做的事）。
 
 ⇒ 框架若把 `acceptInvite()` 收窄到本次 token 所属关联、`resendInvite()` 改成 `operator + tenant` 粒度，
@@ -1432,7 +1432,7 @@ cd /Users/arthur/Devel/WorkSpaceAI/mynet-club/mynet_api && sed -n '110,114p;126,
 
 ### 要框架定的一件事
 
-三问，back 都不自决：
+三问，后端都不自决：
 
 - **① `acceptInvite()` 是否收窄到本次 token 所属的那一条关联？** 要收窄就得先定
   **token 与租户的绑定放哪儿** —— 现在 token 存在 `operators` 行上（`:59`/`:64`），一账户一 token，
@@ -1443,11 +1443,11 @@ cd /Users/arthur/Devel/WorkSpaceAI/mynet-club/mynet_api && sed -n '110,114p;126,
   mynet 已裁 v1 不做多区自助，但**框架侧的 Operator 关联本来就是多区的**，
   所以这两条形状问题不该由单个下游的取向决定。
 
-**back 侧本轮不动框架、不加假成功**：按钮保留（对全新账户真实可用），失败原文回显。
+**后端侧本轮不动框架、不加假成功**：按钮保留（对全新账户真实可用），失败原文回显。
 
 ---
 
-## 对齐请求 1 —— 属主判定（Owner Guard）**方法签名对齐** + back 侧接线计划
+## 对齐请求 1 —— 属主判定（Owner Guard）**方法签名对齐** + 后端侧接线计划
 
 ### 这条为什么不在「缺陷」序列里
 
@@ -1457,20 +1457,20 @@ cd /Users/arthur/Devel/WorkSpaceAI/mynet-club/mynet_api && sed -n '110,114p;126,
 **不按「请求框架新增能力」提**。
 
 > **本批把它改写成「三条语义差」而不是「请补一个方法」**：下一节的现状核对查实，
-> 框架的判定核心**已经在框架仓落地**（`538986f5`，2026-10-04 23:37），只是还没进 back 的 vendor 快照。
+> 框架的判定核心**已经在框架仓落地**（`538986f5`，2026-10-04 23:37），只是还没进后端的 vendor 快照。
 > 所以要对齐的不再是「有没有」，而是 **`ownerUserId = null` 的归属语义**、**reasonCode → HTTP 的映射权威**、
-> **level/rights/credits 这三条判定与 back v1 权益合同的关系** —— 三条里第 ① 条若不先定，接线本身会把
-> back 的 fail-closed 静默翻成 fail-open。
+> **level/rights/credits 这三条判定与后端 v1 权益合同的关系** —— 三条里第 ① 条若不先定，接线本身会把
+> 后端的 fail-closed 静默翻成 fail-open。
 
-### 现状核对（2026-10-05 只读）：框架侧**已经落地了一个判定核心**，但它还没进 back 的 vendor
+### 现状核对（2026-10-05 只读）：框架侧**已经落地了一个判定核心**，但它还没进后端的 vendor
 
 先更正本条撰写时的初判（原判「vendor 0 命中 ⇒ 方法尚未出现，可能在框架仓未发布」——**后半已经查实**）：
 
 | 事实 | 取证 |
 |---|---|
-| back 的 vendor 里没有任何属主判定方法 | `grep -rln "OwnerGuard\|ownsResource\|isOwnerOf\|UserAccessPolicy" mynet_api/vendor/dsplat/` ⇒ **0 命中** |
+| 后端的 vendor 里没有任何属主判定方法 | `grep -rln "OwnerGuard\|ownsResource\|isOwnerOf\|UserAccessPolicy" mynet_api/vendor/dsplat/` ⇒ **0 命中** |
 | 框架仓里**已有**统一判定核心，2026-10-04 23:37 落地 | 框架源码 `/Users/arthur/Devel/WorkSpaceAI/framework/multi_tenant_saas`（本仓 `composer.json:2` 的 name 就是 `dsplat/multi-tenant-saas`，即 vendor 根包的**本体**）；提交 `538986f5 feat(user-ai): add unified user access policy decision`、`b25c4158 … gate coupon tool with access policy`（同日 23:47）、HEAD `85aac250` |
-| 但它**不在 back 装的快照里** | `composer.lock` 根包 = `dev-main @ e02594ae`（**2026-10-04 12:18**），`git merge-base --is-ancestor 538986f5 e02594ae` ⇒ **不在**（快照早于该提交 11 小时）⇒ **接线的前置动作 = 等下一次包下发，不是等框架从零实现** |
+| 但它**不在后端装的快照里** | `composer.lock` 根包 = `dev-main @ e02594ae`（**2026-10-04 12:18**），`git merge-base --is-ancestor 538986f5 e02594ae` ⇒ **不在**（快照早于该提交 11 小时）⇒ **接线的前置动作 = 等下一次包下发，不是等框架从零实现** |
 | 框架自己的登记也说明只到「判定核心」 | `docs/governance/LEDGER.md:139`（U1）：「当前只提供统一只读判定核心，**未宣称 self-scope 工具或 right-gated 入口已接线**」 |
 | 判定核心已被测 | `tests/UserAi/UserAccessPolicyTest.php:25-46` 覆盖 7 条 reasonCode 分支 |
 
@@ -1494,44 +1494,44 @@ tenant_mismatch :21-23 → identity_required :24-26 → identity_inactive :27-29
 
 ### 三条**必须先对齐才能接**的语义差（这是本条的正题，不是「请求新增能力」）
 
-**① 最重要：`ownerUserId = null` 在框架形状里是「不判属主」，在 back 判据里是「拒」。**
+**① 最重要：`ownerUserId = null` 在框架形状里是「不判属主」，在后端判据里是「拒」。**
 
 - 框架：`UserAccessPolicy.php:33` `if ($policy->ownerUserId !== null && $policy->ownerUserId !== $context->userId)`
   ⇒ **null 直接跳过这条判定 = 放行**。
-- back：`OwnerGuard.php:53-55` `$ownerId !== null && (int) $ownerId === $userId` ⇒ **归属列 NULL/0 一律拒**。
+- 后端：`OwnerGuard.php:53-55` `$ownerId !== null && (int) $ownerId === $userId` ⇒ **归属列 NULL/0 一律拒**。
 - ⇒ **若不补判据就照形状接线，`nodes`/`routes`/`connections`/`ip_pools` 等 7 处的存量无主行会从「谁都写不了」
   翻成「谁都能写」** —— 那正是裁定 A1 的 fail-closed 与 A5 的「一步收 NOT NULL + DBA 回填」要防的事
   （`dev-plan.md:510`/`:514`），而且**翻得很安静**（框架返回 `allowed`，没有任何异常面）。
 - 请求框架定的那句：**属主判定要不要区分「资源无主」与「本操作不需要属主」**？
-  两解都可以，但要显式：**(A)** `ownerUserId` 用 `null` 表示「不需要属主」、另给一个「无主」哨兵（back 建议，改动小）；
-  **(B)** 由 back 在构造 policy **之前**自己判 NULL/0 拒（back 能接受，但这条判据就永久留在 back 侧 = 矩阵 R6 的一处例外，
+  两解都可以，但要显式：**(A)** `ownerUserId` 用 `null` 表示「不需要属主」、另给一个「无主」哨兵（后端建议，改动小）；
+  **(B)** 由后端在构造 policy **之前**自己判 NULL/0 拒（后端能接受，但这条判据就永久留在后端侧 = 矩阵 R6 的一处例外，
   要在框架文档里写明「无主行的判据属下游」）。
-  ⚠️ **back 不擅自选**，也**不在框架下发前把 `owns()` 改掉** —— 现在的 fail-closed 是对的，宁可暂时不接。
+  ⚠️ **后端不擅自选**，也**不在框架下发前把 `owns()` 改掉** —— 现在的 fail-closed 是对的，宁可暂时不接。
 
 **② `decide()` 回的是决策对象，不是布尔/异常 ⇒ 要一张 reasonCode → HTTP 的映射表**
 
-back 的出口已登记在错误码清单里（`spec/v1-error-codes.md` §2.1：越权 = `DomainException::forbidden()` → 403 + `DOMAIN_FORBIDDEN`），
+后端的出口已登记在错误码清单里（`spec/v1-error-codes.md` §2.1：越权 = `DomainException::forbidden()` → 403 + `DOMAIN_FORBIDDEN`），
 接线时得逐条落定：`owner_mismatch` / `tenant_mismatch` → **403**；`identity_required` / `identity_inactive` → 走 401 还是 403
-（back 现在无身份就是 403，因为 `auth:sanctum` 已先挡；**这条不要顺手改成 401**，改了会动既有契约）；
-`level_insufficient` / `right_missing` / `credits_insufficient` → back **v1 不产生**（见 ③）。
+（后端现在无身份就是 403，因为 `auth:sanctum` 已先挡；**这条不要顺手改成 401**，改了会动既有契约）；
+`level_insufficient` / `right_missing` / `credits_insufficient` → 后端 **v1 不产生**（见 ③）。
 ⇒ 请框架把这张表的**权威口径**写进 `resources/kb/`，否则七个 reasonCode 会各下游翻译一遍。
 
-**③ `level` / `rights` / `credits` / `scoreVersion` 进了判定核心，但 back 的 v1 合同里没有它们**
+**③ `level` / `rights` / `credits` / `scoreVersion` 进了判定核心，但后端的 v1 合同里没有它们**
 
 - 框架 `UserAccessContextResolver::resolve(int $tenantId, int $userId, array $rights = [])`
   （`src/Modules/UserAi/Access/UserAccessContextResolver.php:17-52`）从服务端派生：`tenant_users.is_active` + `credits`（`:28-36`）、
   `users.is_active`（`:38-43`），并明文规定 **「`rights` 只能由受信业务服务传入，不接受请求参数」**（`:11-14` 注释）
-  —— 这半与矩阵 **R4** 完全一致，back 支持并会照用。
-- 但 back 侧裁定 C1（`dev-plan.md:519`）已定：**权益只做租户级 `subscription_plan`，用户级 level/score/right 明确不进 v1 合同**；
-  而 F-28 的取证是**库里根本没有 `level`/`score` 列**、`credits` 只在 `tenant_users` 上且 back 未在用。
+  —— 这半与矩阵 **R4** 完全一致，后端支持并会照用。
+- 但后端侧裁定 C1（`dev-plan.md:519`）已定：**权益只做租户级 `subscription_plan`，用户级 level/score/right 明确不进 v1 合同**；
+  而 F-28 的取证是**库里根本没有 `level`/`score` 列**、`credits` 只在 `tenant_users` 上且后端未在用。
 - 默认值是惰性的（`minimumLevel = null` / `creditsRequired = 0` / `rights = []` ⇒ 三条分支都不会触发），
-  所以 back **可以**接属主与租户两条而不引入权益语义。⚠️ 但有两处要框架答一句：
-  **(a)** resolver 把 `users.is_active` 也当判定输入（`:38-43`）⇒ back 的账号若无 active `tenant_users` 行会得到
-  `identity_inactive`，**与 back 现在的「上下文为空 ⇒ 下游自己判」语义不同**（这条正是缺陷 10 同族的归属问题）；
-  **(b)** `level`/`credits` 是不是框架打算逐步接进**通用**用户面判据？若是，back 需要先重裁 C1，
+  所以后端 **可以**接属主与租户两条而不引入权益语义。⚠️ 但有两处要框架答一句：
+  **(a)** resolver 把 `users.is_active` 也当判定输入（`:38-43`）⇒ 后端的账号若无 active `tenant_users` 行会得到
+  `identity_inactive`，**与后端现在的「上下文为空 ⇒ 下游自己判」语义不同**（这条正是缺陷 10 同族的归属问题）；
+  **(b)** `level`/`credits` 是不是框架打算逐步接进**通用**用户面判据？若是，后端需要先重裁 C1，
   而不是在接线里被动接受。
 
-### back 现在的签名（框架下发后 `OwnerGuard` 退成适配层）
+### 后端现在的签名（框架下发后 `OwnerGuard` 退成适配层）
 
 ```php
 // app/Modules/VPN/Domain/Guards/OwnerGuard.php
@@ -1542,9 +1542,9 @@ public static function authorize(string $ability, Model $resource): void;       
 
 与框架形状的**结构性差**（接线时的适配动作，不必框架改）：
 
-1. **框架收 `ownerUserId: ?int`，不收 `Model` + 列名** ⇒ 「从哪个列读归属」这件事**永久留在 back**：
+1. **框架收 `ownerUserId: ?int`，不收 `Model` + 列名** ⇒ 「从哪个列读归属」这件事**永久留在后端**：
    `node_route_requests` 的 `source_user_id` / `target_user_id` 两列（同一张表要按不同列判两次）
-   只能由 back 的适配层读出来后喂给 policy。**这条不请求框架改**，但要说清：框架的下一次扩容若要收 `Model`，
+   只能由后端的适配层读出来后喂给 policy。**这条不请求框架改**，但要说清：框架的下一次扩容若要收 `Model`，
    请保持「列名可指定」的语义。
 2. **身份只从已认证主体取**（矩阵 R4）：`authorize()` 的实现里写死了这条（`OwnerGuard.php:61-63` 注释与 `:71-74`），
    与框架 resolver 的「不接受请求参数」同源 ⇒ 接线时 `UserAccessContext::userId` 一律来自 `auth()->user()`，
@@ -1552,11 +1552,11 @@ public static function authorize(string $ability, Model $resource): void;       
 3. **拒绝要翻成 `DomainException::forbidden()`**（已登记码 `DOMAIN_FORBIDDEN`），不是 Laravel 默认的
    `AuthorizationException`（那会多出一套码）。
 4. **绝不掺入 tenant 管理员语义** —— 用户面不表达 tenant 权限是 10-04 的既有裁定；
-   框架若把 `canAccessTenant()` 之类塞进同名方法，back **不会接**（那是另一种身份模型）。
-   `tenant_mismatch` 那条是**归属**判定、不是管理员语义，back 接。
+   框架若把 `canAccessTenant()` 之类塞进同名方法，后端 **不会接**（那是另一种身份模型）。
+   `tenant_mismatch` 那条是**归属**判定、不是管理员语义，后端接。
 
 
-### back 侧接线计划（框架包下发后**一次接完**，改动面就在这几处）
+### 后端侧接线计划（框架包下发后**一次接完**，改动面就在这几处）
 
 | # | 停等的调用点（2026-10-05 逐个复核行号） | 所属方法 | 现状出口 |
 |---|---|---|---|
@@ -1569,7 +1569,7 @@ public static function authorize(string $ability, Model $resource): void;       
 | 7 | `app/Modules/Social/Domain/Services/SocialDomainService.php:538` | `removeSocialConnection()` `:531` | 已改 `DomainException` ⚠️ **行号漂移**：dev-plan A1 行记 `:509` / `:510`，D2 在其上方插入 `establishFriendship()`（`:227`）后落在 **`:538`** |
 
 **接线动作**（一次做完，不分批）：这 7 处改为调用框架的判定核心（`UserAccessPolicyContract::decide`，
-经 `OwnerGuard` 委托到它 —— 框架收的是 `UserResourcePolicy` 值对象，不收 Model + 列名，所以**列读取永久留在 back**，
+经 `OwnerGuard` 委托到它 —— 框架收的是 `UserResourcePolicy` 值对象，不收 Model + 列名，所以**列读取永久留在后端**，
 这正是留适配层的原因；见上文结构性差 1）；已接线的 4 处写面（`DELETE /nodes/{id}`、`POST /nodes/{id}/operator`、
 `DELETE /route/{id}`、`POST /route/bulk/status`）与已收敛的 6 处
 （`IpPoolDomainService:390,420`、`TenantScopedServiceService:263,343,379,440`）跟着换实现点，
@@ -1585,7 +1585,7 @@ public static function authorize(string $ability, Model $resource): void;       
 `/tmp` 会被清，且框架版本大概率让那份改名直接作废 ⇒ **不要照着它继续做，按框架 API 重新接**。
 
 复核：2026-10-05，7 处行号 + `OwnerGuard` 签名已对源码验证。框架侧状态也已改口重跑：判定核心
-**在框架仓已落地**（`538986f5`，2026-10-04 23:37），**在 back 的 vendor 快照里 0 命中**
+**在框架仓已落地**（`538986f5`，2026-10-04 23:37），**在后端的 vendor 快照里 0 命中**
 （`composer.lock` 根包 `e02594ae`，同日 12:18；`git merge-base --is-ancestor` 判否）
 ⇒ 本条的前置动作是**等包下发**，不是等框架实现。
 
@@ -1595,24 +1595,24 @@ public static function authorize(string $ability, Model $resource): void;       
 
 | `dev-plan` 条目 | 为什么不在本清单 |
 |---|---|
-| **F-1** | 已落（`mynet_api@912ab7e` 补 `rbac.permission` 别名）—— 本来就只是 back 少注册一个别名，不是框架缺陷。 |
+| **F-1** | 已落（`mynet_api@912ab7e` 补 `rbac.permission` 别名）—— 本来就只是后端少注册一个别名，不是框架缺陷。 |
 | **F-2 / F-3 / F-4 / F-5 / F-6** | 已闭环或已关闭：F-2 菜单两套口径的取向已按裁定 D3 落（组头 `VPN`，注入点诉求**已并入缺陷 12 的对照段**，不另立条）；F-3/F-5 按裁定执行完毕；F-4 控制器归属已闭环；F-6 复核后**撤销疑点**（即本文第一批的**缺陷 6**，已在那里记状态）。 |
 | **F-11** | 不是框架缺陷，是**业务取向**，已由裁定 D1「v1 不做多区自助」收口（`dev-plan.md:520`）。它与本清单的关系只有一处：**缺陷 18 的第 ③ 问**明确写了「框架侧 Operator 关联本来就是多区的，不该由单个下游取向决定」。 |
-| **F-12** | **已由 back 于 2026-10-05 在裁定 D2 自行实现**（`mynet_api@37bd540` + `mynet_gui@b80a577`），不需要框架动作。本清单只保留其中一条**框架侧事实**（写给框架确认语义，不作为诉求）：核销只发生在**建号路径**（email `UserAuthController.php:149,159`、sms `:323,326`、OAuth `GatesOAuthRegistration.php:53,57`），**已注册成员凭码入区（join）不产生 `UserRegistered`** ⇒ back 的「核销即成好友」只覆盖新人。 |
-| **F-13** | 是 **back 的交付件**（给 DBA 的建库 DDL 与生成器对不上），取向已裁（裁定 E1「只取 back 启用的 74 张」）。它牵到框架的只有一句：那 47 张下游表**本来就不该由 mynet 建**，属交付口径不属框架缺陷。 |
-| **F-22 … F-28** | 七条全是 **back 侧裁决项**（2026-10-04 P0 审计提出，全文在 [`spec/v1-permission-matrix.md`](spec/v1-permission-matrix.md) §4/§5 与 [`spec/v1-error-codes.md`](spec/v1-error-codes.md) §3/§5），且**已于同日逐项裁完**（`dev-plan.md:515-527`）⇒ 一条都不进这份对外清单。<br>⚠️ 唯一值得框架知道的一句：**F-28 的端别判定**（框架没给资源属主判定、`RbacService::check()` 对非 Operator 主体直接 `return false`、铁律 `identity-model.md` §2/§4 禁止 `User` 持有角色）是「对齐请求 1」成立的前提 —— 本清单**不把它当 bug 提**，因为那是框架有意的设计；back 只按上文请求签名对齐。 |
+| **F-12** | **已由后端于 2026-10-05 在裁定 D2 自行实现**（`mynet_api@37bd540` + `mynet_gui@b80a577`），不需要框架动作。本清单只保留其中一条**框架侧事实**（写给框架确认语义，不作为诉求）：核销只发生在**建号路径**（email `UserAuthController.php:149,159`、sms `:323,326`、OAuth `GatesOAuthRegistration.php:53,57`），**已注册成员凭码入区（join）不产生 `UserRegistered`** ⇒ 后端的「核销即成好友」只覆盖新人。 |
+| **F-13** | 是 **后端的交付件**（给 DBA 的建库 DDL 与生成器对不上），取向已裁（裁定 E1「只取后端启用的 74 张」）。它牵到框架的只有一句：那 47 张下游表**本来就不该由 mynet 建**，属交付口径不属框架缺陷。 |
+| **F-22 … F-28** | 七条全是 **后端侧裁决项**（2026-10-04 P0 审计提出，全文在 [`spec/v1-permission-matrix.md`](spec/v1-permission-matrix.md) §4/§5 与 [`spec/v1-error-codes.md`](spec/v1-error-codes.md) §3/§5），且**已于同日逐项裁完**（`dev-plan.md:515-527`）⇒ 一条都不进这份对外清单。<br>⚠️ 唯一值得框架知道的一句：**F-28 的端别判定**（框架没给资源属主判定、`RbacService::check()` 对非 Operator 主体直接 `return false`、铁律 `identity-model.md` §2/§4 禁止 `User` 持有角色）是「对齐请求 1」成立的前提 —— 本清单**不把它当 bug 提**，因为那是框架有意的设计；后端只按上文请求签名对齐。 |
 | **A1 的「框架出属主判定方法」那半** | 按上文**对齐请求 1** 提，**不按新增缺陷提**：框架本体仓已落地判定核心
-（`538986f5`）但未随包下发到 back 的 vendor ⇒ 要对齐的是签名与三条语义差，不是「请新增能力」。 |
+（`538986f5`）但未随包下发到后端的 vendor ⇒ 要对齐的是签名与三条语义差，不是「请新增能力」。 |
 
 ---
 
 ## 这份清单不要读成的三件事
 
-1. **不要读成「back 已经在按这些绕行做」**：每条的「back 现状的兜底」都写清了哪道是**代码级补丁**
+1. **不要读成「后端已经在按这些绕行做」**：每条的「后端现状的兜底」都写清了哪道是**代码级补丁**
    （缺陷 7 的歧义拒绝、缺陷 9 的监听器、缺陷 11 的 stub、缺陷 13/14 的读模型、缺陷 15 的前端闸门），
    哪道**根本没有兜底**（缺陷 12 只有落点约束、缺陷 18 只如实回显、缺陷 15 的跨租户那半没有兜底）。
-2. **不要读成「back 已经实测触发过」**：本批**只读**取证 —— 凡属**写库 / 改构建配置 / 动生产**的动作一律没做，
+2. **不要读成「后端已经实测触发过」**：本批**只读**取证 —— 凡属**写库 / 改构建配置 / 动生产**的动作一律没做，
    每条的「复现方式」里都用 ⚠️ 标出了「代码级取证」与「实测跑过」的分界（唯一实测跑出过后果的是
    缺陷 12 的 fast-glob 探针与缺陷 7、10 的 `information_schema` / `SHOW INDEX` 只读查询）。
-3. **不要读成「back 等不及就自己改了」**：全清单**没有一处 vendor 改动、没有 fork**；
-   候选方案一律是 `dev-plan` 原文的转述 + back 的倾向，**归属框架拍板**（裁定 G1 的口径）。
+3. **不要读成「后端等不及就自己改了」**：全清单**没有一处 vendor 改动、没有 fork**；
+   候选方案一律是 `dev-plan` 原文的转述 + 后端的倾向，**归属框架拍板**（裁定 G1 的口径）。
