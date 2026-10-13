@@ -359,3 +359,15 @@ api Default：**511 tests / 4875 assertions / 1 skip**。
 1. 生产发布/上线 smoke —— 用户窗口（`deploy.sh plan` 已备）
 2. 实机（OpenWrt/Windows）—— CPI-71 端到端、CPI-80 Wintun
 3. 他人未提交件 —— api TestCase、agent 托盘、web guard
+
+## Mac 本机实机验收（2026-10-13，darwin/arm64）
+
+| 项 | 结果 |
+|---|---|
+| `mynet platform/version` | darwin/arm64 · launchd · capab=service.launchd,tray,apply.osroute |
+| `nodeface sign` | **修一处**：无 mode.json 时扫 `nodes/*/keys`；sign exit 0，base64 输出 |
+| `guest route` | 写出 `driver/gnb/conf/1001/route.conf`，本机行在前 |
+| `update --check/--dry-run` | 活索引给出 `mynet_agent_darwin_arm64_v0.1.2.tgz`（**archive**，非 dmg/pkg）→ CPI-76 本机实证 |
+| 全量测试 | `mynet`+`mynetd`+`shared` 全绿 |
+
+未在 Mac 装 launchd/托盘服务（避免改本机运行态）；.dmg/.pkg 装机链待发布窗口。
