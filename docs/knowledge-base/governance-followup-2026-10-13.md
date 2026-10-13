@@ -308,3 +308,11 @@ api Default：**511 tests / 4875 assertions / 1 skip**。
 
 未全表重写 CPI（体量大、部分仍开）；已修项以本文件+合并台账为准。
 设备/生产验收不进本文。
+
+## G5.b guest 路由写面收口（2026-10-13）
+
+| 项 | 状态 | 证据 |
+|---|---|---|
+| `mynet guest route` | **完成** | 与 Lua gen_route_conf 同构；单测 2 例（agent `8bd35cb`） |
+| Lua `ensure_route_conf` | **委托** | 优先执行器；无 mynet 时本地写兜底（openwrt `f499f02`） |
+| node.generate_route_conf | 保留 | /etc/mynet/conf 侧 cidr-via 表，另一语义 |
