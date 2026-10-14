@@ -145,7 +145,23 @@ flowchart LR
   wintun 适配器/电源/漫游/服务恢复，属「常驻重活」反模式且丢 DPAPI 静态加密）；待实测：wg.exe 的
   syncconf 支持、/installtunnelservice 拷贝语义（192.168.0.5）；②存量迁移：`/etc/wireguard/` 残留与
   .182⇄.188 `wg_exit` 现网活隧道。
-  附带小修：state/last-good 快照自清（只留 N 份或快照不落 security/，12 天长 55 份私钥副本，2026-10-13 已手工清到 1 份）。
+  **Windows home 口径（2026-10-14 用户裁定）**：密钥/配置放 **`C:\ProgramData\MyNet`**（机器级数据标准位，
+  SYSTEM 服务可读写、不被 OneDrive/文档备份同步卷走）；程序进 `C:\Program Files\MyNet\bin`。
+  **不放 Documents**（语义不对 + 私钥会被 OneDrive 同步上云）。
+  **install 认领自动化（2026-10-14 实测短板）**：home 已有 mode.json+密钥（重装/认领场景）时，
+  install 应自动 `setup --online --tenant <mode.json>` 收编或至少给出填好参数的可粘贴命令；
+  现在只给 `<ID>` 占位提示，人工易漏跑 setup → system.json 缺失 → mynetd 不发心跳 → bundle 不下发。
+  **Windows 治理缺口（2026-10-14 183 全清实测四条）**：
+  ① **卸载不清理机器/用户环境变量**：旧装机 setx 的 `HKLM/HKCU\...\Environment\MYNET_{HOME,BIN,GNB_BIN,GATEWAYS}`
+  是全部路径鬼打墙的总根（resolveGNBBinary 第一优先 MYNET_GNB_BIN 显式覆盖）；且 services.exe 环境缓存
+  开机固化，注册表清了不重启也不生效——install 应写**服务级 Environment 覆盖值**（SCM 服务键下
+  REG_MULTI_SZ），uninstall 应清 HKLM/HKCU 残留；
+  ② **Windows OS 路由落地链坏**：apply 的 netsh `interface=` 解析全失败（表空/幽灵 IF 段），`replace→add`
+  遇已存在即 exit 1；resolveDevice 靠「接口上的 VPN IP」找设备而 IP 配置步骤又缺——鸡生蛋；
+  ③ **隧道地址无人配**：Windows 侧 apply 不给 wintun 口配 VPN IP（10.182.236.183 需手工 netsh）；
+  ④ **wintun 口生命周期不稳 + 名称漂移**：adapter 名是 `P2PNet`（描述 GNB Tunnel）而 node.conf 投影无
+  ifname 行——按 gnb_tun 找口必空；且口会自行消失（daemon/会话权限相关）。
+  附带小修：state/last-good 快照自清（只留最近 3 份，2026-10-13 已落）。
 
 **迁移/回滚**：只生成本地迁移/DDL与重复件预检，不实施生产；明确旧rows kind回填来源、唯一键冲突、未知ext、latest维度、降级回滚可保留双kind数据的方式。迁移前备份/验证清单，冲突停止；已有生产数据不得自动去重删除。文件SHA、版本与来源固定；旧下载URL保持filename精确身份。
 
