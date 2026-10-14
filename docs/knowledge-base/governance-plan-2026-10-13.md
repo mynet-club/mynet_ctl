@@ -161,6 +161,13 @@ flowchart LR
   ③ **隧道地址无人配**：Windows 侧 apply 不给 wintun 口配 VPN IP（10.182.236.183 需手工 netsh）；
   ④ **wintun 口生命周期不稳 + 名称漂移**：adapter 名是 `P2PNet`（描述 GNB Tunnel）而 node.conf 投影无
   ifname 行——按 gnb_tun 找口必空；且口会自行消失（daemon/会话权限相关）。
+  **节点迁移实测缺口（2026-10-14，181/182/180/188 收口时发现）**：
+  ⑤ **密钥轮换流程断**：`config keys sync` 401（credential 指纹绑定旧钥）+ 对端 ed25519 环**投影不覆盖
+  已存在公钥**（SSOT「换新钥对端解不开」的坑）→ 设计路径上无法完成轮换；188 重建密钥只能
+  后端直改 node_keys + 手工换对端环。需补：轮换命令（sync 免指纹旧钥）+ 环版本化下发；
+  ⑥ **tun 名被占时 gnb 无 tun 空跑不报错**：新旧双实例并存时后者静默无 tun（180/183 实测），
+  进程活着、一切看似正常但零流量——应 fail loud 或抢名重试；
+  ⑦ **install 不重写已存在的陈旧服务单元**（188 的 mynet_gnb.service 指旧 bin+旧布局 crash-loop 50 次）。
   附带小修：state/last-good 快照自清（只留最近 3 份，2026-10-13 已落）。
 
 **迁移/回滚**：只生成本地迁移/DDL与重复件预检，不实施生产；明确旧rows kind回填来源、唯一键冲突、未知ext、latest维度、降级回滚可保留双kind数据的方式。迁移前备份/验证清单，冲突停止；已有生产数据不得自动去重删除。文件SHA、版本与来源固定；旧下载URL保持filename精确身份。
