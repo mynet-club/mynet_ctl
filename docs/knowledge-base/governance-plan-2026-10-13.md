@@ -161,13 +161,22 @@ flowchart LR
   ③ **隧道地址无人配**：Windows 侧 apply 不给 wintun 口配 VPN IP（10.182.236.183 需手工 netsh）；
   ④ **wintun 口生命周期不稳 + 名称漂移**：adapter 名是 `P2PNet`（描述 GNB Tunnel）而 node.conf 投影无
   ifname 行——按 gnb_tun 找口必空；且口会自行消失（daemon/会话权限相关）。
-  **节点迁移实测缺口（2026-10-14，181/182/180/188 收口时发现）**：
-  ⑤ **密钥轮换流程断**：`config keys sync` 401（credential 指纹绑定旧钥）+ 对端 ed25519 环**投影不覆盖
-  已存在公钥**（SSOT「换新钥对端解不开」的坑）→ 设计路径上无法完成轮换；188 重建密钥只能
-  后端直改 node_keys + 手工换对端环。需补：轮换命令（sync 免指纹旧钥）+ 环版本化下发；
-  ⑥ **tun 名被占时 gnb 无 tun 空跑不报错**：新旧双实例并存时后者静默无 tun（180/183 实测），
-  进程活着、一切看似正常但零流量——应 fail loud 或抢名重试；
-  ⑦ **install 不重写已存在的陈旧服务单元**（188 的 mynet_gnb.service 指旧 bin+旧布局 crash-loop 50 次）。
+  **节点迁移实测缺口（2026-10-14，181/182/180/188 收口时发现；同日复审修正过表述）**：
+  ⑤ **密钥轮换缺编排**（复审修正：环投影是无条件覆盖 `driver/gnb.go:323`，后端有
+  `BundleInvalidator.invalidateAfterKeyChange` + ETag 补拉的正道，非"设计无法轮换"）：
+  实测断链在——token 与设备指纹绑定（`DeviceFingerprintMiddleware`，失配吊销+401），
+  换钥后须重登录；直改 node_keys **不触发失效链** → 对端 ETag 304 继续用旧环（188 实测踩坑）。
+  缺一条把「换钥 → invalidateAfterKeyChange → 对端补拉 → credential 重绑」串起来的
+  轮换命令/console 流程（对应泄漏事故的"密钥轮换待用户"）；
+  ⑥ **tun 缺健康信号**（复审修正：现象实证——tun 名被占时 gnb 进程活着但零流量，180/183；
+  源码层未核）：服务"active"≠隧道可用，mynetd/状态面应加 tun 存在性检查并 fail loud；
+  ⑦ **install 写单元时机早于 setup**（复审修正：writeSystemdUnits 是覆盖写，188 坏单元是
+  install 在 home 无 mode.json 时 `gnbConfRel` 回退 `conf/local/default` 写出的）：
+  单元应改运行期解析（对齐 OpenWrt init 的 node_confdir）或 install 顺序改为 setup 后写单元。
+  **Windows 侧同日修正**：② netsh replace 实为先删后加（`apply_plan.go:572`，原表述有误），
+  183 路由失败真因疑为设备解析/所有权闸（接口无 IP 找不到设备）；③ 隧道 IP 归因待定
+  （Linux gnb 按 route.conf 自配 tun IP，gnb-windows 是否同为未核）；④ 名称漂移成立、
+  "适配器自消失"机制未核。
   附带小修：state/last-good 快照自清（只留最近 3 份，2026-10-13 已落）。
 
 **迁移/回滚**：只生成本地迁移/DDL与重复件预检，不实施生产；明确旧rows kind回填来源、唯一键冲突、未知ext、latest维度、降级回滚可保留双kind数据的方式。迁移前备份/验证清单，冲突停止；已有生产数据不得自动去重删除。文件SHA、版本与来源固定；旧下载URL保持filename精确身份。
