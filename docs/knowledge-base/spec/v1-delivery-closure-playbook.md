@@ -66,7 +66,7 @@ DC-1/DC-2回滚为恢复代码与重新构建，不回滚生产数据；流量�
 |---|---|---|---|
 | DC-1 | 已实现 | make check、路径/入口/快照行为测试通过 | 按用户要求暂缓 |
 | DC-2 | 已实现 | 准备脚本正/拒绝/重跑；embed HTTP首页+JS/CSS；标签测试通过；workflow静态校验 | CI未执行，实机暂缓 |
-| DC-3 | 归档侧已实现；安装器来源验证待续 | 三平台真实归档fixture、来源一致/冲突拒绝、GUI指纹；macOS原生双二进制zip构建通过 | 上传/安装器验收未执行 |
+| DC-3 | 归档侧+安装器侧已实现；上传/实机验收待续 | 归档：三平台真实归档fixture、来源一致/冲突拒绝、GUI指纹。安装器：SOURCES 嵌入+sidecar、check-installer-sources 复核、构建脚本缺来源/kind错配拒绝不产半包；workflow 已存在版本做来源复核后才 SKIP；目标矩阵六腿交叉编译通过 | 上传/安装器验收未执行 |
 | DC-4 | 复用L1/L2清单 | 不勾实测 | 用户明确暂缓实机验收 |
 | DC-5 | 复用H/O合同 | Windows/Linux/OpenWrt交叉编译通过；非实机运行 | 用户明确暂缓实机验收 |
 | DC-6 | 本文已建立 | 已核对本机基线 | 不适用 |
@@ -79,6 +79,20 @@ DC-1/DC-2回滚为恢复代码与重新构建，不回滚生产数据；流量�
 - 自动化：agent make check通过（实际扫描本批改动）；Windows amd64/Linux amd64全仓与OpenWrt mipsle执行器/daemon交叉编译通过；shellcheck、workflow YAML解析和各run块bash语法通过（静态，不冒充CI运行）；新增真实脚本/归档行为测试通过。
 - 本轮只改agent与ctl知识库；不部署、不上传、不轮换密钥、不操作实机。用户选择“先完成本地开发，实机验收暂缓”。下一本地包：DC-3安装器来源记录与复核；DC-4/5的实机项继续保留未验，不据此勾M4/M6。
 
+### 2026-10-15 第二批：DC-3 安装器来源记录与复核
+
+范围：mynet_desktop（安装器构建/复核/门禁）+ 发布 workflow；不改 agent 运行时、不上传、不部署、不操作实机。
+
+- **来源记录**：`build-nsis.sh` / `build-pkg.sh` 要求 agent dist 带 `SOURCES.txt`（缺失即失败、不产半包）；NSIS 将 SOURCES 落 `$INSTDIR`（`mynet-agent.nsi` 无 `/nonfatal`，缺则编译失败）、pkg 落 `/opt/mynet/share/SOURCES.txt`、dmg 内带 `SOURCES.txt`；三者均写 `*.SOURCES.txt` sidecar 供无解包工具环境复核。
+- **来源复核**：新增 `scripts/check-installer-sources.sh PKG EXPECTED`。archive（tgz/zip/tar.gz）解包内 SOURCES；installer（exe/pkg/dmg）优先 sidecar、否则解内嵌；未知扩展名拒绝；取不到 SOURCES 一律失败（「复核不了」不算通过）。目录形态与 pack.sh 输入同源。
+- **kind 选择错误拒绝**：build-nsis 只接受 `mynet_agent_windows_*`、build-pkg 只接受 `mynet_agent_darwin_*`（kind 检查先于二进制检查，错配报 kind 而非「缺 mynet」）；check 脚本不猜未知扩展名。
+- **发布侧**：desktop `release.yml` publish 步已存在版本改为下载后 `check-installer-sources` 逐字比对，不一致拒绝（不覆盖已发布 provenance）；HTTP 非 200/404 停止；sidecar 不进 GitHub Release 资产、不进 ctl 上传循环。publish 作业检出 mynet_desktop 以取复核脚本。
+- **行为测试**（desktop `make check`）：`test_installer_sources` 10 项（目录/exe sidecar/归档一致与不一致、缺 SOURCES、未知 kind、空期望）；`test_installer_build_rejects` 6 项（build-nsis/pkg 缺 SOURCES、kind 错配、缺 sidecar、不产半包）。lint 新增 `lint_installer_sources` 9 项静态契约。
+- **自动化**：desktop `make check` **41 lint + 25 test 全绿**；agent `make check` 通过；release.yml YAML 解析通过、12 个 run 块 `bash -n` 通过（静态，不冒充 CI）；六腿目标矩阵（linux amd64/arm64/mipsle、darwin amd64/arm64、windows amd64）交叉编译通过。
+- **限制**：macOS pkg/dmg 与 NSIS exe 的**真实打包**未在本机跑（缺 makensis/pkgbuild 产物链不阻塞脚本级验收）；ctl 上传、安装器实机安装、升级 kind 选择器仍待实机/线上，不据此勾 M4/M6。Linux tgz 走归档侧 SOURCES（首批已覆盖），本轮不重复打 Linux 安装器。
+
 ### 提交锚点（2026-10-15）
 
 agent：`03b8d92`（DC-1路径）与`92b06b6`（DC-2及DC-3归档侧）。提交前make check、跨平台编译与上述本机验证通过；提交hooks安全/结构门禁通过。尚未push或部署。
+
+desktop（DC-3安装器侧，工作树未提交）：`nsis/build-nsis.sh`、`nsis/mynet-agent.nsi`、`macos/build-pkg.sh`、`macos/build-dmg.sh`、`scripts/check-installer-sources.sh`（新）、`scripts/check.sh`、`.github/workflows/release.yml`。提交前 desktop make check 41+25 全绿、agent make check 通过、六腿交叉编译通过。
