@@ -1,3 +1,5 @@
+> 2026-10-15执行入口：[v1交付收口Playbook](spec/v1-delivery-closure-playbook.md)。DC工作包是H/O/L既有任务的交付拆分，不新增或覆盖本表任务ID；自动化通过与实机验收分别登记。
+
 # MyNet 开发计划
 
 > 依据：`docs/mynet-overview.md`（设计与决策）· `docs/repo-migration.md`（仓库结构与迁移）· 2026-09-23 三仓摸底实测

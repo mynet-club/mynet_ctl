@@ -49,6 +49,12 @@ GUI 的 20 测试通过与类型基线 202 错误/39 文件来自既有实施记
 - **运行投影已实施（同日）**：`projectToRun` 把原生配置投到 `/var/run/mynet/<nodeId>/`；`gnbConfPath` → gnb `-c` 指投影；`service start` 先 `ApplyFromActive` 再起进程；`MYNET_RUN_ROOT` 可覆盖（测试无 root）。Windows 无独立投影，仍指 conf 节点目录。
 - 装机现场若仍在 `/var/lib/mynet` 等旧树，视为 legacy，待迁移。
 
+## 2026-10-15 交付收口入口
+
+用户要求「做playbook，然后持续开发」。当前整体编排：[v1交付收口Playbook](spec/v1-delivery-closure-playbook.md)。承接H/O/L原有任务，先DC-1路径与DC-2发行一致性，之后DC-3来源、DC-4/5实机验收；旧快照不视作当前状态。
+本机基线：agent make check通过；API519/4908/1skip、ctl82/467/1skip、GUI58tests与183条/31文件类型存量错误、desktop40项通过。无线上验收或部署。
+2026-10-15开发结果：DC-1路径与DC-2发行GUI一致性已实施，DC-3归档来源/完整性已实施；新增行为测试、make check、embed HTTP校验、三目标交叉编译通过。具体文件与边界见playbook执行账。agent代码已提交：`03b8d92`（路径）与`92b06b6`（GUI/发行来源）；尚未push。用户已明确实机验收暂缓。下一本地包=安装器来源记录与复核。
+
 ## 下一次开工
 
 **跨平台规划入口（2026-10-10，整体 workspace review）**：读 [审查报告](workspace-review-20261010.md) 与 [安装/运行/构建规划](spec/platform-lifecycle-build-playbook.md)。发现安装器/CLI 的 Windows 常驻机制、macOS label/path/home、Linux权限/env分叉，OpenWrt UCI兜底与Ops合同断层、条件编译/自更新/发行解析缺口；均未修复。下一步 H0→H1/H2，发行 H4 可准备，OpenWrt O1/O6 遵循这些共同合同。最新本机验证：agent make check通过、API471/4690/1skip、ctl54/426/1skip、GUI41 tests与类型棘轮194条/38文件；desktop39项、GNB主通道52项包内单测、UTC实际测试入口通过；web单测缺依赖跳过、OpenWrt目标Lua5.1未验。UTC工作树另有gateway_session进行中变更，本轮只读review与测试，不改其工作；旧“搁置”描述不代表其当前代码无进展。

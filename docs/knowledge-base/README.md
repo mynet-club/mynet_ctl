@@ -126,7 +126,7 @@
 | 顺序 | 文件 | 回答什么 |
 |---|---|---|
 | **① 入口** | [project-memory.md](project-memory.md) | **现在什么状态** + 下一步指向。**状态快照（HEAD / 未推送 / 测试计数）的唯一权威** |
-| **② 当期** | [spec/proxy-permission-loop-playbook.md](spec/proxy-permission-loop-playbook.md) | **下一步具体做什么** —— 当前唯一在跑的线，§10 是唯一未完成清单（七项实机验收） |
+| **② 当期** | [spec/proxy-permission-loop-playbook.md](spec/proxy-permission-loop-playbook.md) | **Proxy验收子线** —— §10 保留七项实机验收；整体交付编排见 [v1交付收口](spec/v1-delivery-closure-playbook.md) |
 | **③ 勾选台账** | [dev-plan.md](dev-plan.md) | **任务勾选记在哪** —— §3 是 76 项计划顺序表，**任务 ID 唯一标识** |
 
 **只管口径、不跟着勾选**：

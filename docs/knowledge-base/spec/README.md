@@ -27,6 +27,7 @@
 
 | 文件 | 操作域 | 适用线 |
 |------|--------|--------|
+| [v1-delivery-closure-playbook.md](v1-delivery-closure-playbook.md) | **2026-10-15交付收口**：路径、发行资产/来源、真实流量与四平台验收；承接H/O/L既有任务 | 当前实施 |
 | [control-plane.md](control-plane.md) | **控制面与传输**：gateway 通道、多点部署、借 node 访问、GUI 接入、心跳链路、proxy 下架 | 目标线 |
 | [node-keying.md](node-keying.md) | **节点密钥与鉴权**：GNB ed25519 密钥派生 / `ed25519_key_exchange` DH / 心跳 HMAC 现状 / gateway 鉴权方案 | 目标线 |
 | [unified-platform-architecture.md](unified-platform-architecture.md) | 统一平台架构 L1~L7 与实施计划（业务与驱动分层） | 目标线 |
