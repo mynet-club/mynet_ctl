@@ -54,7 +54,7 @@ GUI 的 20 测试通过与类型基线 202 错误/39 文件来自既有实施记
 用户要求「做playbook，然后持续开发」。当前整体编排：[v1交付收口Playbook](spec/v1-delivery-closure-playbook.md)。承接H/O/L原有任务，先DC-1路径与DC-2发行一致性，之后DC-3来源、DC-4/5实机验收；旧快照不视作当前状态。
 本机基线：agent make check通过；API519/4908/1skip、ctl82/467/1skip、GUI58tests与183条/31文件类型存量错误、desktop40项通过。无线上验收或部署。
 2026-10-15开发结果：DC-1路径与DC-2发行GUI一致性已实施，DC-3归档来源/完整性已实施；新增行为测试、make check、embed HTTP校验、三目标交叉编译通过。具体文件与边界见playbook执行账。agent代码已提交：`03b8d92`（路径）与`92b06b6`（GUI/发行来源）；尚未push。用户已明确实机验收暂缓。
-2026-10-15第二批：DC-3安装器来源记录与复核已在mynet_desktop实施——build-nsis/build-pkg/build-dmg 嵌入SOURCES+sidecar、`check-installer-sources.sh` 复核、缺来源/kind错配拒绝不产半包、release.yml 已存在版本先复核再SKIP。desktop make check 41 lint+25 test 全绿；agent make check、六腿交叉编译、workflow run块bash -n 通过。desktop工作树未提交。上传/实机仍暂缓，不据此勾M4/M6。下一包=DC-3收尾提交+DC-4/5可本地部分，实机项继续保留未验。
+2026-10-15第二批：DC-3安装器来源记录与复核已在mynet_desktop实施——build-nsis/build-pkg/build-dmg 嵌入SOURCES+sidecar、`check-installer-sources.sh` 复核、缺来源/kind错配拒绝不产半包、release.yml 已存在版本先复核再SKIP。desktop make check 41 lint+25 test 全绿；agent make check、六腿交叉编译、workflow run块bash -n 通过。已提交并推送：desktop `75c670b`、ctl `be0497c`、agent `03b8d92`+`92b06b6`。上传/实机仍暂缓，不据此勾M4/M6。下一包=DC-4/5可本地部分，实机项继续保留未验。
 
 ## 下一次开工
 

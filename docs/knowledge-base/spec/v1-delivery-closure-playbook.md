@@ -95,4 +95,4 @@ DC-1/DC-2回滚为恢复代码与重新构建，不回滚生产数据；流量�
 
 agent：`03b8d92`（DC-1路径）与`92b06b6`（DC-2及DC-3归档侧）。提交前make check、跨平台编译与上述本机验证通过；提交hooks安全/结构门禁通过。尚未push或部署。
 
-desktop（DC-3安装器侧，工作树未提交）：`nsis/build-nsis.sh`、`nsis/mynet-agent.nsi`、`macos/build-pkg.sh`、`macos/build-dmg.sh`、`scripts/check-installer-sources.sh`（新）、`scripts/check.sh`、`.github/workflows/release.yml`。提交前 desktop make check 41+25 全绿、agent make check 通过、六腿交叉编译通过。
+desktop：`75c670b`（DC-3安装器侧：`nsis/build-nsis.sh`、`nsis/mynet-agent.nsi`、`macos/build-pkg.sh`、`macos/build-dmg.sh`、`scripts/check-installer-sources.sh`（新）、`scripts/check.sh`、`.github/workflows/release.yml`）。提交前 desktop make check 41+25 全绿、agent make check 通过、六腿交叉编译通过；pre-push 门禁通过后推送。ctl：`be0497c`（本批执行账）。
