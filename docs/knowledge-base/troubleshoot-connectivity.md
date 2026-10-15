@@ -103,7 +103,7 @@ ls -la "$(dirname "$(ps ... | awk '{print $NF}')")"   # gnb_ctl 是否同目录
 |---|---|---|
 | Linux 生产 | `/var/lib/mynet/driver/gnb/conf/<id>` | 私钥在 `security/` |
 | OpenWrt | `/etc/mynet/driver/gnb/conf/<id>` | ifname 可能是 `gnb_tun_16` |
-| macOS | `/var/lib/mynet/...` 或 `/usr/local/opt/mynet/...` | **多树**，以 ps 为准 |
+| macOS | `/opt/mynet/...`（默认）；旧树 `/var/lib/mynet`、`/usr/local/opt/mynet` 为 legacy | 以 ps 为准 |
 | Windows | `C:\mynet\driver\gnb\conf\<id>` | `gnb.exe -c C:\mynet\...` |
 
 ### 1.5 常见 A 步病灶

@@ -228,7 +228,7 @@ tar xzf mynet_linux_amd64_v1.4.0.tgz && cd mynet/
 
 1. **平台检测**：darwin / linux / openwrt / freebsd
 2. **安装目录决策**：
-   - root 用户：`/opt/mynet`（Linux/OpenWrt）、`/usr/local/opt/mynet`（macOS）
+   - root 用户：`/opt/mynet`（Linux/macOS/BSD）；OpenWrt `/etc/mynet`
    - 普通用户：`~/.local/mynet`（Linux）、`~/Library/Application Support/MyNet`（macOS）
 3. **复制文件**：
    - `bin/` → `$INSTALL_DIR/bin/`（mynet、mynet-updater、mynetd）

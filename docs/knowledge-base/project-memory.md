@@ -39,6 +39,16 @@ P3 已裁定收口：自家节点自动组网、不限制；不建 planner、不
 P4/M4 未收口：OpenWrt 未接统一 Proxy 合同、回程缺口、离线与错误出口证据不足、console 公共出口线未开。
 GUI 的 20 测试通过与类型基线 202 错误/39 文件来自既有实施记录，不是“类型零错误”。
 
+## 路径定稿（2026-10-14，用户裁定）
+
+- **unix 系（linux/mac/bsd）prefix = home = `/opt/mynet`**；OpenWrt prefix=`/usr`、home=`/etc/mynet`；Windows 维持 `C:\Program Files\MyNet` / `C:\ProgramData\MyNet`。
+- **系统级唯一，无用户级模式**（节点守护要 TUN/路由/密钥）。
+- **`/var` 只放运行时**：目标运行投影 `/var/run/mynet/<nodeId>/`（gnb `-c`、map/pid）；**不是 home**。
+- **用词**：conf 里 apply 渲染出的驱动文件 = **原生配置**；**投影**专指 `/var/run` 运行副本。
+- 代码已改默认值：`paths.go` `PlatformDefaultHome/Prefix`、`prefix_unix.go`、tray/install 解析；`GetMyNetHome` 不再猜 exe/cwd（env > 平台默认）。
+- **运行投影已实施（同日）**：`projectToRun` 把原生配置投到 `/var/run/mynet/<nodeId>/`；`gnbConfPath` → gnb `-c` 指投影；`service start` 先 `ApplyFromActive` 再起进程；`MYNET_RUN_ROOT` 可覆盖（测试无 root）。Windows 无独立投影，仍指 conf 节点目录。
+- 装机现场若仍在 `/var/lib/mynet` 等旧树，视为 legacy，待迁移。
+
 ## 下一次开工
 
 **跨平台规划入口（2026-10-10，整体 workspace review）**：读 [审查报告](workspace-review-20261010.md) 与 [安装/运行/构建规划](spec/platform-lifecycle-build-playbook.md)。发现安装器/CLI 的 Windows 常驻机制、macOS label/path/home、Linux权限/env分叉，OpenWrt UCI兜底与Ops合同断层、条件编译/自更新/发行解析缺口；均未修复。下一步 H0→H1/H2，发行 H4 可准备，OpenWrt O1/O6 遵循这些共同合同。最新本机验证：agent make check通过、API471/4690/1skip、ctl54/426/1skip、GUI41 tests与类型棘轮194条/38文件；desktop39项、GNB主通道52项包内单测、UTC实际测试入口通过；web单测缺依赖跳过、OpenWrt目标Lua5.1未验。UTC工作树另有gateway_session进行中变更，本轮只读review与测试，不改其工作；旧“搁置”描述不代表其当前代码无进展。

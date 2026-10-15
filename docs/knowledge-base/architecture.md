@@ -64,7 +64,7 @@ $MYNET_HOME/                           # /opt/mynet 或 ~/.local/mynet
 ```
 
 **$MYNET_HOME 路径决策**：
-- root：`/opt/mynet`（Linux/OpenWrt）、`/usr/local/opt/mynet`（macOS）
+- root：`/opt/mynet`（Linux/macOS/BSD）；OpenWrt `/etc/mynet`
 - 普通用户：`~/.local/mynet`（Linux）、`~/Library/Application Support/MyNet`（macOS）
 - 开发模式（未设置）：降级到 `~/.config/mynet/`
 

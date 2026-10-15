@@ -181,23 +181,23 @@ OpenWrt 上凡**依赖隧道接口**的动作，规则统一为：**安装期只
 
 ## 3. 默认路径与服务名矩阵（B 层登记目标值）
 
-**平台默认 Store Root**（详见 [paths.md](paths.md) §3，install 时写入，之后以 env 为准）：
+**平台默认**（详见 [paths.md](paths.md) §3，2026-10-14 定稿；代码 `PlatformDefaultHome` / `PlatformDefaultPrefix`）：
 
-| 平台 | 默认 prefix | 目标默认 home |
-|---|---|---|
-| Linux | `/opt/mynet` | `/var/lib/mynet` |
-| OpenWrt | `/opt/mynet`（bin 在 `sbin`） | `/etc/mynet` |
-| macOS | `/usr/local/opt/mynet` | `/var/lib/mynet` |
-| Windows | `C:\Program Files\MyNet` | `C:\ProgramData\MyNet` |
+| 平台 | prefix（程序） | home（配置/数据，系统级唯一） | 运行投影 |
+|---|---|---|---|
+| Linux / macOS / BSD | `/opt/mynet` | `/opt/mynet` | `/var/run/mynet/<nodeId>` |
+| OpenWrt | `/usr`（bin 在 `sbin`） | `/etc/mynet` | `/var/run/mynet/<nodeId>` |
+| Windows | `C:\Program Files\MyNet` | `C:\ProgramData\MyNet` | 无 /var/run，维持现状 |
 
-**运行路径矩阵（2026-10-13 D4-E 随动）**：
+**运行路径矩阵**：
 
 | 对象 | 目标位置 | 备注 |
 |---|---|---|
-| 二进制（mynet/mynetd/gnb 四件套） | `<prefix>/bin` | driver/ 安装目录层退役；旧 `home/driver/gnb/bin` 只作查找回退 |
-| 节点实体（密钥 + 驱动 conf） | `<home>/conf/<form>/<nodeId>/` | 唯一存放位；gnb 协议内布局不变 |
-| gnb `-c` 目标 | `<home>/conf/<form>/<nodeId>` | 服务单元生成面按 mode.json 解析 form+nodeId（`__GNB_CONF_REL__`） |
-| wg conf | `<home>/conf/<form>/<nodeId>/wg.conf` | setconf/syncconf 指文件；旧 `/etc/wireguard/<iface>.conf` 只作未迁移兜底 |
+| 二进制（mynet/mynetd/gnb 四件套） | `<prefix>/bin` | 旧 `home/driver/gnb/bin` 只作查找回退 |
+| 节点实体（密钥 + 原生配置） | `<home>/conf/<form>/<nodeId>/` | 唯一存放位；gnb 协议内布局不变 |
+| **运行投影** | `/var/run/mynet/<nodeId>/` | gnb `-c` 指这；map/pid 落这；apply 先投再起服务 |
+| gnb `-c` | `/var/run/mynet/<nodeId>` | 单元占位符 `__GNB_CONF__`；Windows 回落 conf 节点目录 |
+| wg conf（现行） | `<home>/conf/<form>/<nodeId>/wg.conf` | 旧 `/etc/wireguard/<iface>.conf` 只作未迁移兜底 |
 | 密钥格式 | gnb=security/ 下 128/64hex 无换行；wg=wg.conf base64 44 | 磁盘只存驱动原生格式，hex↔base64 只留 DB/上报边界 |
 
 **服务登记目标矩阵**（同名对象只能有一个 owner/一条启动链）：

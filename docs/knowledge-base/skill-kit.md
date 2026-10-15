@@ -174,7 +174,7 @@ mynet platform
 
 ```bash
 # 4.1 二进制从哪来、什么版本
-command -v mynet || ls -l "$HOME/.mynet/bin/mynet" /usr/local/opt/mynet/bin/mynet
+command -v mynet || ls -l /opt/mynet/bin/mynet /etc/mynet/bin/mynet
 mynet version
 mynet platform
 

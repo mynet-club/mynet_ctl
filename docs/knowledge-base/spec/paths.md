@@ -1,10 +1,13 @@
-# 路径 SSOT —— 存储 / 运行 / 投影 / 运行态
+# 路径 SSOT —— prefix / home / 原生配置 / 运行投影
 
 > **地位**：路径问题的唯一事实源。安装、脚本、排障、文档一律引本文件。
 > **动机**：2026-09-30 五节点取证发现同机 3–4 套 home、脚本找不到主主体
 > （`archive/2026-09/evidence/20260930-subject/INDEX.md`）。路径不清 = 用户配置一团乱码。
 >
 > 代码对应：`mynet_agent/shared/utils/paths.go`（实现必须与本文件一致）。
+>
+> **2026-10-14 定稿**：unix 系 prefix/home 统一 `/opt/mynet`；系统级唯一、无用户级模式；
+> `/var` 只放运行时；「投影」一词专指运行时副本。
 
 ---
 
@@ -12,120 +15,110 @@
 
 | 词 | 定义 | 谁定 | 进备份? | 可手改? |
 |---|---|---|---|---|
-| **存储根 Store Root** | 真相源所在根目录 | `MYNET_HOME`（install 写入） | **是** | 只改 `conf/**` |
-| **运行根 Runtime Root** | 进程实际打开的目录 | **`ps` cmdline 的 `-c` 参数** | 否 | 否 |
-| **投影目录 Projection** | 驱动原生配置（gnb/wg） | `driver.Apply` | 可选（易再生） | **禁**（会被覆盖） |
-| **运行态 Runtime State** | map/pid/log/bundle 缓存 | 进程 | **否** | 否 |
+| **prefix** | 程序安装根（`bin/`） | 平台默认或 `--prefix` / `MYNET_PREFIX` | 否 | 否 |
+| **home（Store Root）** | 配置/数据/脚本/辅助的真相源根 | `MYNET_HOME`（install 写入服务单元） | **是** | 只改 `conf/**` |
+| **原生配置 Native conf** | apply 把 intent/bundle 渲染成驱动认的格式（node.conf / wg.conf…） | `mynet apply` | **是**（与密钥同居 conf） | **禁**（会被再生成覆盖） |
+| **运行投影 Projection** | **专为运行时**服务的副本（进程 `-c` 打开的目录） | `mynet apply` 落盘 | **否**（可丢可重投） | **禁** |
 
 **铁律**：
 1. 排障时**运行根只认 `ps`**，不认任何「默认树」。
-2. 每机**只有一棵** Store Root；其余是 legacy/残留，禁止混写。
-3. `MYNET_HOME` 缺失 → **拒绝启动**，不静默落 `~/.mynet`。
-4. 手改只准进 `conf/**`；改 `driver/**` 视为事故。
+2. 每机**只有一棵** home；其余是 legacy/残留，禁止混写。
+3. home 缺失 → 用**平台默认**（§3），禁止猜 exe/cwd、禁止猜用户目录。
+4. 手改只准进 `conf/**`；直接改运行投影视为无效（会被重投）。
+5. **`/var` 不是 home**——`/var/run/mynet/<nodeId>` 只放运行投影，重启可空。
+6. **起服务前必须先 apply 投影**（`service start` 已内置）。
 
 ---
 
-## 2. 目录布局（`$MYNET_HOME` = Store Root）
+## 2. 目录布局
 
-> **定稿（2026-10-12 用户裁定）——三面职责，一个可手改面**：
-> · **`conf/` 是人/云端写意图与身份的唯一面**（`mode.json` 也在这里），格式 JSON（**密钥材料除外**，驱动要裸 hex）。
-> · **驱动 conf 是 apply 投影**：agent 的 apply 链（mynetd 触发 → `mynet apply`）落盘，**手改会被覆盖**。
->   2026-10-13 D4-E 起与密钥**同居节点目录**（`conf/<form>/<nodeId>/` 内的协议布局），`driver/` 投影树退役。
-> · **`var/` 是运行态**：同样由 agent 落盘（bundle 拉取 / detector / tunnel 状态），**不进备份、手改无意义**。
-> · **不再有 `mynetd.env`**：`MYNET_HOME` 由**服务单元的启动命令**给出（见 §2.1）。
+> **定稿（2026-10-14 用户裁定）**：
+> · **二进制**：unix 系统一 `<prefix>/bin`，prefix 默认 **`/opt/mynet`**（linux/mac/bsd）。
+> · **home**：系统级唯一（节点守护要建 TUN/写路由/持密钥，**不做用户级模式**）。
+>   unix = **`/opt/mynet`**（与 prefix 同树）、OpenWrt = `/etc/mynet`、Windows = `C:\ProgramData\MyNet`。
+> · **`conf/`**：意图 + 身份 + **原生配置**（apply 渲染结果），进备份。
+> · **运行投影**：目标位 **`/var/run/mynet/<nodeId>/`**（gnb `-c` 指这里；map/pid 也落这）。
+>   `/var/run` 常为 tmpfs、重启即空 → **起服务前必须先 apply 投影**。
+> · **「投影」只指运行副本**；conf 里的驱动文件叫**原生配置**，不叫投影。
 
-> **节点唯一存放位（2026-10-13 D4-E 裁定）**：每节点实体在 `<home>/conf/<form>/<nodeId>/`
-> （密钥 + 驱动 conf 同居一目录）。`form = local | online` 是**获取 key 的形式**（本地自产生 /
-> 在线下发），不是平行密钥面；tenant 维度收进 `mode.json`/节点 meta，**nodeID 全局唯一**（无租户层）。
-> gnb 协议内布局**不动**（node.conf / route.conf / address.conf / security/<id>.{private,public} /
-> ed25519/*.public / gnb.map 只读）；wg = `wg.conf`（驱动原生，PrivateKey base64 44）。
-> 磁盘只存驱动原生密钥格式（gnb=128hex、wg=base64 44），hex↔base64 只留 DB/上报边界。
-> 旧布局由 `mynet config migrate-layout [--dry-run]` 一次性收口（旧树改名 `.bak-<ts>` 保留）。
+> **节点唯一存放位（2026-10-13 D4-E，现行代码）**：`<home>/conf/<form>/<nodeId>/`
+> （密钥 + 原生配置同居）。`form = local | online` 是获取 key 的形式，不是平行密钥面；
+> nodeID 全局唯一。gnb 协议内布局不动。
+> **运行投影（2026-10-14 已实施）**：apply 将原生配置投到 `/var/run/mynet/<nodeId>/`，
+> gnb `-c` 指这里；`service start` **先投影再起进程**。`MYNET_RUN_ROOT` 可覆盖（测试）。
 
 ```text
-$MYNET_HOME/                         # Store Root（真相源根；由服务单元启动命令给出）
-├── conf/                            # ★唯一可手改面（意图 + 身份），进备份
-│   ├── mode.json                    #   激活谁（local|online + tenant/node/driver）
-│   ├── gateways.json                #   网关列表（原 mynetd.env 的 MYNET_GATEWAYS）
-│   ├── local/                       #   本地模式
-│   │   ├── intent.json              #     抽象意图（无 gnb/wg 术语）
-│   │   ├── proxy_intent.json        #     代理意图（双轨合一后的 Local 轨）
-│   │   ├── plugins/<name>.json      #     插件配置
-│   │   └── <nodeId>/                #     ★节点唯一存放位（D4-E）密钥 + 驱动 conf 同居
-│   │       ├── meta.json            #       身份元数据（node_id/algorithm/back_pub_hex）
-│   │       ├── security/            #       gnb：<id>.private / <id>.public（128/64hex 无换行）
-│   │       ├── ed25519/             #       gnb：<peer>.public
-│   │       ├── node.conf route.conf address.conf proxy.conf
-│   │       ├── wg.conf              #       wg：驱动原生（PrivateKey = base64 44）
-│   │       ├── gnb.map              #       ctl-block（运行态，可再生）
-│   │       └── gnb.pid
-│   └── online/<nodeId>/             #   联网模式：同构节点目录（tenant 在 mode.json）
-│       └── （profile.json 等租户面仍按 tenant 存 conf/online/<tenant>/）
-├── plugins/                         # 插件包体（可重装）
-├── var/                             # ★运行态，不进备份（agent 落盘）
-│   ├── system.json                  # detector 结果
-│   ├── bundle.json (+ .etag)        # 云端 envelope 拉取落盘（唯一一份，勿在 conf/ 再放）
-│   ├── tunnel-state.json
-│   ├── subject.json                 # subject 解析缓存（见 §4）
-│   ├── wg.conf                      # OpenWrt init 兼容回退位（未迁移 init）
-│   ├── run/local-api.token
-│   └── log/
-├── state/
-│   └── last-good/<ts>/              # Apply 成功快照（只留最近 3 份，含密钥副本须自清）
-└── backups/                         # config export/import 与升级备份
+/opt/mynet/                            # unix：prefix 与 home 同树（系统级）
+├── bin/                               # mynet · mynetd · mynet_tray · gnb 四件套
+├── conf/                              # ★唯一可手改面（意图 + 身份 + 原生配置），进备份
+│   ├── mode.json                      #   激活谁（local|online + tenant/node/driver）
+│   ├── gateways.json                  #   网关列表
+│   ├── local/ | online/
+│   │   └── <nodeId>/                  #   ★节点唯一存放位
+│   │       ├── meta.json
+│   │       ├── security/ ed25519/     #   密钥
+│   │       ├── node.conf route.conf address.conf [proxy.conf | wg.conf]  # 原生配置
+│   │       └── …
+│   └── plugins/
+├── plugins/                           # 插件包体
+├── var/                               # 可丢缓存（bundle/system.json/token/log…），不进备份
+├── state/last-good/<ts>/              # apply 成功快照
+└── backups/
+
+/var/run/mynet/<nodeId>/               # ★运行投影（可丢；重启后先 apply 再起服务）
+├── （原生配置副本，gnb -c / wg 指这）
+├── gnb.map · gnb.pid                  # 运行脏文件不进 conf
+└── …
 ```
 
-**二进制安装位（D4-E：driver/ 安装目录层退役）**：gnb 四件套（gnb/gnb_ctl/gnb_es/gnb_crypto）
-与 mynet/mynetd 同居 `<prefix>/bin`（Linux `/opt/mynet/bin`、macOS `/usr/local/opt/mynet/bin`、
-Windows `C:\Program Files\MyNet\bin`、OpenWrt 按 ipk 现状）。旧 `<home>/driver/gnb/bin` 只作
-**查找回退**（存量未迁移节点），不再往那装。旧 `<home>/driver/{gnb/conf,wireguard}/` 同理只作读回退。
+**Windows**：prefix=`C:\Program Files\MyNet`，home=`C:\ProgramData\MyNet`，无 `/var/run`（投影位另定，维持现状）。
+**OpenWrt**：prefix=`/usr`（ipk → `/usr/sbin`），home=`/etc/mynet`。
 
-### 2.1 启动期取值（原 `mynetd.env` 的归宿）
+### 2.1 启动期取值
 
-**`mynetd.env` 已退役**。服务单元（systemd `Environment=` / procd init / launchd plist）在启动命令里给
-`MYNET_HOME`；其余运行参数从 `conf/` 读：
+**`mynetd.env` 已退役**。服务单元写死 `MYNET_HOME`；CLI 无 env 时用平台默认：
 
-| 原 env 项 | 现在从哪来 |
+| 项 | 来源 |
 |---|---|
-| `MYNET_HOME` | **服务单元启动命令**（进程起来前就要知道，无法从 conf/ 里取 —— 先有 home 才有 conf/） |
+| `MYNET_HOME` | 服务单元启动命令；CLI：env > `PlatformDefaultHome()` |
 | `MYNET_GATEWAYS` | `conf/gateways.json` |
-| `MYNET_BIN` | 由 `MYNET_HOME` + 前缀推出（OpenWrt `/usr/sbin`） |
-| `MYNET_EXECUTOR` | 平台默认（OpenWrt `lua`），可 `conf/` 覆盖 |
+| `MYNET_BIN` | `<prefix>/bin/mynet` |
+| 运行投影 | `apply` 落 `/var/run/mynet/<nodeId>/`（目标；现行见 §5） |
 
-调试用的 env 覆盖（`MYNET_CONFIG_HOME` / `MYNET_DATA_HOME` / `MYNET_LOG_DIR` / `MYNET_GNB_BIN`）仍可用，
+调试用 env 覆盖（`MYNET_CONFIG_HOME` / `MYNET_DATA_HOME` / `MYNET_LOG_DIR` / `MYNET_GNB_BIN`）仍可用，
 但**不是配置面**、不写进任何持久文件。
 
 ### 2.2 环境变量（覆盖用，非配置面）
 
 | 变量 | 作用 | 缺失时 |
 |---|---|---|
-| `MYNET_HOME` | Store Root | **拒绝启动**（install/service/executor）——由服务单元给 |
+| `MYNET_HOME` | home | **平台默认**（§3）——不猜 exe/cwd |
+| `MYNET_PREFIX` | 程序前缀 | 平台默认 / exe 反推 |
 | `MYNET_CONFIG_HOME` | 覆盖 `conf/` 位置 | 用 `$MYNET_HOME/conf` |
 | `MYNET_DATA_HOME` | 覆盖 `var/` 位置 | 用 `$MYNET_HOME/var` |
 | `MYNET_GNB_BIN` | 显式 gnb 可执行文件 | 按 §4 解析 |
 | `MYNET_LOG_DIR` | 日志目录 | `$MYNET_HOME/var/log` |
 
-> ⚠️ `MYNET_GATEWAYS` 从本表移除：它是**配置**，归 `conf/gateways.json`；env 里给只作一次性覆盖（调试）。
-
 ---
 
-## 3. 平台默认 Store Root（仅 install 时写入，之后以 env 为准）
+## 3. 平台默认（SSOT = 代码 `PlatformDefaultHome` / `PlatformDefaultPrefix`）
 
-> **默认 home 的 SSOT 是代码**：`mynet_agent/shared/utils/paths.go` 的 `PlatformDefaultHome()`
-> （darwin/linux = `/var/lib/mynet`、windows = `C:\ProgramData\MyNet`），与
-> [`lifecycle-contract.md`](lifecycle-contract.md) §3（G-14 关闭记录）同一口径。
-> 下表右列是 **2026-09-30 实测的现场多树现状**（与 §4「各节点活主体」同源）——
-> 收敛前排障按右列认树，新装/写默认值一律按左列。
+> 代码：`mynet_agent/shared/utils/paths.go`。install 可不显式给 home/prefix，落到下表默认。
 
-| 平台 | 默认 home（SSOT） | 现场多树现状（历史，待收敛） |
-|---|---|---|
-| Linux / OpenWrt | `/var/lib/mynet` | OpenWrt 常用 `/etc/mynet`（182 实测）；另有 `/opt/mynet`（188 实测） |
-| macOS | `/var/lib/mynet` | `/usr/local/opt/mynet` 或 `/var/lib/mynet` 多树并存（181 实测） |
-| Windows | `C:\ProgramData\MyNet` | `C:\mynet`（183 实测）；勿把 prefix `C:\Program Files\MyNet` 当 home（权限） |
+| 平台 | prefix（程序） | **home（配置/数据）** | 运行投影 |
+|---|---|---|---|
+| **linux / mac / bsd** | **`/opt/mynet`** | **`/opt/mynet`** | `/var/run/mynet/<nodeId>` |
+| **OpenWrt** | `/usr`（→ `/usr/sbin`） | `/etc/mynet` | `/var/run/mynet/<nodeId>` |
+| **Windows** | `C:\Program Files\MyNet` | `C:\ProgramData\MyNet` | （无 /var/run，维持现状） |
 
-**收敛目标**：每机只剩一个 Store Root，其余改名 `*.legacy-YYYYMMDD` 或移入 backup。
+**系统级唯一，无用户级模式**。多环境只走显式 `--home` / `MYNET_HOME` 换树，不是第二套内建模式。
 
-> **install 写入的路径与服务登记名**（B 层目标矩阵、服务名一致性）见 [`lifecycle-contract.md`](lifecycle-contract.md) §3；安装/卸载/升级的动作合同见其 §2。
+**现场多树（历史，待收敛）**：`/var/lib/mynet`、`/usr/local/opt/mynet`、`/usr/local/mynet` 等
+（181/180/188 实测，见 §4）——一律视为 legacy，新装不写、排障只作候选列出。
+
+**收敛目标**：每机只剩一棵 home（`/opt/mynet` 或 `/etc/mynet`），其余改名 `*.legacy-YYYYMMDD` 或移入 backup。
+
+> **install 写入的路径与服务登记名**见 [`lifecycle-contract.md`](lifecycle-contract.md) §3。
 
 ---
 
@@ -159,19 +152,21 @@ Windows `C:\Program Files\MyNet\bin`、OpenWrt 按 ipk 现状）。旧 `<home>/d
 
 ---
 
-## 5. 双层配置：mynet 意图 vs 驱动投影
+## 5. 双层配置：意图/原生配置 vs 运行投影
 
-| | **mynet 自己** | **驱动 gnb / wg** |
-|---|---|---|
-| 位置 | `conf/**`（含 `conf/mode.json`） | `conf/<form>/<nodeId>/` 内的驱动原生布局（D4-E 同居；旧 `driver/**` 只读回退） |
-| 格式 | JSON schema v2（密钥材料除外） | gnb 文本 / wg INI |
-| 写入者 | 用户 / 后端 / wizard | **仅 `driver.Apply`** |
-| 手改 | 可 | **禁**（会被 apply 覆盖） |
-| 真相 | 是 | 否（产物） |
+| | **mynet 自己（意图）** | **原生配置** | **运行投影** |
+|---|---|---|---|
+| 位置 | `conf/**`（mode/intent/密钥） | `conf/<form>/<nodeId>/` 驱动原生布局 | `/var/run/mynet/<nodeId>/`（目标；现行仍指 conf 节点目录） |
+| 格式 | JSON schema v2（密钥材料除外） | gnb 文本 / wg INI | 原生配置副本 + map/pid |
+| 写入者 | 用户 / 后端 / wizard | **仅 apply 渲染** | **仅 apply 投影** |
+| 手改 | 可 | **禁**（再生成覆盖） | **禁**（重投） |
+| 真相 | 是 | 是（配置面产物，进备份） | 否（运行副本，可丢） |
+
+> **用词**：conf 里的驱动文件 = **原生配置**，不叫投影；**投影**只指 `/var/run` 运行副本。
 
 **proxy 两层命名（易混）**：
 - `intent.listen.proxy` / `node.conf` 的 `proxy on` = GNB 数据面准出开关
-- `plugins/proxy.json` → `conf/<form>/<nodeId>/proxy.conf` = 出口选点/权重（D4-E 随节点目录）
+- `plugins/proxy.json` → `conf/<form>/<nodeId>/proxy.conf` = 出口选点/权重
 - 「开不开」与「走谁」，不是同一件事
 
 ---
