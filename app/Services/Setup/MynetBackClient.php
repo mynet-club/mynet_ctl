@@ -144,7 +144,6 @@ class MynetBackClient
         ], $zoneId);
     }
 
-
     /**
      * BundleEnvelope schema v2（R8）。GET /nodes/{id}/bundle 返回**裸 Envelope**。
      */

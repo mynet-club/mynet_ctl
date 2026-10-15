@@ -2,6 +2,7 @@
 
 namespace Tests\Unit;
 
+use App\Models\Release;
 use App\Services\Manifest\ManifestService;
 use App\Services\Release\ReleaseService;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -230,11 +231,11 @@ class ReleaseServiceTest extends TestCase
         $this->upload('mynet_agent', 'windows', 'amd64', 'v1.3.0', 'mynet_agent_windows_amd64_v1.3.0.exe');
         $this->upload('mynet_agent', 'windows', 'amd64', 'v1.3.0', 'mynet_agent_windows_amd64_v1.3.0.zip');
 
-        $old = \App\Models\Release::where('version', 'v1.2.0')->get();
+        $old = Release::where('version', 'v1.2.0')->get();
         foreach ($old as $row) {
             $this->assertFalse((bool) $row->is_latest, "v1.2.0 {$row->kind} 不应再是 latest");
         }
-        $new = \App\Models\Release::where('version', 'v1.3.0')->get();
+        $new = Release::where('version', 'v1.3.0')->get();
         foreach ($new as $row) {
             $this->assertTrue((bool) $row->is_latest, "v1.3.0 {$row->kind} 应是 latest");
         }
