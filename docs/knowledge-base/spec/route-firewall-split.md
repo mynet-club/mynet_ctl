@@ -137,3 +137,35 @@ OS 回程路由          L6：对端怎么把回包送回（必须对称）
 
 **关联**：`spec/paths.md` §5 双层配置 · `spec/proxy-conf-design.md` ·
 `research/linux-openwrt-fw-route/REPORT.md` · `node-connectivity-checklist.md`
+
+## 8. Linux / OpenWrt 外部防火墙 reload 合同（2026-10-18）
+
+目标是其他 OP / 软件执行防火墙服务的 reload/restart 后，由系统钩子自动重放 MyNet 规则。不是依赖操作方先调用 MyNet，也不通过周期性 apply 抢回规则。规则与系统操作归 Go 执行器，mynetd 不参与。
+
+| 外部入口 | MyNet 恢复入口 |
+|---|---|
+| OpenWrt firewall / fw4 reload、restart | UCI script include，enabled=1、fw4_compatible=1，加载同一套产物 |
+| Linux nftables.service start、restart、reload | 系统配置确实 include mynet.nft 时使用 drop-in；否则登记 ExecStartPost / 追加 ExecReload，保留系统原命令 |
+| ufw start、reload、force-reload、restart | after.init 包装钩子，先执行原钩子，再重放；stop 保留配置；卸载恢复原文件 |
+| firewalld.service start、restart、reload | 服务后置钩子重放；不主动 reload firewalld |
+| firewall-cmd --reload / D-Bus reload | 执行器 mynet firewall watch 订阅 Reloaded 信号；独立 systemd 服务，无轮询；先订阅再初始重放 |
+| netfilter-persistent start、restart、reload | 90-mynet 插件重放 nft 自有表，不保存整机 iptables 快照 |
+
+每个入口只加载 scripts/*.nft，不调用完整 apply 或 firewall sync，避免递归 reload。基础规则、proxy 集合/规则与出口 WAN 边界用单次 nft include 事务重放；文件原子替换，失败向调用方返回。MyNet 停止保留配置与重放登记，卸载清理本实例登记/事件服务并还原 ufw 原钩子。没有可接入的系统加载面时明确告警。
+
+### CPI-84：授权边界与 LAN 互访
+
+- 未授权、撤销或 client-only 状态均保留隧道→WAN 的拒绝专表/链；不再靠删除专表表达“禁用”。平台即使保留宽 forwarding、NAT 或 conntrack accept，也不能绕过该拒绝。
+- 开放许可允许 WAN 转发，白名单只允许解算到的源 CIDR；其余丢弃。IPv4/IPv6 的 nft 规则共用 inet forward 边界；iptables 路径仍按既有 IPv4 合同，不在本批扩展 ip6tables。
+- WAN 来源为 detector 的默认接口及路由表中全部 IPv4/IPv6 默认出口。Linux detector 补采 IPv6 路由，避免独立 IPv6 出口漏出边界。缺少有效 WAN 事实或 WAN=本隧道时报错，不猜接口。
+- LAN 例外只来自非本隧道的内核直连网络（scope link / proto kernel、无网关、非默认路由）。它们在授权边界内 return，交还平台原有 LAN 规则；不把经网关的远端路由或本隧道网络当作 LAN。因此单网卡旁路由同接口上的 LAN 互访也保留。
+- OpenWrt 首装仅建立 LAN↔MyNet；mynet→wan forwarding 随有效 server 许可增删，重复同步幂等。常驻拒绝专表仍防止第三方恢复旧宽 forwarding。
+- firewall sync 自身也生成当前授权/拒绝产物；无对端/无普通路由的 apply 仍安装授权边界，service start 先 apply 再同步钩子。禁用 client 分类器会删除旧集合/规则产物，WAN 拒绝产物保留。
+
+### 验证与边界
+
+隔离 Linux 容器内用真实 nft/iptables 与 netns/veth 发包：未授权、开放、白名单命中/拒绝、撤销、独立 LAN 与同网卡 LAN 均验证；故意保留平台宽 ACCEPT/NAT/established 规则。清空 nft ruleset 后执行真实 include，WAN 拒绝及 LAN 互访恢复。另用隔离 D-Bus 服务发 firewalld Reloaded 信号，验证独立 watcher 重新装入已删的表。
+
+Go 行为回归覆盖钩子顺序、原 ufw 钩子恢复、错误传播、默认出口与直连网段解算；OpenWrt 构建标签下在 Linux 容器实际运行 UCI 替身验证授权 forwarding 增删/幂等。它不等于实际 OpenWrt 固件或完整 Linux 发行版的服务验收；生产未部署，M4/M6 不勾。
+
+本合同不要求对绕过服务、单独裸 flush 后不触发任何加载事件的行为轮询自愈；下一次正常服务加载仍由以上钩子恢复。真实发行版升级覆盖钩子、策略路由的额外出口表、IPv6 数据流量和 iptables-legacy/固件版本仍须按部署环境验收。doctor 的基础专表检查不替代逐项 ACL/集合与流量验收。

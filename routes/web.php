@@ -40,7 +40,7 @@ Route::prefix('d')->group(function () {
     // mynet_proxy 插件清单（mp = mynet_proxy）
     // IP 大表 + DNS 上游 + 域名清单（D2）
     Route::get('/plugins/mp/{name}', [ProxyController::class, 'iplistFile'])
-        ->where('name', '(interip|chinaip|dns-domestic|dns-clean|proxy-domains|direct-domains)\.txt');
+        ->where('name', '(interip|chinaip|dns-domestic|dns-clean|proxy-domains|direct-domains|ad-domains|malware-domains)\.txt');
 
     // 插件下载
     Route::get('/plugins/{filename}', [PluginController::class, 'downloadByFilename'])

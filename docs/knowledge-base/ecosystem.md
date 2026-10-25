@@ -132,7 +132,7 @@ mynetd（心跳组装 · WS）
 | my.mynet.club / my.mynet.local | mynet_gui | prod / dev |
 | www.mynet.club / www.mynet.local | mynet_web | prod / dev |
 
-> 本机 API / WebUI 端口 **8096**（8192 已被占用，勿漂移）。gateway 默认 8710。
+> 本机 API / WebUI 端口 **8096**（8192 已被占用，勿漂移）。gateway 8097。
 
 ## API 版本
 

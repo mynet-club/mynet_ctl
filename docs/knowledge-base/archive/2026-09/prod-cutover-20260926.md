@@ -202,7 +202,7 @@ ls -la /usr/local/opt/mynet/driver/gnb/conf/ 2>/dev/null
    CORS_ALLOWED_ORIGINS=（my.mynet.club 等完整 origin）
    MYNET_BACK_FACE_*=/etc/mynet/back_face_*   # 生产密钥，不是 /etc/mynet/stage/
    MYNET_GATEWAY_ENABLED=true
-   MYNET_GATEWAY_URL=http://127.0.0.1:8710     # 生产 gateway
+   MYNET_GATEWAY_URL=http://127.0.0.1:8097     # 生产 gateway
    REDIS_PREFIX=mynet_database_                # 固定，防 APP_NAME 漂移
 4) nginx：api.mynet.club → root /data/app/mynet.club/api/public
    （IPv4+IPv6 listen 齐全；证书 mynet.club-0001；fastcgi php8.4）
@@ -429,7 +429,7 @@ ls -la /usr/local/opt/mynet/driver/gnb/conf/ 2>/dev/null
 
 P3 晋升时必须：
 1. 启用 `gw.mynet.club` 站点（含 `/v1/node/connect` WS 升级、`proxy_read_timeout 3600s`）
-2. gateway 监听 **127.0.0.1:8710**（生产口）
+2. gateway 监听 **127.0.0.1:8097**（生产口）
 3. 节点/agent 的 gateway 地址一律 `https://gw.mynet.club`
 4. 移除 gw.mynet.club 对 Laravel 的 default 落点
 

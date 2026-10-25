@@ -69,7 +69,7 @@ class ProxyController extends Controller
     /**
      * GET /api/v2/proxy/iplists
      * 返回全部清单内容（供 client 一次性下载）。
-     * IP 大表 + DNS 上游 + 域名清单；单文件下载走 /plugins/mp/{name}。
+     * IP 大表 + DNS 上游 + 域名清单；单文件下载走 /d/plugins/mp/{name}。
      */
     public function iplists(): JsonResponse
     {
@@ -92,7 +92,7 @@ class ProxyController extends Controller
         ];
 
         // DNS 上游与域名清单：可缺省（按需生成），有则带上
-        foreach (['dns-domestic.txt', 'dns-clean.txt', 'proxy-domains.txt', 'direct-domains.txt'] as $f) {
+        foreach (['dns-domestic.txt', 'dns-clean.txt', 'proxy-domains.txt', 'direct-domains.txt', 'ad-domains.txt', 'malware-domains.txt'] as $f) {
             $key = str_replace('.txt', '', $f);
             $path = $dir.'/'.$f;
             $out[$key] = file_exists($path) ? file_get_contents($path) : '';
@@ -102,7 +102,7 @@ class ProxyController extends Controller
     }
 
     /**
-     * GET /plugins/mp/{name} —— 纯文本清单直出（curl -o 直接保存）。
+     * GET /d/plugins/mp/{name} —— 纯文本清单直出（curl -o 直接保存）。
      *
      * IP 大表（Linux）：
      *   interip.txt / chinaip.txt          每日 geoip 生成
@@ -121,7 +121,7 @@ class ProxyController extends Controller
             // DNS 上游
             'dns-domestic.txt', 'dns-clean.txt',
             // 域名清单
-            'proxy-domains.txt', 'direct-domains.txt',
+            'proxy-domains.txt', 'direct-domains.txt', 'ad-domains.txt', 'malware-domains.txt',
         ];
         if (! in_array($name, $allowed, true)) {
             abort(404);

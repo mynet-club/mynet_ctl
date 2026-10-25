@@ -2,8 +2,8 @@
 # 语义：Mac/Win 导航型分流的主清单；也可在 Linux 与 IP 大表叠加
 # 形态：精确 domain / .suffix / *.suffix
 # 叠加：本机 custom_domains 在此之上追加（不回写云端）
-# 来源：ctl 发布 → /plugins/mp/proxy-domains.txt
-# 更新：2026-10-17 —— 补齐国人常用海外站 + AI 服务主域/辅助域（CDN·鉴权·静态·API）
+# 来源：ctl 发布 → /d/plugins/mp/proxy-domains.txt
+# 更新：2026-10-24 —— 补齐本机自定义加速域相关条目（gmail / googlemail / groups / gsuite / zhanghao.today）
 # 组织：按业务域分组；同站主域与辅助域相邻，便于 diff 与人工审阅
 
 # ── 搜索 / 浏览器 ─────────────────────────────────────────
@@ -45,6 +45,11 @@ youtu.be
 youtube-nocookie.com
 youtubekids.com
 youtube-ui.l.google.com
+# YouTube 仅保留 .com 与新加坡入口；播放资源由现有 CDN 规则覆盖
+youtube.sg
+youtube.com.sg
+yt.be
+
 netflix.com
 nflxvideo.net
 nflximg.net
@@ -172,6 +177,17 @@ videos.openai.com
 help.openai.com
 status.openai.com
 
+# OpenAI 资源 / 语音 / 新入口；2026-10-20 对照 MetaCubeX/geosite
+openaicom-api-bdcpf8c6d2e9atf6.z01.azurefd.net
+chatgpt.site
+oaistatsig.com
+openai.org
+chat.com
+host.livekit.cloud
+chatgpt.livekit.cloud
+turn.livekit.cloud
+openai.com.cdn.cloudflare.net
+
 # Anthropic / Claude
 anthropic.com
 claude.ai
@@ -181,6 +197,13 @@ console.anthropic.com
 api.anthropic.com
 statsig.anthropic.com
 cdn.anthropic.com
+
+# Claude 新入口 / MCP / 网站资源；2026-10-20 对照 MetaCubeX/geosite
+clau.de
+claude.com
+claude.dev
+claudemcpclient.com
+claudemcpcontent.com
 
 # Google AI / Gemini / DeepMind / NotebookLM
 gemini.google.com
@@ -197,6 +220,17 @@ ai.google
 tensorflow.org
 kaggle.com
 kagglecdn.com
+
+# Google AI 新入口（API 与常用资源已由 googleapis.com 等父域覆盖）；2026-10-20 对照 MetaCubeX/geosite
+notebook.google
+antigravity-unleash.goog
+antigravity.google
+opal.google
+flow.google
+generativeai.google
+ai.studio
+jules.google
+gemini.google
 
 # xAI / Grok
 grok.com
@@ -521,6 +555,11 @@ sharepoint.com
 sharepointonline.com
 googleworkspace.com
 workspace.google.com
+# Gmail / Google 邮箱与套件相关（gmail.com 不是 google.com 子域，需独立条目）
+gmail.com
+googlemail.com
+googlegroups.com
+gsuite.com
 zoom.us
 zoom.com
 zoomgov.com
@@ -939,4 +978,27 @@ carrd.co
 read.cv
 bento.me
 pornhub.com
+# Pornhub 图片 / 视频 / 静态资源 CDN（含子域）；2026-10-20
+phncdn.com
+phprcdn.com
 ty66.com
+
+# 草榴 / 同类常用站及主要资源 CDN；2026-10-20（父域含子域）
+t66y.com
+# XVideos
+xvideos.com
+xvideos-cdn.com
+# XNXX
+xnxx.com
+xnxx-cdn.com
+# xHamster
+xhamster.com
+xhcdn.com
+xhpingcdn.com
+# SpankBang
+spankbang.com
+sb-cd.com
+
+# ── 本机自定义加速域（父域含子域）────────────────────────
+# 2026-10-24：本机 proxy_intent custom_domains 相关条目上云，便于多端一致
+zhanghao.today

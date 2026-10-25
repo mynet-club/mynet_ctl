@@ -880,6 +880,8 @@
 
 | 修复日期 | 问题 | PR / Commit |
 |---------|------|------------|
+| 2026-10-18 | **CPI-83** 外部 reload 钩子补齐：nftables 服务后置 / ufw after.init / firewalld 服务钩子和 D-Bus Reloaded；保留 fw4 include 与 netfilter 插件；不要求裸 flush 轮询 | agent 工作树；隔离 D-Bus + nft 事件恢复实测；见 route-firewall-split §8 |
+| 2026-10-18 | **CPI-84** 无授权/撤销保留 WAN 拒绝；授权 CIDR 过滤只管 WAN，直连 LAN 例外保留旁路由互访；OpenWrt WAN forwarding 按许可增删 | agent/OpenWrt 工作树；真实 nft/iptables netns IPv4 流量矩阵及 reload 恢复通过；固件与 IPv6 流量待部署验收 |
 | 2026-05 | mynet_gui 根目录文档归档 | 本次审计 |
 | 2026-05 | mynet_client openwrt 注释清理 | 本次审计 |
 | 2026-05 | mynet_api 缺 .env.example | 本次审计（新增） |

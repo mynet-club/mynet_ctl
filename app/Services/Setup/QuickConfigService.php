@@ -18,7 +18,7 @@ class QuickConfigService
      */
     private const NODE_DEFAULTS = [
         'ifname' => 'gnb_tun',
-        'mtu' => 1450,
+        'mtu' => 1400,
         'multi_socket' => 'on',
         'direct_forwarding' => 'on',
         'unified_forwarding' => 'auto',

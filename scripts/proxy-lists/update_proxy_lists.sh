@@ -60,6 +60,19 @@ main() {
     log_info "输出目录: $OUTPUT_DIR"
     log_info "临时目录: $TEMP_DIR"
 
+    # DNS 上游与域名清单（手工维护的模板，存在即发布）
+    # D2：dns-domestic / dns-clean / proxy-domains / direct-domains
+    for f in dns-domestic.txt dns-clean.txt proxy-domains.txt direct-domains.txt ad-domains.txt malware-domains.txt; do
+        if [ -f "$SCRIPT_DIR/$f" ]; then
+            cp "$SCRIPT_DIR/$f" "$OUTPUT_DIR/.$f.tmp"
+            chmod 644 "$OUTPUT_DIR/.$f.tmp"
+            mv "$OUTPUT_DIR/.$f.tmp" "$OUTPUT_DIR/$f"
+            log_info "✓ 已发布 $f"
+        else
+            log_info "  跳过 $f（无源文件）"
+        fi
+    done
+
     # 步骤1: 下载 geoip.dat
     log_info "步骤 1/3: 下载 geoip.dat..."
     cd "$TEMP_DIR"
@@ -97,18 +110,6 @@ main() {
     cp "$TEMP_DIR/interip.txt" "$OUTPUT_DIR/"
     chmod 644 "$OUTPUT_DIR/chinaip.txt" "$OUTPUT_DIR/interip.txt"
 
-    # DNS 上游与域名清单（手工维护的模板，存在即发布）
-    # D2：dns-domestic / dns-clean / proxy-domains / direct-domains
-    for f in dns-domestic.txt dns-clean.txt proxy-domains.txt direct-domains.txt; do
-        if [ -f "$SCRIPT_DIR/$f" ]; then
-            cp "$SCRIPT_DIR/$f" "$OUTPUT_DIR/"
-            chmod 644 "$OUTPUT_DIR/$f"
-            log_info "✓ 已发布 $f"
-        else
-            log_info "  跳过 $f（无源文件）"
-        fi
-    done
-
     # 生成 meta.json（供 API / 节点校验）
     list_meta() {
         local f="$1" key="$2"
@@ -118,14 +119,14 @@ main() {
             return
         fi
         local cnt sz sum
-        cnt=$(grep -cvE '^\s*(#|$)' "$path" 2>/dev/null || echo 0)
+        cnt=$(awk 'NF && $1 !~ /^#/ {n++} END {print n+0}' "$path")
         sz=$(stat -c%s "$path" 2>/dev/null || stat -f%z "$path")
         sum=$(sha256sum "$path" 2>/dev/null | cut -d' ' -f1 || shasum -a 256 "$path" | cut -d' ' -f1)
         echo "    \"$key\": {\"count\": $cnt, \"size\": $sz, \"sha256\": \"$sum\"}"
     }
 
-    china_count=$(grep -cvE '^\s*(#|$)' "$OUTPUT_DIR/chinaip.txt")
-    inter_count=$(grep -cvE '^\s*(#|$)' "$OUTPUT_DIR/interip.txt")
+    china_count=$(awk 'NF && $1 !~ /^#/ {n++} END {print n+0}' "$OUTPUT_DIR/chinaip.txt")
+    inter_count=$(awk 'NF && $1 !~ /^#/ {n++} END {print n+0}' "$OUTPUT_DIR/interip.txt")
 
     cat > "$OUTPUT_DIR/meta.json" <<EOF
 {
@@ -135,7 +136,9 @@ $(list_meta interip.txt interip),
 $(list_meta dns-domestic.txt dns_domestic),
 $(list_meta dns-clean.txt dns_clean),
 $(list_meta proxy-domains.txt proxy_domains),
-$(list_meta direct-domains.txt direct_domains)
+$(list_meta direct-domains.txt direct_domains),
+$(list_meta ad-domains.txt ad_domains),
+$(list_meta malware-domains.txt malware_domains)
 }
 EOF
 
@@ -144,7 +147,7 @@ EOF
     log_info "=========================================="
     log_info "chinaip.txt: $china_count 条"
     log_info "interip.txt: $inter_count 条"
-    for f in dns-domestic.txt dns-clean.txt proxy-domains.txt direct-domains.txt; do
+    for f in dns-domestic.txt dns-clean.txt proxy-domains.txt direct-domains.txt ad-domains.txt malware-domains.txt; do
         [ -f "$OUTPUT_DIR/$f" ] && log_info "$f: $(grep -cvE '^\s*(#|$)' "$OUTPUT_DIR/$f") 条"
     done
     log_info "meta.json: 已生成（含 sha256）"

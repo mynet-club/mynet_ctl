@@ -11,6 +11,7 @@ lint:
 test:
 	@echo "▸ test"
 	@if [ -x vendor/bin/phpunit ]; then php vendor/bin/phpunit; else echo "(无 phpunit 时跳过)"; fi
+	@bash scripts/proxy-lists/test_domain_publish.sh
 
 guard:
 	@echo "▸ guard（安全红线）"

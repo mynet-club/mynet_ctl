@@ -1616,3 +1616,19 @@ public static function authorize(string $ability, Model $resource): void;       
    缺陷 12 的 fast-glob 探针与缺陷 7、10 的 `information_schema` / `SHOW INDEX` 只读查询）。
 3. **不要读成「后端等不及就自己改了」**：全清单**没有一处 vendor 改动、没有 fork**；
    候选方案一律是 `dev-plan` 原文的转述 + 后端的倾向，**归属框架拍板**（裁定 G1 的口径）。
+
+## 登录响应 tenant_id 恒为空（2026-10-24）
+
+**现象**：`POST /api/v1/auth/login` 成功，但 `data.tenant_id` 为 null；CLI 落盘后 `credential.tenant_id` 为空。
+
+**位置**：`vendor/dsplat/multi-tenant-saas-module-auth/Http/Controllers/Concerns/BuildsUserTokenResponse.php:42`
+
+```php
+'tenant_id' => $request->attributes->get('tenant_id'),
+```
+
+**根因**：登录时尚未解析用户租户（`ResolveTenantFromUser` 依赖 `$request->user()`），request attribute 为空。注册路径有 `ResolveTenantFromInviteCode` 写入，登录没有对应解析。
+
+**期望**：登录成功后按 `users.tenant_id` 指针 → `tenant_users` 回退解析，并写入响应 `data.tenant_id`（与 `User::tenantId()` 同判据）。
+
+**本仓绕过**：agent `authLogin` 在 `tenant_id` 为空时调 `/api/v1/user/tenants/` 回填默认区（`mynet/cmd_auth.go` `fetchDefaultTenantID`）。上游修复后可删。

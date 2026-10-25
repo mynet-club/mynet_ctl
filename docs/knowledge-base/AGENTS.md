@@ -92,7 +92,7 @@ mynetd **不含**：探测解析、OS 路由/防火墙写入、驱动配置生�
 
 - 产物前缀 **`mynet_agent_*`**（不是 `agent_*`）。
 - 本机 API / WebUI 端口 **8096**（8192 被 IANA 的 `spytechphone` 与 `mynet_utc` 双重占用）。
-- gateway 默认 8710；后端内网地址是**部署配置**，不下发。
+- **端口（2026-10-24 钉死）**：`mynetd`=**8096**（本机 API/WebUI/relay）· `mynet_gateway`=**8097**（绑回环）· 对外 WS/relay=**443**（nginx `gw.mynet.club` 反代，证书在 nginx）。**不用 8710**。后端内网地址是**部署配置**，不下发。
 
 ### 1.6 mynet_api 按需 module
 

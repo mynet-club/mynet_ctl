@@ -768,18 +768,18 @@ nameserver 顺序：[peer VIP, smart IP]
 - 推论：**验证代理必须走「转发」路径**（LAN 客户端 / 造一个转发源），
   **不能**由口机自己 curl 出去当验收 —— 那测的不是客户端路径。
 
-### 15.5 PC 形态（mac/win）自出口：域名驱动，例外于 §15.4
+### 15.5 PC 形态（mac/win/Linux/BSD）自出口：域名驱动，例外于 §15.4
 
-**§15.4 的铁律只管「Linux/OpenWrt **节点**」**（路由器，自身是转发平面的旁路）。
-PC（mac/win）上**用户自己就是端点**，没有 LAN 转发可打标、也没有 fwmark 策略表 ——
+**§15.4 的铁律只管 GW 形态的 Linux/OpenWrt 节点**（路由器，自身是转发平面的旁路）。
+PC（mac/win/Linux/BSD）上**用户自己就是端点**，没有 LAN 转发可打标、也没有 fwmark 策略表 ——
 唯一能把本机流量送进隧道的机制就是**主表目的路由**。这不是「节点代理自己」的违规，
 而是 PC 形态的正当路径。
 
 - 目的集**不固定**（用户想代理啥就配啥域名），所以**不装全量 CIDR**；只把
   **指定域名**解析出的 IP 按 `/32` 钉进隧道（用户裁决 2026-10-11：「可以维护一个小集」）。
-- 落点 `mynet/proxy_pc_pin.go`：`ResolvePCProxyPinIPs`（域名 → A 记录，`EffectiveProxied`∪
-  `UpstreamClean`，去重封顶 512）+ `PCProxyPinCmds`/`PCProxyPinDelCmds`（PC 方言，
-  darwin replace=删+加）+ `ApplyPCPin`（对账：撤失效、钉当前，清单落
-  `var/proxy/pc-pin.json`）。挂在 `executeApply`（proxy 激活分支；禁用分支撤销）。
-- **跨平台分流**：Linux/OpenWrt 走 nft 打标 + 策略表（§15.1 三层），PC 走域名 `/32` 主表
+- **2026-10-18 生命周期收口**：PC 动态路由由 dns-hook 内 `pcProxySession` 唯一管理，
+  实际查询命中后加载、有界租约到期回收；apply 不再预解析整份清单或另写一份动态路由。
+  ctl 基线与本机叠加分开存储，缓存命中仍核对内核路由；关闭与异常退出精确释放。
+  状态文件、迁移、事件矩阵及验收边界见 [PC 白名单加速生命周期](pc-proxy-lifecycle.md)。
+- **跨平台分流**：Linux GW/OpenWrt 走 nft 打标 + 策略表（§15.1 三层），PC 走域名 `/32` 主表
   钉扎 —— 同一份 `ProxyPolicy`，两种落地方言，`isPCProxyForm` 分派。

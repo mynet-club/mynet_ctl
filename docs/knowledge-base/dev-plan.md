@@ -809,3 +809,19 @@ P0 ──┬──────────────────────�
 - **分步**：P4-1 决策包 → P4-2 OpenWrt 接统一合同 → P4-3 回程证据 → P4-4 fail-closed/网关离线用例 → P4-5 脱敏复检 →（可选）P4-6 Acceleration。
 
 **注意**：与本文件轨道 B 的 B-7（`TransportPlanner`：一条连接 → OS 路由语义）不是一回事 —— 那是 L6 路由语义、已 `☑`；P4 是「实体网关 + 转发 + Proxy 的统一合同」，**尚未开码**。
+
+### 2026-10-18 PC proxy / DNS 实施记录
+
+既有 proxy / 平台适配工作的生命周期收口，非新增任务 ID：小集合白名单、ctl 基线与本机叠加、缓存/租约、自动加载/释放已落码，自动化检查通过；真机数据面验收待做，原 M4/M6 状态不变。合同见 [PC 白名单加速生命周期](spec/pc-proxy-lifecycle.md)，命令与结果见 [项目记忆同日记录](project-memory.md)。
+
+### 2026-10-18 Linux/BSD 运行形态与嵌入 WebUI
+
+Linux/BSD 的 PC/GW 形态独立于 local/online 身份，CLI/setup 与 WebUI 均可配置；PC 使用同一白名单 DNS/路由会话，GW 保留网关分类器。Linux/BSD 包嵌入完整 WebUI，OpenWrt 固定 GW 并维持精简包。BSD PF 网关后端、原生 rc 安装器与真机数据面验收仍未完成，不更改对应里程碑。详细实现、构建证据和边界见项目记忆同日追加记录及 PC 生命周期合同。
+
+### 2026-10-18 防火墙启停与外部重启复核
+
+沿既有 Linux/OpenWrt 防火墙生命周期统一检查并修复重放链路：全部 nft 产物单事务加载、Linux 持久化涵盖 proxy/出口 ACL、OpenWrt shell 不再覆盖 Go include、禁用后清除旧分类器产物、原子文件更新与失败返回。后端覆盖边界及真机验收项见 [路由/防火墙分工 §8](spec/route-firewall-split.md)；不增加守护轮询或隐式 fallback，不勾 M4/M6。
+
+### 2026-10-18 外部 reload 钩子与 CPI-84 收口
+
+按用户明确的外部服务 reload/restart 语义接入 nftables/ufw/firewalld（含 D-Bus Reloaded），保持 fw4 include/netfilter 插件；不引入裸 flush 轮询。CPI-84 改为无授权常驻 WAN 拒绝，直连 LAN 例外，OpenWrt WAN forwarding 跟随许可。隔离 Linux 内核真实 IPv4 流量与外部重放、firewalld D-Bus 事件、UCI 幂等测试通过。CPI-83/84 移入已修复；生产/固件验收与 M4/M6 不替代。合同见 route-firewall-split.md §8。
