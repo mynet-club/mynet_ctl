@@ -1,7 +1,24 @@
 #!/bin/sh
-# pre-push：重量守护（lint + test）——「不推坏东西」的关口
-# DoD 要求「测试通过」，这里强制执行
-echo "▸ pre-push: make check"
+# pre-push：安全红线恒跑；lint/test 按**本次推送全部 ref** 计算的范围执行。
+#
+# 为什么重写：原实现无条件 `make check`（guard + 全量 lint + 全量 test），
+# 每次推送都付全量成本；而用 HEAD~1 / 工作区差异近似更糟 —— 多 ref 推送、
+# 新分支、远程被改写、删除 ref 都会漏测或错测。范围一律取 stdin 的 ref 行：
+#   <local ref> <local sha> <remote ref> <remote sha>
+#
+# 无法证明范围安全时**扩大或阻断**，绝不静默通过：
+#   * 推送的提交不是当前 HEAD       → 会推的树和能验的树不是同一棵，阻断
+#     （祖先提交只发布既有 ref，不新增树内容 → 明确打印后跳过）
+#   * 远程基线缺失 / 取不到 / 新分支无共同基线 → 全量 make check 并打印原因
+#   * 工作区有未提交的已跟踪改动     → 阻断（工作区结果不能冒充提交结果）
+#   * 选中测试 unresolved（依赖、基础装配、未知文件）→ 全量 make check
+#   * 删除 ref 不新增内容            → 只跑 guard，并打印说明
+#   * 没有 scripts/check.py 的仓      → 维持原语义：guard + 全量 make check
+#   * 有 check.py 但引擎不可用        → 打印原因 + 全量 make check；连全量入口都没有则阻断
+#
+# 不用「这个提交以前通过过」这类标记跳过检查：每次推送都按当前 ref 重新算范围。
+set -u
+
 ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
 if [ -z "$ROOT" ]; then
   # bare 仓没有工作树，--show-toplevel 必然失败（mynet_gnb 就是 bare + linked worktree）。
@@ -16,11 +33,127 @@ if [ -z "$ROOT" ]; then
   exit 0
 fi
 cd "$ROOT" || exit 0
-if [ -f Makefile.guard ]; then
-  exec make -f Makefile.guard check
+
+# 红线恒跑：依赖或工具缺失可以让后续检查失败，但不能让 guard 静默跳过。
+sh .githooks/guard.sh || exit 1
+
+if [ ! -f scripts/check.py ]; then
+  if [ -f Makefile ] && grep -q '^check:' Makefile 2>/dev/null; then
+    echo "▸ pre-push: 本仓无 scripts/check.py，按仓库入口执行全量 make check"
+    exec make check
+  fi
+  echo "✓ pre-push: guard 通过（无 check 入口，跳过 lint/test）"
+  exit 0
 fi
-if [ -f Makefile ] && grep -q '^check:' Makefile 2>/dev/null; then
+
+# 入口在、引擎不在（锁定框架包还没有 scripts/devtools）⇒ 选测不可用。
+# 回退全量但**必须响**：不能把「没选测」显示成「选测通过」，也不能因此放行。
+if ! python3 scripts/check.py --version >/dev/null 2>&1; then
+  if [ -f Makefile ] && grep -q '^check:' Makefile 2>/dev/null; then
+    echo "▸ pre-push: 选测引擎不可用（锁定框架包缺 vendor/dsplat/multi-tenant-saas/scripts/devtools），回退全量 make check"
+    exec make check
+  fi
+  echo "✗ pre-push: 选测引擎不可用且无全量入口，阻断（升级锁定框架包或补全 Makefile）" >&2
+  exit 1
+fi
+
+REMOTE=${1:-origin}
+HEAD_SHA=$(git rev-parse HEAD 2>/dev/null) || { echo "✗ pre-push: 取不到 HEAD，阻断" >&2; exit 1; }
+
+TMP=$(mktemp -d) || exit 1
+trap 'rm -rf "$TMP"' EXIT INT TERM
+REFS="$TMP/refs"; RANGES="$TMP/ranges"; FULL="$TMP/full"; HARD="$TMP/hard"
+: > "$REFS"; : > "$RANGES"; : > "$FULL"; : > "$HARD"
+SEEN=0
+
+# git 自己不读走 stdin，会截断 ref 列表；先落盘再解析。
+cat > "$REFS"
+
+default_base() {
+  for ref in "refs/remotes/$REMOTE/HEAD" "refs/remotes/$REMOTE/main" "refs/remotes/$REMOTE/master"; do
+    sha=$(git rev-parse --verify --quiet "$ref" 2>/dev/null) || continue
+    printf '%s\n' "$sha"
+    return 0
+  done
+  return 1
+}
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [ -n "$local_ref" ] || continue
+  SEEN=$((SEEN + 1))
+  case "$local_sha" in
+    *[!0]*) ;;
+    *)
+      printf '  ▸ 删除 %s：不新增内容，仅跑 guard\n' "$remote_ref"
+      continue
+      ;;
+  esac
+  if [ "$local_sha" != "$HEAD_SHA" ]; then
+    if git merge-base --is-ancestor "$local_sha" "$HEAD_SHA" 2>/dev/null; then
+      printf '  ▸ %s → %s 已在当前 HEAD 历史中，只发布既有 ref，不新增树内容\n' "$local_ref" "$local_sha"
+    else
+      printf '  ✗ %s → %s 不是当前检出提交\n' "$local_ref" "$local_sha" >> "$HARD"
+    fi
+    continue
+  fi
+  if [ "$remote_sha" = "0000000000000000000000000000000000000000" ]; then
+    base=$(default_base) || base=""
+    if [ -z "$base" ]; then
+      printf '  ✗ 新分支 %s：取不到 %s 的默认分支基线\n' "$local_ref" "$REMOTE" >> "$FULL"
+      continue
+    fi
+    base=$(git merge-base "$local_sha" "$base" 2>/dev/null) || base=""
+    if [ -z "$base" ]; then
+      printf '  ✗ 新分支 %s：与 %s 默认分支没有共同基线\n' "$local_ref" "$REMOTE" >> "$FULL"
+      continue
+    fi
+  else
+    if ! git cat-file -e "$remote_sha^{commit}" 2>/dev/null; then
+      printf '  ✗ %s 的远程基线 %s 本地不存在（远端被改写或本地未 fetch）\n' "$local_ref" "$remote_sha" >> "$FULL"
+      continue
+    fi
+    base=$remote_sha
+  fi
+  printf '%s..%s\n' "$base" "$local_sha" >> "$RANGES"
+done < "$REFS"
+
+if [ -s "$RANGES" ] && [ -n "$(git diff HEAD --name-only 2>/dev/null)" ]; then
+  printf '  ✗ 工作区有未提交的已跟踪改动：工作区结果不能冒充将要推送的提交结果\n' >> "$HARD"
+fi
+
+if [ -s "$HARD" ]; then
+  echo "✗ pre-push: 无法验证本次推送（已阻断，未报告通过）："
+  cat "$HARD"
+  echo "  处置：切到要推的提交/分支后再推；确认内容后手工跑 make check。"
+  exit 1
+fi
+
+if [ -s "$FULL" ]; then
+  echo "▸ pre-push: 范围无法安全收窄，执行全量 make check："
+  cat "$FULL"
   exec make check
 fi
-sh .githooks/guard.sh || exit 1
-echo "✓ pre-push: guard 通过（无 check 目标，跳过 lint/test）"
+
+if [ ! -s "$RANGES" ]; then
+  if [ "$SEEN" -eq 0 ]; then
+    echo "▸ pre-push: 未收到 ref 列表（直接调用钩子？），无法判定范围 → 全量 make check"
+    exec make check
+  fi
+  echo "✓ pre-push: 本次推送不新增需要在本工作区验证的内容（各 ref 处理见上），guard 已跑"
+  exit 0
+fi
+
+RANGES=$(sort -u "$RANGES")
+for range in $RANGES; do
+  echo "▸ pre-push: 按推送范围选测 $range"
+  python3 scripts/check.py --run --range "$range"
+  rc=$?
+  if [ "$rc" -eq 2 ]; then
+    echo "▸ pre-push: 有未映射的影响面，按要求全量 make check"
+    exec make check
+  elif [ "$rc" -ne 0 ]; then
+    echo "✗ pre-push: 选测失败（exit=$rc），不推送" >&2
+    exit "$rc"
+  fi
+done
+echo "✓ pre-push: 本次推送范围内检查通过"

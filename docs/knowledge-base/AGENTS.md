@@ -190,9 +190,30 @@ operator / platform / plugin / ticket / sms / form / knowledge / conversation �
 
 | 层 | 机制 | 内容 | 时机 |
 |---|---|---|---|
-| 入口 | `make check` | guard + lint + test | 随时可跑 |
+| 入口 | `make check` | guard + lint + **全量**测试（显式全量验证入口） | 随时可跑；依赖升级、基线变更、要全量时 |
 | 闸 1 | `.githooks/pre-commit` → `make guard` | **轻量**：安全红线 + 文件名（秒级） | 每次提交 |
-| 闸 2 | `.githooks/pre-push` → `make check` | **重量**：lint + 全量测试 | 每次推送 |
+| 闸 2 | `.githooks/pre-push` | guard 恒跑；lint/test **按本次推送全部 ref 选测**，范围不足时扩为全量 | 每次推送 |
+
+- **pre-push 的范围来源是推送本身，不是工作区。** 从 stdin 的 ref 行（`<local ref> <local sha> <remote ref> <remote sha>`）逐条算 `remote..local`，多 ref 各自验、相同范围去重；不看 `HEAD~1`、不用「以前通过过」的标记跳过。各形态的处置：
+
+  | 推送形态 | 处置 |
+  |---|---|
+  | 普通更新 | `scripts/check.py --run --range remote..local`（受影响的 lint + 测试） |
+  | 多 ref（分支 + tag） | 每个 ref 各自范围都验 |
+  | 新分支（远端无基线） | 取远程默认分支（`origin/HEAD`→`main`→`master`）的共同基线；取不到 → 全量 `make check` 并打印原因 |
+  | 远程基线本地不存在（远端被改写 / 未 fetch） | 全量 `make check` 并打印原因 |
+  | 删除 ref | 不新增内容：只跑 guard，明确打印 |
+  | 祖先提交的 ref（如旧 tag） | 只发布既有 ref、不新增树内容：明确打印后跳过内容检查 |
+  | 推送的提交不是当前 HEAD（分叉） | **阻断**：工作区验证不能冒充别的树 |
+  | 工作区有未提交的已跟踪改动 | **阻断**：工作区结果不等于将要推送的提交 |
+  | 选中测试 unresolved（依赖/基础装配/未知文件） | 全量 `make check` 并打印原因 |
+  | 选测失败（exit 1） | 阻断，不降级为全量 |
+  | 无 `scripts/check.py` 的仓 | 维持原语义：guard + 全量 `make check` |
+  | 有 `check.py` 但引擎不可用（锁定框架包还没有 `scripts/devtools/`） | 打印「选测引擎不可用」+ 全量 `make check`；连全量入口都没有则**阻断** |
+
+  选测引擎是实现契约（`scripts/check.py` → 锁定框架包的 `scripts/devtools/`，API v1）；**未知影响绝不静默通过**。功能自测 `templates/.githooks/push_scope_test.sh`（16 用例）跑在临时仓里，桩掉 guard/选测/`make` 逐条断言退出码、理由与**实际执行了什么**。
+
+  引擎不可用 ≠ 跳过检查：`mynet_api` 锁的框架版本还没有 `scripts/devtools/`，所以本仓当前推送会**打印原因后走全量**；把锁定框架包升到带 API v1 的版本后，选测自动生效（入口脚本与钩子都不必改）。
 
 - **`make guard` 三类红线**（见 `templates/.githooks/guard.sh`，功能自测 `templates/.githooks/guard_test.sh` **45 用例**）：
 

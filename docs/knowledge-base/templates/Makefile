@@ -2,9 +2,9 @@
 # 用法：make lint | make test | make guard | make check | make install-hooks
 #
 # 守护机制（AGENTS.md §2.6）：
-#   make        = 显式入口，随时可跑
-#   pre-commit  → make guard   （轻量：安全红线 + 文件名，秒级）
-#   pre-push    → make check   （重量：lint + test）
+#   make check  = 显式**全量**入口（依赖升级、基线变更、要全量时）
+#   pre-commit  → make guard          （轻量：安全红线 + 文件名，秒级）
+#   pre-push    → 按推送的全部 ref 选测（guard 恒跑；范围不足扩为 make check）
 
 .PHONY: lint test guard check install-hooks
 
