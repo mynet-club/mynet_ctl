@@ -279,6 +279,7 @@ operator / platform / plugin / ticket / sms / form / knowledge / conversation �
   **静默削掉**这条已生效的红线。
 - **自包含不跨仓依赖**——各 repo 可独立 clone / build，hook 不能断。
 - **不要用 `--no-verify` 绕过 hook**。拦下了就按红线改。
+- **框架问题回框架，不在本仓修**：先在本仓复现定性（业务代码/本仓配置/本仓 CI 问题就地修），确认根因在 `dsplat/multi-tenant-saas` 才在该仓提 issue。issue 必带最小复现、锁定版本或 ref、失败证据、影响面、是否阻塞。框架发版后：定向 `composer update <具体包> --dry-run` 看闭包 → 正式更新 → 提交 `composer.lock` → 跑受影响测试与 CI → 回填 issue 再由框架侧关单。未更新 lock 视为未送达，本地通过不算验收；处理期间不改 `vendor/`、不手工覆盖框架源码。`mynet_api` 当前仍锁框架 2.7 线（升级需 2.7→3.10 契约迁移，见框架 backlog BL-174），切换前其 `pre-push` 保持显式回退全量 `make check`。
 
 ---
 
