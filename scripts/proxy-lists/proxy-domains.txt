@@ -322,6 +322,7 @@ phind.com
 typicalhuman.com
 inflection.ai
 pi.ai
+# 国内大模型（deepseek/moonshot/zhipu/01.ai/minimax）不加速：默认直连，勿加入本清单
 mistral.ai
 mistralcdn.com
 cohere.com
@@ -330,12 +331,6 @@ cohere.tools
 ai21.com
 ai21.org
 aleph-alpha.com
-deepseek.com
-deepseek.ai
-moonshot.ai
-zhipu.ai
-01.ai
-minimaxi.com
 abacus.ai
 together.ai
 together.xyz

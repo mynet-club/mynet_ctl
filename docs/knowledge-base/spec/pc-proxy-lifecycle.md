@@ -122,3 +122,46 @@ A返回127.0.0.1、AAAA返回::1，其他类型NOERROR空答案，TTL60秒。配
 CLI：proxy dns-hook dns set <IP或域名...>、dns clear、dns status [--json]。WebUI运行形态PC区域提供填写、保存、恢复跟随租户，并显示来源和上游顺序；轮询不覆盖未保存输入。操作不会启动hook/修改加速意愿。
 
 本机此前用户明确选定的221.216.138.69迁移为显式本机配置，保留原选择；新安装不自动创建该覆盖文件，优先使用租户下发。未增加对其他机器配置的自动迁移。
+
+
+## PC 单出口（2026-10-28 用户裁定）
+
+**PC 形态（macOS / Windows / Linux / BSD PC）只支持一个加速出口。**
+
+- 理由：OS 层加权多下一跳（`ip route … nexthop via A weight W1 nexthop via B weight W2`）仅 Linux/GW 可用；macOS `route` 与 Windows `netsh` 无原生加权 ECMP。PC 多节点若要做，应靠 gnb `proxy.conf` 的 `w=`/`order=`（隧道内加权/故障转移），但产品面选择**先锁单出口**，避免语义含糊。
+- 落点：GUI「PC 形态单选一个出口」（`LocalAccelerationPage`）；保存路径 `exit_peer` 单值；运行时 `firstEnabledExit` / 单 `ExitVia`。
+- 多出口仍属 **GW 形态**（有序候选 + gnb `proxy.conf` 多 `exit … w= order=`），与 PC 契约正交。
+- 本裁定**不禁止**后续在 gnb P2 上做 PC 多出口；届时另开合同，不在本文件静默扩大。
+
+## 出口探测（2026-10-28，加速启用时每 15s；2026-10-28 二裁改驱动探活）
+
+启用加速（dns-hook 运行）期间，执行器每 **15s** 读一次**加速节点（出口）**状况，让用户看到节点健康。
+
+| 项 | 约定 |
+|---|---|
+| 周期 | `ExitProbeInterval = 15s`（用户裁定）；启动后立刻探一次 |
+| 目标 | `currentExitProbe()`：生效策略第一个 enabled `exit`（`node_id` + `via`），否则插件壳 `EffectiveExits` 首个 |
+| **方法** | **驱动自身探活，不 TCP 拨 VIP:53**（2026-10-28 用户纠正）：<br>• **gnb**：`gnb_ctl -b <conf\|run>/gnb.map -c -s`（`driver.GnbPeerLinks`）取该 peer 的 **lastping**（`ping_ts_sec`）与 `addr4_ping_latency_usec` 时延；可达 = 链路 direct/relay **且** lastping 新鲜（≤75s，对齐 `VPNPeer.IsActive`）<br>• **wg**：`wg show dump` 的 **latest-handshake**；可达 = handshake 有效（≤2min，与 `parseWGDump` 一致） |
+| 落盘 | `$MYNET_HOME/var/proxy/dns-hook-exit-probe.json`（含 node_id / driver / method / link / last_ping / age_ms） |
+| 状态面 | `dns-hook status` 第二行 `exit_probe: node=… target=… driver=gnb method=gnb_map link=… reachable=… rtt_ms=… age_ms=… fails=…`；`/api/v1/acceleration/status` → `runtime.exit_probe` |
+| 托盘 | 加速子菜单 DNS 行追加「节点可达 Nms / 节点不可达」 |
+| 清理 | hook 停止 / `cleanupDNSHook` 清结果，避免过期可达 |
+
+归属：探测在**执行器**（`mynet` 的 dns-hook worker 内 `startExitProbeLoop`），mynetd 只透传 status（AGENTS.md §1.2）。
+
+验收边界：单元测试覆盖 gnb lastping 新鲜/过期/离线、按 overlay 认 peer、wg handshake、连续失败累计、状态行解析；**未做**真隧道两端 15s 周期实测。`gnb.map` 仅由 gnb 产出、只读（不手搓）。
+
+## Windows / Linux PC 同步（2026-10-28）
+
+本轮 mac 上落地的能力已按 **PC 模式** 对齐 Windows / Linux（GW 不变）：
+
+| 能力 | macOS | Windows | Linux PC |
+|---|---|---|---|
+| 收/发字节 | `netstat -ibn` `<Link>` 行 | `Get-NetAdapterStatistics` | `/sys/class/net/<if>/statistics` |
+| 出口探测 15s | gnb lastping / wg handshake（同） | 同 | 同 |
+| 退出应用 = 停隧道 + 停服务 | `launchctl bootout` | `sc stop mynetd`（SCM Stop） | `systemctl stop` / init.d |
+| 再打开拉起服务 | kickstart/bootstrap（必要时授权） | `sc start` | `systemctl start` / init.d |
+| 加速页/首页/托盘节点状态 | 共用 `exit_probe` 字段 | 同 | 同 |
+
+服务登记名 SSOT：`utils.ServiceNameMynetd = "mynetd"` / `LaunchdLabelMynetd = "com.mynet.mynetd"`。
+交叉编译：`GOOS=windows|linux` 的 mynet / mynetd / mynet_tray 与 `go test -c` 通过。

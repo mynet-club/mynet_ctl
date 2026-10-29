@@ -353,3 +353,15 @@ IpFragFails 582303；隧道回环 5MB≈8Mbps，外网 HTTPS 间歇停顿；两�
 - 证据：CLI `auth status` 后端公钥可取（原 404 消失）；`gw.mynet.club/healthz` 200；WS 进 gateway
 - 后续：各节点按此表逐步更新；agent `DefaultListen` 已改 `:8097`
 
+
+### 2026-10-28 PC 锁单出口 + 加速出口 15s 探测
+
+用户裁定：**PC 形态只支持一个加速出口**（多节点/OS 加权 ECMP 仅 Linux GW 的 `ip route nexthop` 语义，mac/win 无；多出口仍属 GW + gnb `proxy.conf w=/order=`）。合同见 [pc-proxy-lifecycle.md](spec/pc-proxy-lifecycle.md) §PC 单出口。
+
+加速启用（dns-hook 运行）时，执行器每 **15s** TCP 拨测出口 overlay VIP:53（connect/refused=可达），结果落 `var/proxy/dns-hook-exit-probe.json`；`dns-hook status` 第二行 `exit_probe:`，`/api/v1/acceleration/status.runtime.exit_probe`，托盘 DNS 行追加「出口可达 Nms / 出口不可达」。停 hook 清结果。探测在执行器，mynetd 只透传。
+
+验证：`go test ./mynet ./mynetd/localapi ./cmd/mynet_tray` 全绿（含 record/落盘/连续失败/状态解析/托盘文案）。未做真隧道 15s 周期与丢包实测；未整仓提交。
+
+### 2026-10-28 出口探测改驱动探活（用户纠正）
+
+先前 TCP 拨 VIP:53 **已废**。探测改为读驱动自身探活：gnb 经 `gnb_ctl -b <map> -c -s`（`GnbPeerLinks`）取出口 peer 的 **lastping**（`ping_ts_sec`，`parseGNBStatus` 现已解析）与 `addr4_ping_latency_usec`；wg 取 `wg show` latest-handshake。可达判据：gnb 链路 direct/relay 且 lastping ≤75s；wg handshake ≤2min。合同见 pc-proxy-lifecycle.md 出口探测节。
