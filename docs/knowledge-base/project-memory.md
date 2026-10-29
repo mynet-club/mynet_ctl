@@ -365,3 +365,15 @@ IpFragFails 582303；隧道回环 5MB≈8Mbps，外网 HTTPS 间歇停顿；两�
 ### 2026-10-28 出口探测改驱动探活（用户纠正）
 
 先前 TCP 拨 VIP:53 **已废**。探测改为读驱动自身探活：gnb 经 `gnb_ctl -b <map> -c -s`（`GnbPeerLinks`）取出口 peer 的 **lastping**（`ping_ts_sec`，`parseGNBStatus` 现已解析）与 `addr4_ping_latency_usec`；wg 取 `wg show` latest-handshake。可达判据：gnb 链路 direct/relay 且 lastping ≤75s；wg handshake ≤2min。合同见 pc-proxy-lifecycle.md 出口探测节。
+
+### 2026-10-30 框架 3.10.3 升级、S2 账号契约适配与生产发布
+
+用户令「升级框架到最新，测试后发布」，并裁定「saas 全盘采纳新契约」+「提交推送 + 生产部署」。
+
+- **框架**：四包同批升 root e02594a→f42858d（v3.10.3）/auth →f64eb13/infra →f3e1d95/operator →58f7257；根包别名 `as 2.7.0`→`as 3.10.3`（新模块 `requires_core >=2.13`）；连带 15 个传递依赖；symfony/mime v8.1.7→v8.1.10（CVE-2026-45070）。10-29 实测的 65 失败 + 4 错误逐项消解，`make check` 535/4955/1skip 全绿，`scripts/devtools/` 选测引擎随包生效。
+- **S2 账号契约适配**（mynet_api `757b630`）：`users.account_scope` 派生键（`App\Models\User` creating 钩子按 DeploymentPolicy 同规则派生）；登录/注册须显式点名区（X-Tenant-ID / 码上解析），无区登录 fail-closed 403；「无码开注册产出无归属用户」退役；console 不再从成员关系任取租户（夹具 `actingAsConsoleOperator` 显式点名），query 点名未授权区 = 整单拒绝（7 条 widen 用例改断「拒绝」）；`SessionAwareUserAuthController` 构造 3→7 依赖透传；测试 schema 镜像生产终态（account_scope NOT NULL、复合唯一、membership_operations、auth_action_tokens rekey 后唯一键）。
+- **现网执行件** `database/sql/2026_10_30_s2_account_identity_scope.sql`：MySQL 8.4.8 与 **MariaDB 10.11.19**（现网引擎）双隔离实例往返验证（首跑→幂等→回灌）。生产已执行：18 行 users 全部回填 `t:%`，复合唯一/两表就位，备份 `/data/backup/mynet/mynet_back-pre-s2-20261029_185030.sql.gz`。
+- **发布**（三步，用户确认）：① S2 SQL → ② API `manage-prod.sh deploy`（commit `d757a3d`，健康 200，备份 `/data/backup/mynet/api/20261030_025106`）→ ③ GUI `deployment.sh`（commit `f60d8c0`，线上 200、LoginPage 含区码字段）。发布后 `POST /api/v1/auth/login` 无区 → 403「无法识别租户上下文」（新契约生效）。
+- **GUI 登录**（mynet_gui `158af34`）：登录表单新增「区码 / 区 ID」（数字→X-Tenant-ID 头，非数字→body invite_code），首登记住免填；拦截器对显式 X-Tenant-ID 不覆盖。
+- ⚠️ **遗留给用户**：mynet_gui 的 `.env.prod` 被 `f60d8c0` 收敛成 `.env.embed` 同款（`/gui/` 基路径，embed 构建口径）——web 部署（my.mynet.club 根路径 + `/api/` 代理）需要同源口径；本次构建**临时**换回 `158af34:.env.prod` 完成发布（构建后已复原提交原样）。两套口径需拆清（web=.env.prod / embed=.env.embed），否则下次 `deployment.sh` 直跑会打出 `/gui/` 基路径包、站点路由全坏。
+- 契约变更点（API 面）：登录/注册须带区（X-Tenant-ID 或 invite_code）；同邮箱可多区各一号（全局唯一已摘）；不带区的开注册被拒。
