@@ -382,3 +382,7 @@ IpFragFails 582303；隧道回环 5MB≈8Mbps，外网 HTTPS 间歇停顿；两�
 ### 2026-10-30 L3 隔离实机验收（Linux GW，6/7 通过）
 
 OrbStack 隔离栈（快照控制面 + 4 Debian 容器真 gnb 隧道）完成上线前七项验收：矩阵三态、gateway 通知链、fail-closed、conntrack、并发 apply、generation 乱序重放**全过**；iptables-legacy 待用户裁决（建议降级为按需）。证据表与边界见 [proxy-permission-loop-playbook.md §L3](spec/proxy-permission-loop-playbook.md)。过程中揪出并修复三个真 bug（agent `4b1701e` findGnbBin 标准位、`202c60b` nft 首跑 flush 序、`092a694` gateway 运维口令 Bearer 兼容）；另记三个产品缺口（endpoint 更新不重发 bundle、mynetd 先于 claim 启动 transport 永久死、status 端点字符串 500）。验收基于 API 冻结快照，框架升级完成后控制面相关项需复验；M4/M6 不勾。
+
+### 2026-10-30 L3 追加：legacy 通过、3.10 复验、四项修复
+
+① iptables-legacy 双路径验收通过（消费 ipset+mangle、出口 iptables 独立链矩阵一致），揪出 inverted 否定词 bug（agent `a89563a`）。② 框架 3.10 复验：登录 S2 租户头/矩阵/发布/门禁过；揪出 deferred job 缺 TaskAuthEnvelope 致通知链全断（快照已验证修法，移交升级会话落库），及 auth_module 内嵌迁移三表 fresh-migrate 缺口（同移交）。③ agent 侧修复并实测：mynetd 先于 claim 启动 transport 永久死（`73b24ec` 重试）。合计 agent 四修复：`4b1701e`/`202c60b`/`092a694`/`73b24ec`。证据见 [proxy-permission-loop-playbook §L3 追加](spec/proxy-permission-loop-playbook.md)。

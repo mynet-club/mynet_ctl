@@ -183,3 +183,13 @@ M4/M6 仍不勾。API/ctl 改动未提交；agent 已有本地提交 `3e3d464`�
 过程记录的缺口（待入 CPI/台账）：节点 endpoint 更新不触发 bundle 重发（`BundleInvalidator` 无 endpoint 触发点，peers 拿旧 address.conf）；mynetd 先于 claim 启动则 transport 启动失败后无重试（永久死）；`PATCH /nodes/{id}/status` 收字符串被吞成 500（要整数）。
 
 边界：快照控制面（冻结 API 副本）证据，框架升级（2.7→3.10）完成后控制面相关项需复验；IPv6、真固件 fw4/ufw/firewalld 发行版验收、通知丢失窗口的量化仍未做。M4/M6 仍不勾。
+
+### L3 追加（2026-10-30 晚）：legacy 验收 + 3.10 控制面复验 + 三项修复
+
+**① iptables-legacy 验收：通过**（双路径）。容器切 `iptables-legacy`（1.8.9）+ 摘 nft + ipset：消费侧 ipset+mangle 打标经隧道出网 0% 丢包；出口侧 iptables 独立 filter/mangle/nat 链（`0x4d…` 标记段 + 按标 MASQUERADE + 白名单 accept + 末尾 DROP）矩阵语义一致（{B,D} 时 O/U 通、改 {B} 后 U 100% 拒）。**途中揪出真 bug**：inverted 否定词 `! -m set` 被 legacy 拒（`a89563a` 改 `-m set ! --match-set`）。附带记录：iptables 回退路径无 flush 幂等（重复 apply 堆规则）；消费端 full_tunnel 下 default_iface=gnb_tun 使出口边界 WAN scope 判空（apply 部分失败，非 legacy 专属）。
+
+**② 3.10 控制面复验**（框架升级后重快照）：登录（S2 显式租户头 X-Tenant-ID）、矩阵读写、发布链（config_revisions）、generation 门禁均过。**揪出阻断级集成缺口**：deferred job 缺 `TaskAuthEnvelope` 被框架 3.10 执行边界拒绝（identity_missing）→ 通知链全断（发布正常、afterResponse job 在 terminate 抛异常级联 fatal）；修法（job 挂 HasTaskAuthEnvelope + forService 信封 + provider trustService 登记）已在快照验证端到端恢复，已移交升级会话落正式树。另：auth_module 内嵌迁移（sso_auth_transactions/sso_sessions/operator_sso_accounts 三表 CREATE）升级后永不补跑，全新库 migrate 必炸（生产手工补过）——同移交。
+
+**③ mynetd transport 重试修复（`73b24ec`）**：mynetd 先于 claim 启动则 transport 永久死。抽 tryNodeFace + retryNodeFace（15s 后台重试）；L3 实测：无身份启动告警 → 放入身份 15s 后「transport 已接入」+ WS 真连。另有 gateway 运维口令 Bearer 兼容（`092a694`）与 findGnbBin 标准位（`4b1701e`）、nft 首跑 flush 序（`202c60b`）共四个修复。
+
+M4/M6 仍不勾；3.10 通知链修复落正式树后需再复验一轮自动通知。
