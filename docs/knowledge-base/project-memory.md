@@ -386,3 +386,9 @@ OrbStack 隔离栈（快照控制面 + 4 Debian 容器真 gnb 隧道）完成上
 ### 2026-10-30 L3 追加：legacy 通过、3.10 复验、四项修复
 
 ① iptables-legacy 双路径验收通过（消费 ipset+mangle、出口 iptables 独立链矩阵一致），揪出 inverted 否定词 bug（agent `a89563a`）。② 框架 3.10 复验：登录 S2 租户头/矩阵/发布/门禁过；揪出 deferred job 缺 TaskAuthEnvelope 致通知链全断（快照已验证修法，移交升级会话落库），及 auth_module 内嵌迁移三表 fresh-migrate 缺口（同移交）。③ agent 侧修复并实测：mynetd 先于 claim 启动 transport 永久死（`73b24ec` 重试）。合计 agent 四修复：`4b1701e`/`202c60b`/`092a694`/`73b24ec`。证据见 [proxy-permission-loop-playbook §L3 追加](spec/proxy-permission-loop-playbook.md)。
+
+### 2026-10-31 L3 缺口 A/B 落地（gw 会话转办，插队 T9/T10 之前）
+
+- **缺口 A（阻断级，现网通知链）**：框架 3.10 B 包 ExecutionBoundary 对缺信封 deferred job 一律拒（identity_missing），app 侧零适配 ⇒ PUT proxy-exit 后 bundle 不重发、terminate 级联 fatal。按复验快照修法落库（mynet_api `1c89e71`，已发布生产）：`NotifyGatewayBundleChanged` use `HasTaskAuthEnvelope` + 构造器 `withTaskAuthEnvelope(forService(SERVICE_NAME, null, 'bundle-changed'))`；`AppServiceProvider` boot `trustService(SERVICE_NAME)`（信封/登记共用常量防漂移）。判据 `NotifyGatewayBundleChangedTest` 2 条（信封 subjectId + dispatch 真实过 JobProcessing→beginJob）。AGENTS §1.8 已记「app 新增 Job 都要走这条」。
+- **缺口 B（fresh-migrate 框架债）**：sso 三表（sso_auth_transactions / sso_sessions / operator_sso_accounts）的 CREATE 只藏在框架 auth_module 内嵌 map，存量库永不补跑而独立文件 2026_10_24_000001 会 ALTER ⇒ 缺表即炸。收编 `database/sql/2026_10_30_sso_tables.sql`（幂等 fresh-install 件，建到含 protocol 三列终态，MariaDB 10.11 口径）+ tests/Schema/CoreModule 同形三表。
+- ⚠️ **取证更正**：现网 mynet_back **实无这三表**（SHOW TABLES 只有 sso_providers）——复验会话「生产靠手工补过」不成立；生产没炸的真因是**禁 migration**（ALTER 从不跑）。运行面无 SSO 消费者不受影响；是否补表（幂等 CREATE）待用户发话。
