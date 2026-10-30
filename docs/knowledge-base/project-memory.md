@@ -378,3 +378,7 @@ IpFragFails 582303；隧道回环 5MB≈8Mbps，外网 HTTPS 间歇停顿；两�
 - ~~⚠️ 遗留给用户~~ **已拆开（mynet_gui `2027bc8`，2026-10-30 当日收口）**：`.env.prod` = web（同源 `/api/v1` + Reverb）、`.env.embed` = embed（`/gui/` 基路径），两文件头注释写明分工；`npm run build:embed` 经 gitignored 的 `.env.local.prod` 注入 embed 口径（构建后自动清，不碰 `.env.prod`），`quasar.config.ts` 的 `loadEnvFiles()` 读 `.env.prod`+`.env.local.prod` 覆盖层喂 build.env；lint 增 `check:env` 车道护栏（web 文件不许带 /gui 基路径、embed 文件必须带，混用即红）。验证：web 构建引 `/assets/`、embed 构建引 `/gui/assets/`、vitest 71/71。mynet_desktop release.yml 的拷贝舞步只在 CI 临时 checkout 里做，未动。
 - **/users/onboarding G2 翻案**（mynet_api `b5b3d0a`，当日 404 修复）：旧端点 10-13 因「PUT 假持久化」被 G2 下架；GUI 引导流（f60d8c0）真调 GET/PUT 后以真落库回归（`user_preferences.preferences.onboarding`，生产已有表不动库形，行按用户键）。判据 `OnboardingStatePersistenceTest` 5 条（往返一致/隔离/整包替换/422 不落库）；已发布生产并验证 404→401。排障实录：同测试内换 Bearer 必须 `forgetGuards()`（RequestGuard 缓存 user）。
 - 契约变更点（API 面）：登录/注册须带区（X-Tenant-ID 或 invite_code）；同邮箱可多区各一号（全局唯一已摘）；不带区的开注册被拒。
+
+### 2026-10-30 L3 隔离实机验收（Linux GW，6/7 通过）
+
+OrbStack 隔离栈（快照控制面 + 4 Debian 容器真 gnb 隧道）完成上线前七项验收：矩阵三态、gateway 通知链、fail-closed、conntrack、并发 apply、generation 乱序重放**全过**；iptables-legacy 待用户裁决（建议降级为按需）。证据表与边界见 [proxy-permission-loop-playbook.md §L3](spec/proxy-permission-loop-playbook.md)。过程中揪出并修复三个真 bug（agent `4b1701e` findGnbBin 标准位、`202c60b` nft 首跑 flush 序、`092a694` gateway 运维口令 Bearer 兼容）；另记三个产品缺口（endpoint 更新不重发 bundle、mynetd 先于 claim 启动 transport 永久死、status 端点字符串 500）。验收基于 API 冻结快照，框架升级完成后控制面相关项需复验；M4/M6 不勾。

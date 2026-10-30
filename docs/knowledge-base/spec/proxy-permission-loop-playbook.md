@@ -163,3 +163,23 @@ L1 失败：事务整组回滚。L2 失败：保留 last-known-good、还原由�
 | 旧 generation 重放（实机） | 已有单元门禁；实机乱序推送仍待 |
 
 M4/M6 仍不勾。API/ctl 改动未提交；agent 已有本地提交 `3e3d464`，本轮 generation 门禁改动在其后的工作树中。
+
+### L3 隔离实机验收（2026-10-30，OrbStack 栈）
+
+隔离栈：快照控制面（mynet_l3 MySQL + API + gateway `-internal-token`）+ 4 个 Debian arm64 特权容器（E 出口 10.0.0.10 / O 10.0.0.11 / C 10.0.0.16 / U 10.0.0.22，gnb 真隧道）。**6/7 通过，iptables-legacy 待裁决**；下列为实测证据：
+
+| 项 | 结果 | 证据 |
+|---|---|---|
+| E/O/C/U 流量矩阵 | **通过** | 白名单{B}：O/C 经隧道→E→NAT 出网 0% 丢包（~90ms），U 100% 丢包；开放`[]`：三方全通；DELETE 撤销：三方全拒。撤销后 E 保留 `mynet_exit_*` 拒绝边界 |
+| 真 gateway 通知与拉取 | **通过**（揪出集成 bug） | PUT 后 bundle 秒级自动更新、E 全自动落地链（bundle updated→refresh→reload→route）。WS 重连补拉已见。**修复**：API `Authorization: Bearer` vs gateway `X-Internal-Token` 恒 401（agent `092a694` 双认） |
+| 出口离线 fail-closed | **通过** | 杀 E gnb 后 O 100% 丢包、`ip route get` 仍指 gnb_tun（fwmark 0xc8→table 200）无 eth0 回落；恢复即通 |
+| 现存连接终止 | **通过**（强于承诺） | 对照实测：不撤销时旧连接第二请求得 `HTTP/1.1 301`；撤销后旧连接新请求 0 字节、新连接 fail——旧流往返被切断（合同只承诺规则撤销） |
+| 并发 apply | **通过** | 5 发并发 bundle_changed：4 发「已有动作在跑，合并补跑」串行化、`bundle unchanged` 幂等；5 路并发 localapi 写：1×200 + 4×409 `operation_in_progress`；风暴后 nft 规则不堆积（mark 规则仍 1 条） |
+| 旧 generation 重放（实机） | **通过** | 旧包（rev-…151800）覆盖重放：`stale cloud revision 2026103015180000001 < current 2026103020522900001，拒绝旧 generation 重放`；数据面 ACL 保持 N+1（4 accept 含 U 的 .22）无回退 |
+| iptables-legacy / OpenWrt 兼容 | **待裁决** | legacy 只服务老 xtables 环境（CentOS7 代、fw3 固件、被切后端的主机）；现网目标（.180/.182/现代机）全为 nft 系。建议降级为按需验收（L3 容器 `update-alternatives` 切 legacy 可复验） |
+
+过程修复（L3 揪出的真 bug，均已在 agent 提交）：`findGnbBin` 漏标准位 `<prefix>/bin`（`4b1701e`）；客户端分类器 nft 批 `flush chain` 先于 `add` 致首跑必败（`202c60b`）；gateway 运维口令不认 Bearer（`092a694`）。
+
+过程记录的缺口（待入 CPI/台账）：节点 endpoint 更新不触发 bundle 重发（`BundleInvalidator` 无 endpoint 触发点，peers 拿旧 address.conf）；mynetd 先于 claim 启动则 transport 启动失败后无重试（永久死）；`PATCH /nodes/{id}/status` 收字符串被吞成 500（要整数）。
+
+边界：快照控制面（冻结 API 副本）证据，框架升级（2.7→3.10）完成后控制面相关项需复验；IPv6、真固件 fw4/ufw/firewalld 发行版验收、通知丢失窗口的量化仍未做。M4/M6 仍不勾。
