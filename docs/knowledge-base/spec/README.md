@@ -36,11 +36,13 @@
 | [node-upgrade-plan-180-182.md](node-upgrade-plan-180-182.md) | **现网升级部署计划（H6）**：`.180`(proxy server)/`.182`(proxy client) 的取证、产物、步骤、验证、回滚、Go-NoGo、待裁定 | **计划，未执行**（2026-10-10） |
 | [node-upgrade-runbook-180-182.md](node-upgrade-runbook-180-182.md) | **今晚升级 Runbook（H6）**：开工前决策、commit 锚点、出包/取证/备份/步骤/验证/回滚/Go-NoGo/记录表 | **可执行清单，未执行**（2026-10-10 夜） |
 | [schemas/bundle-envelope-v2.schema.json](schemas/bundle-envelope-v2.schema.json) | R2 线格式 SSOT：BundleEnvelope + NetworkIntent + GnbIntent + WireGuardIntent | 机器可读契约 |
+| [schemas/tips-kb.schema.json](schemas/tips-kb.schema.json) | tips/小助手知识库载荷 SSOT：manifest + chunk 记录（见 [tips-kb-contract.md](tips-kb-contract.md)） | 机器可读契约 |
 | [fixtures/bundle-envelope-v2/](fixtures/bundle-envelope-v2/) | R2 双端互解 fixtures（Go/PHP 共用，7 场景） | 共享测试数据 |
 | [v1-permission-matrix.md](v1-permission-matrix.md) | **权限矩阵（P0 冻结件）**：R1–R6 边界规则 + 六表面×操作域判据 + 9 条实测洞 | 全线（后端 / agent / 壳） |
 | [v1-error-codes.md](v1-error-codes.md) | **稳定错误码清单（P0 冻结件）**：7 套信封现状 + 现有码注册表 + 死码与分叉 + 冻结口径 | 全线（后端 / agent / 壳） |
 | [local-api.md](local-api.md) | 本机能力面：mynetd HTTP/ubus 契约（GUI/OpenWrt 壳只调不改） | 目标线 ⚠️ 信封口径与代码不符，见 [v1-error-codes.md](v1-error-codes.md) §3-5 |
 | [data-models.md](data-models.md) | 所有数据结构（JSON/conf 格式，唯一定义处） | 目标线 |
+| [tips-kb-contract.md](tips-kb-contract.md) | **tips/小助手知识库**：蒸馏清单（md→chunk）+ tips-kb.json 载荷契约 + `/d/kb/` 分发与 id 合并语义 + tips 联动字段 | **现行**（契约定稿，实现批未开工） |
 | [auth.md](auth.md) | 登录 / 登出 / Token 刷新 | ⚠️ **冻结（旧线）** |
 | [wizard.md](wizard.md) | 安装向导：首次配置、Zone/节点选择、配置同步 | ⚠️ **冻结（旧线）** |
 | [service.md](service.md) | 服务三层启停（GNB 进程 → 路由注入 → 防火墙） | ⚠️ **冻结（旧线）** |

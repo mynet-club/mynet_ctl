@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mynet.local/spec/schemas/tips-kb.schema.json",
+  "title": "TipsKb",
+  "description": "tips/小助手知识库载荷：manifest + chunk 记录两层。契约正文见 ../tips-kb-contract.md；manifest.chunks 的 id 集是权威全量（含空数组 = 撤回全部），合并按 id 收敛、幂等，version 不参与合并判定。",
+  "type": "object",
+  "required": ["version", "generated_at", "lang", "chunks"],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "type": "string",
+      "minLength": 1,
+      "description": "内容版本标识（建议 v<YYYYMMDD>.<n> 或全文 sha256 前 12 位）。仅用于新鲜度展示、日志与条件拉取，不参与合并判定。"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "蒸馏产物生成时刻，ISO 8601（UTC）。"
+    },
+    "lang": {
+      "type": "string",
+      "const": "zh-CN",
+      "description": "BCP-47 语言标签。v1 固定 zh-CN；将来多语言版本换值并分文件分发。"
+    },
+    "chunks": {
+      "type": "array",
+      "description": "chunk 全量列表。id 集为权威全量：客户端合并后删除不在本列表的本地 chunk。",
+      "items": { "$ref": "#/$defs/chunk" }
+    }
+  },
+  "$defs": {
+    "chunk": {
+      "type": "object",
+      "required": ["id", "title", "tags", "body", "source"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+          "description": "全库唯一；发布后不改语义、不复用（改名 = 删旧增新）。前缀约定：tc- / nc- / help-。"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "description": "单行标题（用户可读，中文）。"
+        },
+        "tags": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+          },
+          "description": "kebab-case 检索标签（如 connectivity / troubleshoot / zip）。"
+        },
+        "body": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Markdown 正文。单一主题，≤1500 汉字为初值（超限拆 chunk）；不得含凭据/私钥/内网地址/个人数据。"
+        },
+        "source": {
+          "$ref": "#/$defs/source"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$",
+          "description": "body 的 sha256 十六进制。建议给，供客户端跳过未变更 chunk。"
+        }
+      }
+    },
+    "source": {
+      "type": "object",
+      "required": ["file", "section"],
+      "additionalProperties": false,
+      "properties": {
+        "file": {
+          "type": "string",
+          "minLength": 1,
+          "description": "蒸馏源文件的 workspace 相对路径（如 docs/knowledge-base/troubleshoot-connectivity.md）。"
+        },
+        "section": {
+          "type": "string",
+          "minLength": 1,
+          "description": "源文件内小节标识（如 '2. 步骤 B —— 密钥正确交换'）。整文件蒸馏时填文件标题。"
+        }
+      }
+    }
+  }
+}
