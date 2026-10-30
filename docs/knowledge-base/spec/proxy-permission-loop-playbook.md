@@ -193,3 +193,5 @@ M4/M6 仍不勾。API/ctl 改动未提交；agent 已有本地提交 `3e3d464`�
 **③ mynetd transport 重试修复（`73b24ec`）**：mynetd 先于 claim 启动则 transport 永久死。抽 tryNodeFace + retryNodeFace（15s 后台重试）；L3 实测：无身份启动告警 → 放入身份 15s 后「transport 已接入」+ WS 真连。另有 gateway 运维口令 Bearer 兼容（`092a694`）与 findGnbBin 标准位（`4b1701e`）、nft 首跑 flush 序（`202c60b`）共四个修复。
 
 M4/M6 仍不勾；3.10 通知链修复落正式树后需再复验一轮自动通知。
+
+**复测收口（2026-10-30 深夜）**：升级会话以 `1c89e71` 落库 TaskAuthEnvelope 适配（job 信封 + trustService + 2 行为测试）与 `database/sql/2026_10_30_sso_tables.sql` 执行件后，以正式树重刷 L3 快照复测：PUT proxy-exit → bundle 自动更新 → E 全自动落地链 ✓。**通知链 3.10 闭环**。取证更正：现网并无 SSO 三表（禁 migration 所以 ALTER 从不跑、未炸；非「手工补过」），运行面无 SSO 消费者不受影响；生产是否补三表待用户裁决。

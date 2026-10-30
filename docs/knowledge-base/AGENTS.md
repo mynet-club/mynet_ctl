@@ -129,6 +129,12 @@ operator / platform / plugin / ticket / sms / form / knowledge / conversation �
 - 定位问题时先判**根因落在哪一侧**：`app/`（我们的，可改）还是 `vendor/dsplat/`（框架的，只出报告）。
   判定结论要写进任务记录，别把框架 bug 当自己的 bug 绕过去。
 - 我们自己的业务代码在 `app/Modules/VPN/` 等 `app/` 路径下，**这些可以改**。
+- **deferred job 必须带 TaskAuthEnvelope**（框架 3.10 B 包 ExecutionBoundary，缺信封
+  `JobProcessing` 一律拒 `identity_missing`）：`use MultiTenantSaas\Concerns\HasTaskAuthEnvelope`
+  + 构造器 `withTaskAuthEnvelope(TaskAuthEnvelope::forService(...))`，且信封 service 名要
+  在 `AppServiceProvider` 显式 `trustService()` 登记（不自动授）。**app 新增 Job 都走这条**；
+  2026-10-30 L3 缺口 A 实测：`NotifyGatewayBundleChanged` 缺信封 → PUT proxy-exit 后
+  bundle 不重发、terminate 阶段级联 fatal。判据见 `NotifyGatewayBundleChangedTest`。
 
 ### 1.9 WebUI 构建：开发用 dev，发布用 embed
 
