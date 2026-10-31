@@ -68,7 +68,7 @@
 | `title` | string | ✅ | 单行标题（用户可读，中文） |
 | `tags` | string[] | ✅ | 1–8 个，kebab-case，用于检索过滤（如 `connectivity` `troubleshoot` `zip`） |
 | `body` | string | ✅ | Markdown 正文。**单一主题**，≤ 1500 汉字为初值（超限必须拆 chunk）；可含命令，不得含凭据/私钥/内网地址/个人数据 |
-| `source` | object | ✅ | 蒸馏出处（证据可查）：`{"file": "docs/knowledge-base/troubleshoot-connectivity.md", "section": "2. 步骤 B —— 密钥正确交换"}`；`file` 为 workspace 相对路径 |
+| `source` | object | ✅ | 蒸馏出处（证据可查）：`{"file": "mynet_ctl/docs/knowledge-base/troubleshoot-connectivity.md", "section": "2. 步骤 B —— 密钥正确交换"}`；`file` 为 workspace 相对路径 |
 | `sha256` | string | ❌ | `body` 的 sha256 十六进制；建议给，供客户端跳过未变更 chunk |
 
 ### 2.3 删除 / 改名 / 回滚语义
@@ -161,9 +161,9 @@
 
 | 源（workspace 相对路径） | 行数 | security_class 现状 | id 前缀 | 计划 chunk | 状态 |
 |---|---|---|---|---|---|
-| `docs/knowledge-base/troubleshoot-connectivity.md` | 444 | **缺前置，蒸馏前补** | `tc-` | 见 §4.3 | 待蒸馏 |
-| `docs/knowledge-base/node-connectivity-checklist.md` | 340 | **缺前置，蒸馏前补** | `nc-` | 见 §4.3 | 待蒸馏 |
-| `mynet_gui/docs/help/**`（实存 6 份 md） | — | 随 GUI 帮助发布，公开 | `help-` | 见 §4.3 | 待蒸馏 |
+| `mynet_ctl/docs/knowledge-base/troubleshoot-connectivity.md` | 444 | 已补 `security_class: public`（2026-10-31） | `tc-` | 见 §4.3 | 本轮蒸馏 |
+| `mynet_ctl/docs/knowledge-base/node-connectivity-checklist.md` | 340 | 已补 `security_class: public`（2026-10-31） | `nc-` | 见 §4.3 | 本轮蒸馏 |
+| `mynet_gui/docs/help/**`（实存 6 份 md） | — | 随 GUI 帮助发布，公开 | `help-` | 见 §4.3 | 本轮蒸馏 |
 
 ⚠️ `mynet_gui/docs/help/index.json` 的导航树（7 大类）大于盘上实存文件（仅
 `overview/{what-is-mynet,basic-concepts}`、`getting-started/{registration,login}`、

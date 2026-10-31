@@ -34,6 +34,7 @@
 | [driver-abstraction.md](driver-abstraction.md) | VPN Driver 抽象层：公共控制面 + 驱动专属 intent（gnb / wireguard） | 目标线 |
 | [lifecycle-contract.md](lifecycle-contract.md) | **生命周期合同（H0）**：安装/卸载/服务/应用/升级的 A–F 分层、默认路径/服务名、原生包与归档矩阵、现状差距表 | **现行**（目标合同） |
 | [node-upgrade-plan-180-182.md](node-upgrade-plan-180-182.md) | **现网升级部署计划（H6）**：`.180`(proxy server)/`.182`(proxy client) 的取证、产物、步骤、验证、回滚、Go-NoGo、待裁定 | **计划，未执行**（2026-10-10） |
+| [biz-migrate-180-to-xiawo.md](biz-migrate-180-to-xiawo.md) | **业务面迁移**：`.180` 业务（api/ctl/GUI/console + 库）→ xiawo `172.26.4.91`；gw 留 `.180`，上游走 AWS 内网 | **计划，未执行**（2026-11-03） |
 | [node-upgrade-runbook-180-182.md](node-upgrade-runbook-180-182.md) | **今晚升级 Runbook（H6）**：开工前决策、commit 锚点、出包/取证/备份/步骤/验证/回滚/Go-NoGo/记录表 | **可执行清单，未执行**（2026-10-10 夜） |
 | [schemas/bundle-envelope-v2.schema.json](schemas/bundle-envelope-v2.schema.json) | R2 线格式 SSOT：BundleEnvelope + NetworkIntent + GnbIntent + WireGuardIntent | 机器可读契约 |
 | [schemas/tips-kb.schema.json](schemas/tips-kb.schema.json) | tips/小助手知识库载荷 SSOT：manifest + chunk 记录（见 [tips-kb-contract.md](tips-kb-contract.md)） | 机器可读契约 |

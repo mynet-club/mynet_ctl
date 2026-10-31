@@ -1,3 +1,10 @@
+---
+title: GNB 密钥实现对照 + 节点连通性检查模型
+version: 1.0.0
+updated_at: 2026-09-27
+security_class: public   # 可公开分发；绝不夹带账号、密码、私钥、token
+---
+
 # GNB 密钥实现对照 + 节点连通性检查模型
 
 > 2026-09-24 · 对照 PHP 扩展 / Go / C 三端 · 汇总过夜实测

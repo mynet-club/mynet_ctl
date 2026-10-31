@@ -77,7 +77,7 @@
         "file": {
           "type": "string",
           "minLength": 1,
-          "description": "蒸馏源文件的 workspace 相对路径（如 docs/knowledge-base/troubleshoot-connectivity.md）。"
+          "description": "蒸馏源文件的 workspace 相对路径（如 mynet_ctl/docs/knowledge-base/troubleshoot-connectivity.md）。"
         },
         "section": {
           "type": "string",

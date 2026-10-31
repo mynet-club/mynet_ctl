@@ -1,3 +1,10 @@
+---
+title: 连通性排错手册 —— A–E 五步法
+version: 1.0.0
+updated_at: 2026-09-30
+security_class: public   # 可公开分发；绝不夹带账号、密码、私钥、token
+---
+
 # 连通性排错手册 —— A–E 五步法
 
 > **地位**：连通问题的**唯一排错手册**。客服、排障、Agent、skill 一律引本文件。

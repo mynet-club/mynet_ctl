@@ -7,6 +7,7 @@ use App\Http\Controllers\Admin\ScriptAdminController;
 use App\Http\Controllers\Admin\TokenAdminController;
 use App\Http\Controllers\Api\V1\DetectController;
 use App\Http\Controllers\Api\V1\DocsController;
+use App\Http\Controllers\Api\V1\KbController;
 use App\Http\Controllers\Api\V1\ManifestController;
 use App\Http\Controllers\Api\V1\PluginController;
 use App\Http\Controllers\Api\V1\ProxyController;
@@ -36,6 +37,10 @@ Route::prefix('d')->group(function () {
     // 知识库公开文档（skill-kit 等）——必须写在 product 通配之前
     Route::get('/docs/{name}', [DocsController::class, 'show'])
         ->where('name', '[a-z0-9_\-]+\.(md|txt)(\.sha256)?');
+
+    // tips/小助手知识库载荷（spec/tips-kb-contract.md §3.2）
+    Route::get('/kb/{name}', [KbController::class, 'show'])
+        ->where('name', 'tips-kb\.json(\.sha256)?');
 
     // mynet_proxy 插件清单（mp = mynet_proxy）
     // IP 大表 + DNS 上游 + 域名清单（D2）
