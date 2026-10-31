@@ -73,13 +73,25 @@ mynet_api：不参与（无 AI 面）；tips-kb 云端透出与本议题无关�
 
 > ⚠️ 本表是**探测时刻快照**，不是静态事实。换网络态一律按 §4 重测并更新本表（保留旧快照注明被替代）。
 
+**快照 2（2026-10-31 当日复测 · 网络态仍为加速关 · 含 CORS 预检，替代快照 1 的可达性判读）**：
+
+| endpoint | 连通 | 计时 | CORS 预检（Origin=127.0.0.1:8096） |
+|---|---|---|---|
+| `api.deepseek.com` `/v1/chat/completions` | ✅ | 401 @ 0.39s | ✅ 200，allow-headers 含 authorization/content-type |
+| `api.anthropic.com` `/v1/messages` | ✅ | 403 @ 2.8s | ✅ 200，allow-headers 含 `anthropic-dangerous-direct-browser-access`，allow-origin `*` |
+| `api.openai.com` `/v1/chat/completions` | ✅ **已通** | 401 @ 0.40s | ✅ 200，allow-origin 回显本机源 |
+
+> **判读修正**：同一网络态（加速关）下 OpenAI 由「超时」变「可达」——快照 1 的「推断与加速关有关」**不成立**，
+> 超时更像瞬时网络抖动。这正是本表口径的活例证：**可达性是时点事实，任何结论必须带探测时间+网络态，
+> 且不得从单次快照推因果**。GitHub 的超时同批未复测（非 provider，不入矩阵）。
+
 ### 2.4 各 provider 直连要点
 
 | provider | API 形状 | 浏览器直连 | 可达性现状 |
 |---|---|---|---|
-| **DeepSeek（默认）** | OpenAI 兼容 `POST /chat/completions`（base `https://api.deepseek.com`） | CORS **待逐项预检**（§4.2；推断可过，未验） | 2026-10-31 可达（§2.3） |
-| **Anthropic** | `POST https://api.anthropic.com/v1/messages` | 需 `anthropic-dangerous-direct-browser-access: true` 头；CORS 官方支持 | 2026-10-31 可达（§2.3） |
-| **OpenAI（备选）** | `POST https://api.openai.com/v1/chat/completions` | CORS **待逐项预检**；BYOK 下 key 在浏览器，泄露面由用户自担 | 2026-10-31 **超时**（加速关；待复测） |
+| **DeepSeek（默认）** | OpenAI 兼容 `POST /chat/completions`（base `https://api.deepseek.com`） | CORS **已预检通过**（快照 2） | 2026-10-31 可达 |
+| **Anthropic** | `POST https://api.anthropic.com/v1/messages` | 需 `anthropic-dangerous-direct-browser-access: true` 头；CORS **已预检通过**（快照 2，该头在 allow-headers） | 2026-10-31 可达 |
+| **OpenAI（备选）** | `POST https://api.openai.com/v1/chat/completions` | CORS **已预检通过**（快照 2）；BYOK 下 key 在浏览器，泄露面由用户自担 | 2026-10-31 可达（复测，快照 2） |
 
 ---
 
