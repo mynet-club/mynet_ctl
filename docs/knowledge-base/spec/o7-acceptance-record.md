@@ -59,3 +59,18 @@
 - ~~并发护序~~（2026-10-11 完成，见 §2 + 审计）
 
 > O7 门禁要求：以上每项须有**实际证据**，不能用「ping 通 / 服务 running / 规则里搜到字符串」代替（playbook §7 G3）。
+
+## 4. O7 剩余·数据面矩阵上 OpenWrt（2026-10-31，真 LAN 双机）
+
+**拓扑**（弃 docker/slirp，用户裁定走真机）：E=0.32 隔离实例（/opt/mynet-l3，gnb_l3/9116，避开旧装机）；W/W2=0.8 PVE 桥接 OpenWrt x86 VM（192.168.0.105）；控制面=本机快照 API+gateway。gnb 为 0.32 gcc 静态件。
+
+| 矩阵态 | 隧道 | 经出口出网 | 结果 |
+|---|---|---|---|
+| C 角色（W，B 名下，白名单内） | 0.6ms | 203ms 通 | ✅ |
+| fail-closed（E 宕） | — | 100% 拒、路由仍指隧道零回落 | ✅ |
+| 撤销 DELETE | 隧道在 | 100% 拒 | ✅ |
+| U 角色（W2，D 名下） | 0.69ms | **100% 拒**（隧道通而出口拒） | ✅ |
+
+**过程揪出的平台事实**：① OpenWrt 的 `mynet service start`（procd 委托）起 gnb 不稳且**缺 proxy.conf 投影**（只在 `apply --active` 有）——O1/O4 要收的口；② **授权白名单是 PUT 时快照**，增删节点后需重 PUT 刷新 ACL；③ overlay 路由随 tun down 被内核清除，apply 所有权闸可能拒补 →「gnb 起 → apply --auto → 补路由」为标准恢复序列；④ 0.32 p2-itest 占默认路由（gnb_tun_a），用 from-源策略路由表 100 绕开。另：`mynet auth login` 须带 `--tenant`（S2 合同，agent `713ef09`）；端口错位教训再现（listen 与 endpoint 必须同源）。
+
+M4/M6 仍不勾；U/C 换角用重新 claim 实现（同一 VM 顺序扮演），非四节点并行矩阵。
