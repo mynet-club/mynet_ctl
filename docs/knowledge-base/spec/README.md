@@ -43,7 +43,8 @@
 | [v1-error-codes.md](v1-error-codes.md) | **稳定错误码清单（P0 冻结件）**：7 套信封现状 + 现有码注册表 + 死码与分叉 + 冻结口径 | 全线（后端 / agent / 壳） |
 | [local-api.md](local-api.md) | 本机能力面：mynetd HTTP/ubus 契约（GUI/OpenWrt 壳只调不改） | 目标线 ⚠️ 信封口径与代码不符，见 [v1-error-codes.md](v1-error-codes.md) §3-5 |
 | [data-models.md](data-models.md) | 所有数据结构（JSON/conf 格式，唯一定义处） | 目标线 |
-| [tips-kb-contract.md](tips-kb-contract.md) | **tips/小助手知识库**：蒸馏清单（md→chunk）+ tips-kb.json 载荷契约 + `/d/kb/` 分发与 id 合并语义 + tips 联动字段 | **现行**（契约定稿，实现批未开工） |
+| [tips-kb-contract.md](tips-kb-contract.md) | **tips/小助手知识库**：蒸馏清单（md→chunk）+ tips-kb.json 载荷契约 + `/d/kb/` 分发与 id 合并语义 + tips 联动字段 | **现行**（契约+实现批已落，见 dev-plan #77/KB-1） |
+| [assistant-selection.md](assistant-selection.md) | **小助手接入与 provider 选型**：BYOK 桌面直连架构口径（无 BFF）+ 可达性优先选型矩阵 + 只读工具面 v1 + 复测方法 | **现行**（2026-10-31 口径成文） |
 | [auth.md](auth.md) | 登录 / 登出 / Token 刷新 | ⚠️ **冻结（旧线）** |
 | [wizard.md](wizard.md) | 安装向导：首次配置、Zone/节点选择、配置同步 | ⚠️ **冻结（旧线）** |
 | [service.md](service.md) | 服务三层启停（GNB 进程 → 路由注入 → 防火墙） | ⚠️ **冻结（旧线）** |
