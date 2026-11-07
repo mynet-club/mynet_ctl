@@ -5,10 +5,10 @@
 ## 持续有效的约定
 
 - workspace：`/Users/arthur/Devel/WorkSpaceAI/mynet-club`。业务后端为 `mynet_api/`，旧目录 `mynet_back/` 已改名。
-- `mynet_utc` 暂时搁置，不纳入当前实现、验证或交付范围（用户 2026-10-08 明示）。
+- `mynet_utc` 自 2026-11-02 起按用户明示重启，作为独立技术轨道恢复；此前 2026-10-08 的“暂时搁置”结束。重启不改变 MyNet v1 排除项，除非另行裁定。
 - 现网库名仍为 `mynet_back`，引擎 MariaDB 10.11.18；源码更名不构成数据库更名授权。历史归档、备份和数据库引用保留原名。
 - 知识库在 `mynet_ctl/docs/knowledge-base/`；v1 执行基线在 `mynet_agent/docs/MYNET_V1_PLAYBOOK.md`。冲突时按最新明确裁定与代码取证判定，不能按旧勾选推定完成。
-- `mynet_gnb/` 是裸仓；工作树为 `.wt/gnb-actions`。上游源码只读，改动走补丁包。
+- `mynet_gnb/` 为正常根工作树，主线 main。按用户裁定维护自有源码，按需合并上游；不再走补丁包，原 .wt/gnb-actions 已退役。
 - 实际用户前端为 `mynet_gui`；`mynet_web` 定位在旧文档中有冲突，不据其 README 发起合并。
 - mynetd 纯通信、系统能力归执行器；gateway 不鉴权；凭证走 crt/crtvault，不读凭证库。
 - 2026-10-10 用户确认部署身份：.178 为公司节点、用户当前网络的公司主路由；.182 为家里的旁路由。两者不属同一 LAN，不自动将 .182 指定为当前网络试验机；本轮未升级或重启设备。
@@ -30,6 +30,8 @@
 | mynet_web | dc3ad08（10-04） | 1 | 他人 guard.sh | 不动 |
 
 未推送 = `git log --branches --not --remotes`。他人未提交件不得覆盖。
+
+> ⚠️ **2026-11-02 状态更正**：上表是 2026-10-13 的历史快照；`mynet_utc` 已由用户明示重启，按独立技术轨道恢复。上表“搁置”不再作为当前状态；以“持续有效的约定”首条为准。重启不改变 MyNet v1 排除项。
 
 **本机测试（2026-10-13）**：api Default **511 tests / 4874 assertions / 1 skip**；ctl **82/467/1skip**（skip = sqlite 并发，需 MySQL 双连接）、`make test-mysql` **172 passed /
 765 assertions**；agent `go build ./...` + `go test ./...` 19 包全绿；ctl 54 tests / 426 assertions /
@@ -393,3 +395,114 @@ OrbStack 隔离栈（快照控制面 + 4 Debian 容器真 gnb 隧道）完成上
 - **缺口 B（fresh-migrate 框架债）**：sso 三表（sso_auth_transactions / sso_sessions / operator_sso_accounts）的 CREATE 只藏在框架 auth_module 内嵌 map，存量库永不补跑而独立文件 2026_10_24_000001 会 ALTER ⇒ 缺表即炸。收编 `database/sql/2026_10_30_sso_tables.sql`（幂等 fresh-install 件，建到含 protocol 三列终态，MariaDB 10.11 口径）+ tests/Schema/CoreModule 同形三表。
 - ⚠️ **取证更正**：现网 mynet_back **实无这三表**（SHOW TABLES 只有 sso_providers）——复验会话「生产靠手工补过」不成立；生产没炸的真因是**禁 migration**（ALTER 从不跑）。运行面无 SSO 消费者不受影响；是否补表（幂等 CREATE）待用户发话。
 - **生产补表已执行（2026-10-31，用户放行「补吧」）**：备份 `/data/backup/mynet/mynet_back-pre-sso-20261030_213627.sql.gz`（6.4MB）→ 执行前取证三表均无 → source `database/sql/2026_10_30_sso_tables.sql` → 核对三张全在（sso_auth_transactions / sso_sessions / operator_sso_accounts）。表结构抽查：`sso_auth_transactions.assertion_id` varchar(128) UNI + `tx_unique`/`assertion_id_unique` 两索引在；`sso_sessions.session_index` varchar(128)；`operator_sso_accounts` 复合唯一 (tenant_id, sso_provider_id, principal)。幂等件可重复 source。
+
+### 2026-10-31 托盘「启动加速没用」修复（POST→PUT + 错误可见）
+
+用户反馈托盘点「启动加速」无效，须去网页开启。根因（`ae5fb32` 引入，本机 curl 实测复现）：
+托盘 `toggleAccel` 用 **POST** 保存配置到 `/api/v1/acceleration`，而 `handleAcceleration` 只收 **GET|PUT**（acceleration_api.go「GET|PUT only」）→ 405；`postJSON` 只把网络故障当 err，405/409/502 全被当成功吞掉，提示假报「加速设置已更新」，随后 apply 拿旧（关闭）配置执行，加速永远起不来。网页端走 PUT 故只有网页可用。
+
+修复（`cmd/mynet_tray/tray.go`，未提交）：新增 `doJSON(method,…)`/`putJSON`，配置保存改走 **PUT**；新增 `apiErr` 校验 HTTP 状态码 + success 信封，install/保存/apply 三处失败均提示可见，不再假报已更新。新增 `cmd/mynet_tray/accel_toggle_test.go` 5 条回归（锁 PUT 方法、三类失败可见、关闭路径不留开启意图），替身按 localapi 真实方法约束（POST 405）回放。
+
+验证：新测试全绿且旧代码下会红；`go test -race ./cmd/mynet_tray` 通过；`make check` 全绿（guard 首跑拦下误构建入仓的 mynet_tray 产物，已删）。
+
+本机已装（用户授权）：darwin/arm64 CGO 构建 `v0.1.2-123-g540ab1d-dirty`，builder arthur@local_2026-10-31T15:04Z；备份 `/opt/mynet/bin/backup-tray-putfix-20261031-230425/`（mynet_tray + MyNet.app-bin 两份）。替换 `/opt/mynet/bin/mynet_tray` 与 `/Applications/MyNet.app/Contents/MacOS/MyNet`（运行中那份），ad-hoc 重签（identifier club.mynet.tray）。SIGTERM 重启托盘（托盘无信号处理，onExit 不触发，**不连带停隧道**——实测 gnb/dns-hook/mynetd 三进程 PID 未变，加速 state=running 保持）。只换托盘，未动隧道/加速/myd。
+
+⚠️ 遗留状态：本机 `config.enabled=true, dns_enabled=false` 但 hook 在跑（旧 bug 期间 PUT 全被 405 拒、配置从没写成功过留下的不一致）。托盘下一次启停会写一致配置（启=双 true、关=双 false）自愈；未代用户点菜单验收，待用户在托盘点「关闭加速→启动加速」确认。
+
+## 2026-11-05 UTC A2 当前为待授权阻塞（公网/OpenWrt 验收）
+
+R1–R5、R7、A4 与 R6 的隔离 netns 验收、Linux ASan/UBSan、macOS/agent 全量门禁均已通过（见前几条）。**公网验收执行卡与 OpenWrt 待授权项已写入 `mynet_utc/docs/STAGE_A_INTERFACE_DESIGN.md` §11.10**：公网 E 候选 .188（Debian 13 x86_64）需授权 `apt-get install -y build-essential` 并部署，relay 监听 TCP 443（或 80）+ UDP 9011；OpenWrt 需指定 .178 或 .182 与 SDK 授权。已连续多轮请求授权未获回应，按规则不能在这些远端节点做任何写操作，也不能以隔离证据冒充公网通过。目标不标完成，待用户授权后继续。
+
+## 2026-11-05 UTC Linux ASan/UBSan 全量通过
+
+在 OrbStack Ubuntu arm64 VM 以 `-fsanitize=address,undefined -fno-omit-frame-pointer` 跑全量 `make -C tests`（含全部新模块与 formal/dual/core_offline/renewal/meter_report 真实进程场景），最终 `EXIT=0`（`/tmp/r6-sanitize-tests.log`）。过程修复：① tests/Makefile 的断言计数在 dash 下 `grep -c ... || echo 0` 输出两个 0 导致 `Illegal number`，改 `|| true`；② test_plugin_v2 把完整 protocol vtable 截断成 base 类型，validate 读取 split/build 越界（ASan stack-buffer-overflow），改回完整 `mn_protocol_v2_t` 与 `changed.base.*`；③ formal 到期场景短租约 8s 在 sanitizer 高负载下无法先建立，延长至 20s/35s 等待。`session_create`+`free` 的最小复现仍被 LeakSanitizer 报为泄漏，证明该环境 LSan 误报（非真实泄漏），故以 `ASAN_OPTIONS=detect_leaks=0` 跑全量并保留 ASan/UBSan 其它检查。未提交/未推送/未部署。
+
+## 2026-11-05 UTC 公网验收执行卡（待授权）
+
+公网 E 候选 .188（Debian 13 x86_64，ssh admin@18.141.199.14 免密 sudo）：入向仅 TCP 22/80/443 + UDP 9011-9016，缺 gcc/make。执行卡已写入 `mynet_utc/docs/STAGE_A_INTERFACE_DESIGN.md` §11.10：① 授权后 `apt-get install -y build-essential`；② 在 .188 以 `PLATFORM=linux` 独立目录构建 utcd/utc-guard，自有 GNB 与上游 eed65f8 对照；③ relay 监听 TCP 443（占用则 80）、UDP 9011，A/B 在另外两台主机跑 `--security static-mtls`；④ 断言双向 TUN、第三 peer 对照、外层抓包非 export 零 pair 包、失效阻断与恢复；⑤ A-D 用 `--dual` 复跑。曾评估在 OrbStack VM 交叉编译 x86_64 版本，但 OpenSSL 的 x86_64 库成本过高，故以 .188 本机构建为现实路径。OpenWrt 需另指定设备与 SDK 授权。未授权前未对这些远端节点做任何写操作；未提交/未推送/未部署。
+
+## 2026-11-05 UTC R6 真实 netns 拓扑验收通过（A-S/A-D/agent/全封）
+
+在 OrbStack Ubuntu arm64 VM（非 docker 容器，与既往隔离测试同环境）以 root/netns 跑正式 static-mtls 拓扑：
+- A-S 正常组 `/tmp/r6-topology.log`（8 项全过）
+- A-D `--dual` `/tmp/r6-dual-topology.log`（8 项全过）
+- A-S + 真实 agent publish/verify `/tmp/r6-agent-topology.log`（9 项全过，含 `agent_publish_and_current_process_applied_verification`）
+- A-S 全封外部 UDP `--block-udp` `/tmp/r6-blockudp-topology.log`（第三 peer 与 Index 不可达、代理仍双向、零绕行）
+- token-lab 回归 `/tmp/r6-tokenlab-topology.log`（诊断路径未破坏）
+utcd/utc-guard 在 VM 内以 `PLATFORM=linux` 独立目录构建；GNB 自有版与上游 eed65f8 各构建一份作第三 peer 对照。每组含双向 TUN、第三 peer 对照、零原生 UDP 绕行、失效阻断与固定端口重连。**公网与 OpenWrt 设备仍未验收，不据隔离证据宣称公网可用**。未提交/未推送/未部署。
+
+## 2026-11-05 UTC R6 正式拓扑入口接线（待授权环境执行）
+
+`mynet_gnb/tests/test_utc_topology.py` 新增 `--security static-mtls` 与 `--utc-guard`/`--utc-tests`：复用既有 Linux netns 真实 GNB TUN、Index/第三 peer、外层抓包及失效/恢复/到期断言，utcd 配置改为正式 static-mtls（PKI、签名 lease、trust、install-floor），token-lab 默认路径保留诊断用途。`formal_materials` 复用 mynet_utc/tests 的 Harness 生成信任材料，已在本机验证可生成 trust/证书并 install-floor（`/tmp/r6-materials-*`）。真实 netns 与公网执行仍需已授权 Linux root 环境，未执行、未宣称通过。未提交/未推送/未部署。
+
+## 2026-11-05 UTC R3 计量报告去重落地
+
+新增 `mynet_utc_meter`：报告键 scope/lease/meter/epoch/direction/seq，96B 私有状态文件持久高水位；同 key+seq+value=duplicate、同 seq 不同值=conflict、seq 更小=stale、累计值回退=conflict、epoch 回退=replay，损坏失败关闭。utcd 新增 `MN_UTC_CONTROL_METER_REPORT` 与 `utc meter report` CLI，真实进程验证 accepted/duplicate/conflict/stale/replay 及重启高水位保留；生产二进制同过（`/tmp/meter-report-prod.log`）。UTC `make check` 34/0/0/0、`make -C tests` 全过、guard-audit 通过。去重只防重复累计，实际额度仍以签名许可与持久 quota 为准。未提交/未推送/未部署。本机可实现包已收口，剩 R6 真实拓扑/公网需已授权环境。
+
+## 2026-11-05 UTC A4 离线签发与两次续期闭环
+
+`utc-guard` 新增 `issue-lease` / `issue-revocations`：离线 Ed25519 签发，固定字段顺序规范 v1 JSON（十进制 uint64、小写 hex、一个末尾 LF、0600，临时文件 fsync 后 rename 原子替换），与 Go/C 校验器互通（AUTHORIZED）。续期测试 pair_gen 7→8→9 连续签发并装载新许可，E 的 quota_used=1024→2048→3072，同 quota account 两次续期不重复消费；旧 revision 快照重装拒绝。生产二进制同过（`/tmp/r6-renewal-prod.log`）；UTC `make check` 33/0/0/0、`make -C tests` 全过、guard-audit 通过。签发私钥只在运维进程与临时目录，未入库。公网 A-S 仍未验收。未提交/未推送/未部署。
+
+## 2026-11-05 UTC R4 受限远程分派接线
+
+agent 新增 `mynet.utc.coordinate` Op（`mynetd/commands`）：后端/本机请求只含 action(run|resume|status)、scope、pair、plan_json；`mynet utc coordinate` 在 install/trust 缺省时解析到本地安装路径 `conf/utc/install.json`、`conf/utc/trust.json`，请求里的 install/trust/gnb_binary/conf_dir 一律不进入 argv。新增 `--plan-json` 直接传 plan 内容（`utc.ParsePlan` 严格解码+manifest 校验），避免临时文件与任意路径。测试覆盖映射、evil install/trust/binary 不泄露、未知 action、缺 plan、缺 pair、超大 plan、无 `mynet.` 前缀拒绝；`go test ./mynetd/commands`、`go test -race ./mynet/utc ./mynet/driver ./mynetd/commands`、全量 `go test ./...` 与 `env -u MYNET_HOME make check` 全过（`/tmp/r4-op-test.log`、`/tmp/r4-race3.log`、`/tmp/r4-agent-check.log`）。真实 GNB 双端执行与后端联调仍未验收。未提交/未推送/未部署。
+
+## 2026-11-05 UTC R7 A-D 双侧配对落地
+
+utcd 新增 `pairing=dual` 与 trust `dual_peer_transport`/client `side=a|b`：E 按 OPEN.side 校验安装身份并配对两个 session，TCP↔TCP 按 datagram 边界转发；缺侧 `unpaired_drops` 计数不回退；fencing 同时按 side 与 transport 身份（修复 side 变化时旧身份未失权导致 A-A 仍可配对的缺陷）；dual 下 ACCEPT.udp_port=0 表示无 UDP 导出，wire 单测同步更新。真实三进程 4 项全过（缺侧丢弃、双向配对、单边重连不伤对端、A-A 不配对），生产二进制同过（`/tmp/r7-dual-prod.log`）；UTC `make check` 33/0/0/0、`make -C tests` 全过、guard-audit 通过。真实 GNB A-D 拓扑与公网仍未验收。未提交/未推送/未部署。
+
+## 2026-11-05 UTC R2 Core 失联门禁与会话容量
+
+utcd 新增 `coordination=core` + `core_control_socket`：非阻塞 500ms 限速 unix 探测 Core 控制通道，失联时 relay 拒新连接（core_refused）、client 不新建/不重连，已建未过期 session 继续转发并受许可截止约束；static（默认）无 Core 依赖可重连。真实进程 5 项全过（core 在线转发、失联拒新+旧会话继续、失联不重连、static 重连、max_sessions=1 不影响已建会话与控制面），生产二进制同过（`/tmp/r2-core-prod.log`）。`make -C tests` 全量通过、`make guard-audit` 通过。夹具教训：Core listener 必须真正 accept，否则 backlog 占满会被误判离线。A-D 双侧配对与真实 GNB 拓扑/公网仍未做。未提交/未推送/未部署。
+
+## 2026-11-05 UTC R3 E 持久额度接入 utcd
+
+新增 `mynet_utc_quota`（transport/auth/utc_quota.c，112B 格式+SHA256 校验）：E 为唯一 quota_owner，新会话 admit→持久 reserve→才转发；软额度拒新不拒旧、overage 单列；重启/重连不清零 used/reserved/epoch，崩溃预留记 uncertain 不释放；续期改 limit 不重置用量。relay 按 TCP→UDP=A→B、UDP 入站=B→A 批量 256KiB/1s 结算，不每包 fsync。单测 5 组全过；真实进程新增 2 项（SIGKILL 后用量保留、软额度拒新且用量不重置），formal 矩阵共 12 项全过（`/tmp/r3-tests.log`、`/tmp/r3-formal-prod.log`）；UTC `make check` 33/0/0/0、guard-audit 通过；生产 utcd/utc-guard 重建后 12 项全过；mynet_server 链接通过，证明 Core 未引入 OpenSSL 依赖。测试 INI 用 `quota_block_bytes=65536`（默认 1MiB 与测试额度相同会按软额度拒新，属预期语义）。未闭合：计量报告去重/乱序/冲突、跨端续期与租约文件联动、A-D 计量、真实 GNB 拓扑与公网。未提交/未推送/未部署。
+
+## 2026-11-05 UTC R5 协调 CLI 与恢复闭环
+
+agent 新增 `mynet/utc/coordinate.go` 与 `mynet/cmd_utc_coordinate.go`：`mynet utc coordinate run --install --trust --plan`、`resume --scope --pair`（按持久记录恢复，APPLYING 中断自动更大代补偿）、`status`。安装执行描述 `CoordinatorInstall` 固定每个节点的 conf_dir/gnb_binary/utcd_socket（必须绝对路径、拒绝重复 node id），不接受远程任意 --binary/--trust。`NewGeneration` 续期必须更大 generation 并重算 manifest。测试：两次无人值守续期均 EFFECTIVE、旧代拒绝、APPLYING 中断恢复补偿、只读目录下 journal 写失败不得 EFFECTIVE、CLI 参数/失败路径；真实 `go build ./cmd/mynet` 后命令入口可用。日志 `/tmp/r5-coordinate.log`、`/tmp/r5-fsync.log`、`/tmp/r5-cli.log`、`/tmp/r5-agent-check.log`。仍未覆盖：真实 GNB 双端拓扑、受限远程分派鉴权、续期与签名租约文件联动。未提交/未推送/未部署。
+
+## 2026-11-05 UTC R1 落地与 R4 真实 Node 适配器接线
+
+R1 已在 UTC 混合工作区完成（未整包提交/未推送/未部署）：新增正式 `security=static-mtls`，与两种 lab 完全分离；`mynet_utc_wire`（OPEN 488B/ACCEPT 436B，大端定长、未知版本拒绝）、`mynet_utc_trust`（安装 trust/binding/map，0600 单链接、未知键拒绝）、`mynet_utc_admission`（有界接纳 worker，guard fsync 离开转发 poll，满即 BUSY、迟到不 admitted）、`mynet_utc_permit`（双向许可装载）与 `apps/utc-guard`（verify/install-floor/recover-floor，recover 保留损坏历史）。utcd 在 ACCEPT 前不开 UDP，准入先 fence 旧 session 再占固定端口，到期停止转发；TLS 改为安装 key 集合 + `mn_tls_peer_key` 映射 transport ID。真实双进程 10 项反证全过（缺水位、双向 AUTHORIZED、转发、fencing、过期、撤销、SIGKILL 后撤销仍生效、recover、binding 外身份、到期停止），生产二进制 `/tmp/r1-bin/{utcd,utc-guard}` 同样 10 项通过；UTC `make check` 32/0/0/0、`make -C tests` 全过、`make guard-audit` 通过。日志 `/tmp/r1-check.log`、`/tmp/r1-tests-run.log`、`/tmp/r1-formal.log`、`/tmp/r1-formal-prod.log`、`/tmp/r1-root-build.log`。
+
+agent 侧新增 `mynet/utc/execnode.go`（真实 Node 四方法）与 `utcd_control.go`：Prepare 拒绝 token-lab/mtls-transport-lab、Apply 读当前 GNB APPLIED、独立 PID 观察（ps 校验 conf+binary）、Verify 要求双向计数超过 Apply 基线并绑定对端 boot、Block 用更大代+过去截止且要求不再 APPLIED。协调器+双 ExecNode 在 fixture 环境到 EFFECTIVE；真实 utcd 进程控制面集成通过。`go test -race ./mynet/utc ./mynet/driver` 与 `env -u MYNET_HOME make check` 全过（日志 `/tmp/r4-race2.log`、`/tmp/r4-agent-check.log`）。过程修复两个真实缺陷：IDENTITY 拒绝时 ACCEPT 因空 peer 字段编码失败而不回包；Verify 回执缺 PeerBootID 被协调器拒绝。
+
+仍未完成：R5 协调 CLI/恢复闭环、R3 计量续期、真实 GNB 双端拓扑与受限远程分派鉴权、A-S 公网、A-D、OpenWrt 设备。AUTHENTIC/ELIGIBLE/fixture EFFECTIVE 不等于真实 A2 验收。状态入口已更新 `mynet_utc/docs/STAGE_A_INTERFACE_DESIGN.md` §11.9/§11.10、执行契约 §7、`UTC_SYSTEM_ARCHITECTURE.md` 接线段与 `docs/README.md`，未新增平行文档。子 agent 只承担三份 C 单元测试（wire/trust/admission，全过），接口与最终审查由主 agent 完成。
+
+## 2026-11-04 UTC 独立轨道：GNB MVP 源码
+
+`mynet_gnb` main 本地提交 `d5d3908`，直接开发父提交 `04e6b10`，原始源码基线 `eed65f8`。实现 per-peer UTC 收发约束、版本/热载/到期、持久恢复和 --utc-managed 启动断言。A-S/A-D 真实 GNB 驱动夹具各 18 项、288 个持久化故障用例及 ASan/UBSan 通过；完整入口为 `mynet_gnb/docs/gnb-maintenance-plan.md`。agent/A2 外部受管元数据及启动参数、协调器、真实 utcd/TLS/租约与公网验收仍待完成。OpenWrt 仅源码编译，测试环境缺 libz 阻断完整链接；未做设备验收。本地提交，未推送、未改发行 pin、未部署。UTC 规划文档的状态说明已更新于工作区，未混入 GNB 提交。
+
+## 2026-11-04 UTC A2 本地执行与协调内核检查点
+
+agent main 本地提交 `06e633c`（父提交 `63d8ca4`）：受管历史、版本投影/逐 pair 合并、当前进程 APPLIED 验证、systemd/procd exec 启动接线，以及持久协调状态机。GNB main 本地提交 `104b675`（父提交 `d5d3908`，原始源码 `eed65f8`）：收发/生命周期核心收拢到 gnb_utc.c/h，I/O 保留私有 service 辅助模块。agent make check、driver/协调内核 race、GNB 288 个故障用例与 A-S/A-D 18+18 驱动回归、真实 agent/utcd 7 项实验通路通过。协调内核的授权/节点适配器尚未落到真实端点，不能将其受控适配器测试当作完整 A2；utcd 重连/A-D binding、认证授权仍未完成。UTC 原有混合工作区及文档更新未混入上述两仓提交。未推送、未部署。当前目标继续有效，实施入口 mynet_utc/docs/STAGE_A_INTERFACE_DESIGN.md §11.9。
+
+## 2026-11-04 UTC 实验重连与迟到证据续批
+
+agent main `8dc5fac`（父 `06e633c`）：准备及确认阶段显式复核 context/授权/证据有效期，拒绝迟到成功；只读准备取消不改旧路径，已变更路径用新代阻断。GNB main `2489adc`（父 `104b675`）：真实 utcd 夹具增至 9 项，包含进程不变自动重连、固定端点恢复与无原生绕行。UTC 工作区已实现 token-lab Client 退避重连、端口保留、离线队列丢弃、握手截止及信号退出；macOS/Linux 真实进程与 ASan/UBSan 测试通过，UTC make check/guard-audit 通过。UTC 原有未提交基线仍未整包提交。真实授权/节点适配器、正式 binding/session、mTLS/许可及 A-D 仍未完成。状态已合并至 mynet_utc/docs/STAGE_A_INTERFACE_DESIGN.md §11.9；整体目标继续有效。未推送或部署。
+
+## 2026-11-04 UTC 静态授权检查点
+
+agent main 本地提交 `3faf08a`（父 `8dc5fac`）：真实 Ed25519 静态租约校验、可信双向 binding 配置、按签发密钥/scope 隔离的撤销与时钟持久水位，以及本地 `utc authority verify/install-floor`。已知撤销集合单调保留，缺水位拒绝自动初始化，显式恢复需独立可信 revision 与完整撤销集。macOS 全量 `make check`、race 测试及隔离 Linux arm64 实际授权/协调器/CLI 测试通过；Windows 仅交叉编译。验证日志 `/tmp/agent-static-scoped-full-check.log`、`/tmp/agent-static-canonical-final-tests.log`；测试签名密钥均为临时生成。AUTHORIZED 不等于 PREPARED/APPLIED/EFFECTIVE；真实 Node 适配器、utcd mTLS/binding/session/额度执行和 A-D 仍未完成。正式状态入口仍为 `mynet_utc/docs/STAGE_A_INTERFACE_DESIGN.md` §11.9，未新增入口文件。未推送、未部署；其他 agent 路由修改及 UTC 混合工作区未混入本提交。
+
+## 2026-11-04 UTC mTLS transport 与真实进程接线
+
+UTC 混合工作区新增 `include/mynet/mynet_tls.h` 与 `src/transport/tls/channel.c`，并接入真实 utcd：默认 token-lab，显式 mtls-transport-lab；OpenSSL 3/TLS 1.3 双向 PKI + 固定 SPKI pin，绝不回落明文。TLS context 由实例持有，channel 由 session 持有，fd 借用；server 按 poll 双向 WANT、SSL_pending 和每连接3s总握手截止调度；client 为有界握手 helper。临时 PKI 模块测试覆盖 CA/过期/EKU/ALPN/TLS1.2/pin/背压及字节完整；真实进程10项覆盖双向多尺寸 UDP、两端错 pin、私钥错配、明文拒绝、半握手资源、控制响应、重连/稳定端点、SSL pending 和 SIGTERM。发现并修复 socket 调优值被拒绝时默认发送缓冲不足以处理大 UDP 的问题：尝试4MiB，失败时回到单最大 UDP 所需的64KiB。Linux 严格编译另修三处历史连写语句格式，不改变行为。
+
+用户明确授权 Terra/Luna 承担边界清晰的常规任务：Luna 在隔离Linux用-Werror、ASan/UBSan及detect_leaks=1跑真实TLS10项与原token回归4项，均exit0；Terra 用正式Makefile显式PLATFORM=linux独立构建并跑10项，exit0。其首次未显式指定平台的产物带host历史config.mk的macOS宏，不能作为Linux验收证据；保留日志并已重验。VM证据 `/tmp/luna-utc-tls/test-utcd-tls-extended.log`、`test-utcd-reconnect-retry.log`、`/tmp/terra-utc-build-linux/build.log` 与 `tls-test.log`；host `/tmp/utc-mtls-process-extended-tests.log`。纯Core旧文件 control_plane/core_policy 的两处 strncpy 编译警告仍存在，未混入本轮修复。macOS最新全量makecheck27/0/0/0及guard/guard-audit通过，完整证据 `/tmp/utc-mtls-check-final.log`、`/tmp/utc-mtls-guard-final.log`、`/tmp/utc-mtls-audit-final.log`。当前统一入口仍为 `mynet_utc/docs/STAGE_A_INTERFACE_DESIGN.md` §11.9。两种lab模式仍不能进入正式PREPARED；真实Node、utcd签名租约/binding/session fencing/计量及A-D未完成，未公网/OpenWrt SDK或设备验证。UTC混合工作区未整包提交，未推送/部署，目标保持进行中。
+
+R1 继续进展：UTC 新增 `mynet_static_lease.h` / `src/transport/auth/static_lease.c`，独立 transport/auth 适配层按 agent 规范编码识别租约与撤销快照并真实 Ed25519 验签。Terra 的 `tests/static_lease_fixture.go` 调用实际 agent SigningBytes，私钥只在内存；默认回归保留公开签名样本，跨仓目标另用新密钥重生样本防编码漂移。输入界限 lease4096B、revocations73728B/1024IDs；uint64溢出/非法JSON/未知与重复字段/篡改/截断/排序去重/空表/容量反证通过，失败清空输出。macOS跨语言9组、Linux Luna严格-Werror/ASan/UBSan9组均exit0（VM `/tmp/luna-utc-static-codec/limit.log`）；UTC最新makecheck28/0/0/0、guard/guard-audit通过（host `/tmp/utc-static-codec-check.log`、`/tmp/utc-static-codec-guard-final.log`、`/tmp/utc-static-codec-audit.log`）。仅返回AUTHENTIC，不是当前TTL/信任scope/持久撤销水位/额度授权，未接utcd正式guard；R1 OPEN/ACCEPT、可信身份映射及后续R2–R7仍未完成。源码仍在UTC混合工作区，未整包提交/部署。
+
+本目标交接规则（用户2026-11-04明确要求）：5小时用量达到80%时收拢派出agent，停止新派发，保存安全检查点并给出剩余任务playbook；读取Codex账号primary 300分钟usedPercent，不能用goal累计token代替。最近用量复核为81%，已触发用户80%收尾条件；Terra/Luna均交回并结束、测试句柄确认为exit0，无在跑测试agent，停止新开发/派发并交接。剩余R0–R7队列已纳入既有 `STAGE_A_INTERFACE_DESIGN.md` §11.10，README已更新对应入口，不新增平行playbook文件。完整目标仍active；不因额度交接标完成。
+
+R1 C持久guard本轮检查点：`mynet_static_guard.h` / `src/transport/auth/static_guard.c` 实现固定可信issuer/key/scope域、精确单向binding、TTL/撤销epoch、私有持久水位、非阻塞flock、显式安装API、损坏/缺失拒绝、撤销只增不减及观测时钟防回拨。Go真实签名→C正常5组、Linux严格-Werror/ASan/UBSan5组通过；本机测试专用对象另外覆盖四个file/directory fsync失败点，均拒绝本次ELIGIBLE、健康重试后恢复。最新UTC全量makecheck29/0/0/0，guard/guard-audit通过，日志 `/tmp/utc-static-guard-check-final.log`、`/tmp/utc-static-guard-guard-final.log`、`/tmp/utc-static-guard-audit-final.log`；Linux正常证据在VM `/tmp/luna-utc-static-guard/test.log`。guard同步metadata fsync须放有界接纳worker；C安装API尚未有真实运维入口，Go install-floor不能代替C水位。正式OPEN/ACCEPT、TLS key→transport ID、双向许可完整性、quota/session/data面接线及系统断电矩阵仍缺，A2/R1整体未完成。额度81%收尾，接棒按现有阶段A §11.10执行；UTC混合工作树仍未整包提交、未推送/部署。
+
+## 2026-11-05 心跳设计裁定澄清 + 远程命令交付缺陷修复（mynet_api，未提交）
+
+**用户裁定澄清（心跳，勿再当缺陷提）**：心跳完整归 mynetd 常驻（不再 cron/单次拉起——高频 spawn 不合算，且简捷）；系统信息在 mynetd 每次启动首拍调 `mynet metrics` 采一次即足够，此后每拍只换时间戳发存活心跳（2026-10-15 裁定已在码：`cmd/mynetd/main.go` metricsReady 冻结 + TestHeartbeatCollectsMetricsOnlyOnce）。理由：进程存活期间设备不会换（USB 热插拔不在范围）。审计中「指标启动冻结」一项**撤回**，不作为缺陷。唯一待裁定边界：同一冻结快照里的 `vpn_interfaces` up/down（后端 `areAllVpnInterfacesDown` 拿它判离线）属运行态而非硬件——首拍延后到隧道恢复后 / 逐拍轻探 / 接受现状，由用户定。
+
+**远程命令「发了没反应」根因已修（mynet_api，工作树未提交）**：命令认领（markAsExecuting）收归唯一入口 `GET /api/v1/node/commands`。① 心跳 store() 不再调 selectPendingCommands——此前每拍心跳把 1 条 pending 命令标成「执行中」而 mynetd 丢弃心跳响应体（backclient.go reportHeartbeat 只看状态码）→ 永久卡死；② reportResult 不再顺带「下一条」——gateway forwardNodeResult 把响应体 io.Copy(io.Discard)，第二条及以后被抢成「执行中」卡死（排队 N 条只执行 1 条）；③ 认领前 `MonitorRtCmdService::requeueStaleExecuting`（EXECUTING 超 10min → PENDING）作双保险。证据：NodeHeartbeatController.php（store 命令段恒 `[]`、reportResult 恒 `[]`、selectPendingCommands 顶部回收）、MonitorRtCmdService.php 新增 requeueStaleExecuting、PendingCommandsContractTest +5 例（吞命令/抢下一条/逐条交付/超时回收/未超时不重复下发）。旧代码下 3 例红、新代码 10/10 绿；make test **552/4998/1skip** 绿，make test-mysql **198 passed / 1 failed**（唯一红 = OnboardingStatePersistenceTest::round_trip，MySQL 既有失败，干净代码同样红，与本改无关）；make lint、make guard 通过。
+
+**审计遗留（未修，按需排期）**：WS 重连不补拉命令（OnConnect 只 catchUpBundle）；结果上报无持久化重试（WS 断开即丢）；transport 退避不复位且 jitter 为空函数；结果帧无大小护栏（gateway maxFrameBytes 1MiB 超限杀连接）；commands.Run 的 Elapsed 恒 0。会话侧目标方案（node-keying.md §5 Ed25519 challenge-response）仍未实施，现行 WS 握手只带 X-Node-Id。

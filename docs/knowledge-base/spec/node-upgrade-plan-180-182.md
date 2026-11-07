@@ -5,7 +5,7 @@
 > `.182` = `192.168.0.2`，本地（home）**旁路网关**（跑 smartdns），**proxy 的 client**。
 > 承接 [platform-lifecycle-build-playbook.md](platform-lifecycle-build-playbook.md) §5 **H6 现网迁移**。
 > 既有前置计划（不复述，做输入）：`mynet_openwrt/docs/UPGRADE_PLAN_192_168_0_2.md`（.182，2026-09-29）、
-> `.wt/gnb-bare-leftover-20261004/.../p2-route-proxy/UPGRADE-180.md`（.180，2026-09-30 已执行 gnb 升级）。
+> `mynet_gnb` 提交 `b1df2be^:packages/1.6.8-c411f14ee647/p2-route-proxy/UPGRADE-180.md`（.180，2026-09-30 已执行 gnb 升级；原 `.wt/gnb-bare-leftover-20261004` 已于 2026-11-04 清理，文件从该提交取回）。
 > 本轮**只出计划**：不连节点、不改配置、不动 smartdns、不轮换密钥。
 
 **本轮裁定（用户 2026-10-10）**：D1 `.182`=本地旁路网关（旧「公司整网网关」为误读，已回改）· D2 **本次不轮换密钥**（接受推荐）· D3 **走 CI 产物** · D4 `.182` **用 ipk** · D5 `.182` 已非活路径（现网主网关已切到 `.1`），维护窗压力低。

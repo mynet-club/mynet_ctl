@@ -48,7 +48,7 @@ gnb / wireguard 各自的协议与目录结构**不能也不打算破坏**。
   `mynet config migrate-layout` 收口）；**协议内布局不变**——node.conf / route.conf /
   address.conf / security/<id>.{private,public} / ed25519/*.public 仍在该目录内原样；
   `gnb.map` 由 gnb 自己产出，**只读不搓**。
-- gnb 源码的改动走 **`git format-patch` 补丁包**（`mynet_gnb/packages/`），`src/` 保持上游原样，升级用 `rebase.sh`。
+- **2026-11-03 用户裁定：GNB 维护自有版本。** 直接修改 `mynet_gnb` 源码并按正常提交/构建流程交付，不再要求 `git format-patch`、packages 补丁包或 `src/` 保持上游原样。需要吸收作者主线时，在集成分支拉取并合并上游，处理冲突、完成默认行为及 UTC 路径/恢复回归后纳入自有主线。保留 Git 历史、上游来源/基线与自有版本标识；此决定不授权生产部署，也不取消 VPN wire/payload/密钥/身份边界。
 - gnb 落盘的私钥是 `clamp(SHA512(seed))`（128 hex），公钥 64 hex——**这是驱动的事实，只能遵循**。
   磁盘只存驱动原生密钥格式（gnb=128hex、wg=wg.conf 的 base64 44）；hex↔base64 只留 DB/上报边界。
 
@@ -377,7 +377,7 @@ operator / platform / plugin / ticket / sms / form / knowledge / conversation �
 | `mynet_api` | Laravel — 业务权威 | **新建 + 整理式搬运**，**按需 module（31→3~4）** |
 | `mynet_openwrt` | LuCI 壳 + ubus 薄桥 + ipk | **改造** |
 | `mynet_ctl` | 分发中心 + **知识库中枢**（`docs/knowledge-base/`） | **挂载，不动** |
-| `mynet_gnb` | opengnb fork + 补丁包 | **挂载，不动** ⚠️ git 历史必须保留（rebase 上游） |
+| `mynet_gnb` | GNB 自有版本，按需合并上游 | 允许源码开发；保留 Git 历史与上游来源，合并后回归（2026-11-03 用户裁定） |
 | `mynet_utc` | UDP→TCP 隧道 | **挂载，不动** |
 
 ⚠️ **D-4 已作废**（原「合并 `mynet_ui` + `mynet_gui` → `mynet_web` 一份 WebUI」）。

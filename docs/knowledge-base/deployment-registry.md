@@ -13,16 +13,25 @@
 
 ### 1.1 服务器部署
 
-| 项目 | 类型 | 生产域名 | 部署路径 | 部署命令 |
-|------|------|---------|---------|---------|
-| **mynet_ctl** | Laravel 12 | ctl.mynet.club | `/data/app/mynet.club/ctl` | `cd mynet_ctl && bash scripts/deploy/deploy.sh` |
-| **mynet_api** | Laravel 12 | api.mynet.club（API）<br>**console.mynet.club**（租户管理） | `/data/app/mynet.club/api` | `cd mynet_api && ./manage-prod.sh deploy` |
-| **mynet_gui** | Vue 3 / Quasar | my.mynet.club | `/data/app/mynet.club/my/public` | `cd mynet_gui && bash deployment.sh` |
-| **mynet_web** | 静态站点 | www.mynet.club | ⚠️ **未建立**（无部署路径记录） | ⚠️ **无部署脚本** |
+**（2026-11-03 迁移完成，见 [biz-migrate-180-to-xiawo.md](spec/biz-migrate-180-to-xiawo.md)）**
 
-服务器 **`10.182.236.180`**（公网 `52.77.179.176`）。ctl / 后端 / gui 三者**共置同机、
-各是独立 nginx server block**；证书在 `/etc/letsencrypt/live/mynet.club/`，
-**主机 nginx 终结 TLS**（H1：不引入 Caddy）。
+| 项目 | 类型 | 生产域名 | 服务器 | 部署路径 | 部署命令 |
+|------|------|---------|--------|---------|---------|
+| **mynet_ctl** | Laravel 12 | ctl.mynet.club | **xiawo** `18.141.199.14` / `172.26.4.91` | `/data/app/mynet.club/ctl` | `cd mynet_ctl && bash scripts/deploy/deploy.sh` |
+| **mynet_api** | Laravel 12 | api.mynet.club（API）<br>console.mynet.club（租户管理） | **xiawo** 同上 | `/data/app/mynet.club/api` | `cd mynet_api && ./manage-prod.sh deploy` |
+| **mynet_gui** | Vue 3 / Quasar | my.mynet.club | **xiawo** 同上 | `/data/app/mynet.club/my/public` | `cd mynet_gui && bash deployment.sh` |
+| **mynet_web** | 静态站点 | www.mynet.club | **xiawo** 同上 | `/data/app/mynet.club/www` | ⚠️ **无部署脚本** |
+| **mynet_gateway** | Go | gw.mynet.club | **`.180`** `172.26.3.227` | `/opt/mynet-stage/bin/` | systemd `mynet-gateway.service` |
+| **sub / xray / client** | 工具面 | sub/xray/client.mynet.club | **`.180`** 留 | 各自路径 | 不随业务迁移 |
+
+**xiawo**（Lightsail `xiawo`，公网 `18.141.199.14`，私网 `172.26.4.91`，Debian 13）：
+业务面主机。MariaDB 11.8（`mynet_back` + `mynet_ctl` + 壳库）。nginx 直连 443。
+**CF 橙云代理**，源站自签证书 `/etc/ssl/mynet/`，CF SSL=full。
+
+**`.180`**（Lightsail `Mynet`，公网 `52.221.22.241`，私网 `172.26.3.227`，Debian 12）：
+工具/加速 + gateway 入口。nginx stream SNI（Reality + 网站）。
+gateway 绑私网 `172.26.3.227:8097`（带 `-internal-token`），upstream `http://172.26.4.91`（D12 内网 http）。
+MariaDB 10.11 保留作只读备份（≥7 天）。
 
 > **子域命名（H4 裁定，2026-09-24）**：`console.mynet.club` = 后端的**租户管理**面；
 > `admin.mynet.club` 让给框架的 platform/operator SPA（**不是** 后端的管理面）；

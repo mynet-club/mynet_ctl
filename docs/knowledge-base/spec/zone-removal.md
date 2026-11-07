@@ -74,8 +74,10 @@ make pkg-darwin VERSION=v0.0.7-pkg
 
 `GNB_DIR` 本轮复用 v0.0.6 已回归通过的 darwin/arm64 四件套（`mynet_gnb` 出包面这轮零改动，
 重编 gnb 会撞 `1.6.8-c411f14ee647` 的基线漂移坑，见「gnb 出包基线漂移」）；`P2_DIR` 指向
-`.wt/gnb-bare-leftover-20261004/packages/1.6.8-c411f14ee647/p2-route-proxy`，与 v0.0.6 pkg
-内的 p2 文件逐字节一致。验收：pkg payload 文件清单与 v0.0.6 完全一致、gnb 字节一致、
+`mynet_gnb` 提交 `b1df2be^` 下的 `packages/1.6.8-c411f14ee647/p2-route-proxy`（原先指向
+`.wt/gnb-bare-leftover-20261004`，该遗留目录已于 2026-11-04 清理；用
+`git -C mynet_gnb archive b1df2be^ packages/1.6.8-c411f14ee647/p2-route-proxy | tar -x -C <dir>` 取回），
+与 v0.0.6 pkg 内的 p2 文件逐字节一致。验收：pkg payload 文件清单与 v0.0.6 完全一致、gnb 字节一致、
 `mynet version` 三查（baseline/patches/builder）、二进制内 `网络区` 有 / `租户`·`网络空间` 无、
 `shasum -c checksums.txt` 全 OK、dmg 内 pkg 与 `dist/pkg` 同字节。
 

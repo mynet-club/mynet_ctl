@@ -1,6 +1,6 @@
 # 业务面迁移计划 —— .180 → xiawo（AWS 内网互通）
 
-> 2026-11-03 拟。**状态：仅计划，未执行**。
+> 2026-11-03 拟。**状态：已执行**（S0–S5 全部完成 + S6 大部分完成 + S7 复验补漏完成；T5/xiawo 出口职责待裁）。
 > 裁定来源：用户 2026-11-03 —— 「mynet 业务、xiawo 业务都在 xiawo 实例；gw 入口还在 180；
 > 找到他们的 AWS 内网，建立 AWS 内网通信。10.182.236.180 是 UDP 建立的 VPN 网络，不是内网。」
 
@@ -259,15 +259,28 @@ graph TB
 | S5-2 | 节点 WS 不动（仍 `wss://gw.mynet.club`） | ✅ **5/5 节点回连** |
 | S5-3 | 回灌验证 | `gw.mynet.club/healthz` 200 · gateway→API 内网 HTTP 200 |
 
-### S6 — 收尾
+### S6 — 收尾 → ✅ **大部分完成（2026-11-03）**
 
-| # | 动作 |
-|---|---|
-| S6-1 | `.180` 下线 api/ctl/gui/nginx 业务 block、php-fpm 池、mynet-queue |
-| S6-2 | `.180` MariaDB 保留只读备份 ≥7 天，再议退役 |
-| S6-3 | xiawo 摘 proxy 出口职责（D5）或降权；加速出口收敛 `.180` |
-| S6-4 | 更新 `deployment-registry.md` + 本文档状态 |
-| S6-5 | 更新凭证库：`arthur/misc/ssl` 等条目的 host 字段 |
+| # | 动作 | 结果 |
+|---|---|---|
+| S6-1 | `.180` 下线业务残留 | ✅ `mynet-queue` stopped+disabled；6 个业务 nginx block → `sites-available/*.disabled-s6-20261103`（文件保留可恢复）；`gw`/`sub`/`xray`/`client`/`dns`/`openclaw` 保留 |
+| S6-2 | `.180` MariaDB 保留只读备份 ≥7 天 | **保持运行**，`mynet_back`+`mynet_ctl` 原样；7 天后再议退役 |
+| S6-3 | xiawo 摘 proxy 出口职责（D5/T5） | **待用户裁定**——现在 xiawo 已是业务面，应摘掉出口职责；见 §5 T5 |
+| S6-4 | 文档收口 | ✅ 本文档 + 窗口记录已更新 |
+| S6-5 | 凭证库更新 | ✅ 见下 |
+
+### S7 — 复验补漏 → ✅ **已完成（2026-11-02）**
+
+S6 后复验发现两个漏项，症状为节点心跳全 500（用户侧报「Server error. Please try again later.」，实为 `{"success":false,"message":"服务器内部错误"}`）。已修复并复验：
+
+| # | 漏项 | 症状 | 修复 |
+|---|---|---|---|
+| S7-1 | **`/etc/mynet/back_face_{priv,pub}` 密钥对未迁移**——S0 清单只覆盖应用目录/`.env`/库，`/etc/mynet/` 下服务端密钥漏项 | `POST /api/v1/node/heartbeat` 全 500；日志报 `[node-face] back_face 密钥不可用（C-1/H7）—— 节点面鉴权一律拒绝` | 从 `.180` tar 管道直传至 xiawo `/etc/mynet/`，`www-data:www-data` 0600，SHA256 指纹与源机一致（`6181b0de…` / `571244a8…`）。**密钥明文不落终端、不进工单** |
+| S7-2 | **`storage/logs` 对 php-fpm 不可写**——目录属 `admin:admin` 775，php-fpm 跑 `www-data`，写不进日志，异常全被静默吞掉 | laravel.log 自迁移后停更但服务仍在跑，排查时无任何错误可见 | `chgrp -R www-data storage && chmod -R g+w storage`；识别特征：**日志停更 ≠ 无错误** |
+
+**修复后复验**：心跳即刻恢复 200（`17:32:33` 起），日志「HeartbeatRequest 验证开始 → 控制器 store → Node heartbeat recorded → node_monitor 处理完成 ✅」全链路通；A1–A10 全绿。
+
+> **教训固化**：迁移清单必须包含**应用目录之外**的服务端密钥/证书（本例 `/etc/mynet/`）；且迁移后第一件事是验证 **web 用户对 `storage/` 可写**，否则出错无日志。
 
 ---
 
@@ -361,6 +374,8 @@ graph TB
 | 2026-11-03 | **S3 应用迁移完成** | api/ctl/my/download 全量上 xiawo（224M+47M+4M+1.8G）；nginx 6 站全 200；CF SSL=full | — |
 | 2026-11-03 | **S4b DNS 切换完成** | 8 业务域 A 记录 → `18.141.199.14`（橙云）；`gw`/`sub`/`xray` 留 `.180`（灰云）；全站 200 | — |
 | 2026-11-03 | **S5 gateway 切换完成** | gateway 绑私网 `172.26.3.227:8097` + `internal-token` + upstream `http://172.26.4.91`；5 节点回连；`gw.mynet.club` 200 | — |
+| 2026-11-03 | **S6 大部分完成** | `.180` 业务 block 已下线（文件保留）；MariaDB 保留备份；xiawo 出口职责待裁 | — |
+| 2026-11-02 | **S7 复验补漏完成** | 心跳全 500 根因 = `back_face` 密钥未迁移 + `storage/logs` 不可写（错误被吞）；两项已修复，心跳恢复 200，A1–A10 全绿；详见 §3 S7 | — |
 
 ---
 
