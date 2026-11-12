@@ -10,10 +10,12 @@ staging=$(mktemp -d "${TMPDIR:-/tmp}/mynet-release-package.XXXXXX")
 trap 'rm -rf "$staging"' EXIT
 
 git archive HEAD | tar -x -C "$staging"
-if [ -d public/build ]; then
-  mkdir -p "$staging/public"
-  cp -a public/build "$staging/public/build"
-fi
+[ -f public/build/manifest.json ] || {
+  echo "✗ 缺少 public/build/manifest.json，拒绝打出无前端资源的包" >&2
+  exit 1
+}
+mkdir -p "$staging/public"
+cp -a public/build "$staging/public/build"
 mkdir -p "$staging/storage/framework/cache" "$staging/storage/framework/sessions" \
   "$staging/storage/framework/views" "$staging/storage/logs" "$staging/bootstrap/cache"
 

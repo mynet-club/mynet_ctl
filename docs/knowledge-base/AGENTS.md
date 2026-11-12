@@ -204,7 +204,7 @@ operator / platform / plugin / ticket / sms / form / knowledge / conversation �
 - **tag 只能由发布流水线推送**：`mynet-club/mynet_release` 在 `make check`、打包和证据校验通过后写批准；开发机没有批准记录，tag 一律拒绝（bare 仓同理）。不按主机名/IP 区分机器。
 - **发布按仓库配置执行**：根目录 `release.json` 定义 build/test/sanitize/package/verify 与是否要求 P3；build 只编译，test 通过后 release 才打包、写批准、推 tag。工具在独立仓，本仓只维护配置。
 - **`make check` / `scripts/check.py` 仍是人工入口**：推送不再触发选测；人工全量验证与发布流水线使用同一套 `make` 入口。
-- **例外：`mynet_agent`、`mynet_gnb`** 仍由各自的多平台矩阵 CI 构建并分发到 ctl，tag 由该矩阵使用；在流水线支持同版本多 leg 之前，不要把本节的 tag 批准钩子套到这两个仓（会直接阻断它们的发布）。
+- **例外：`mynet_agent`、`mynet_gnb`** 仍由各自的多平台矩阵 CI 构建并分发到 ctl，tag 由该矩阵使用；在流水线支持同版本多 leg 之前，不要把本节的 tag 批准钩子套到这两个仓（会直接阻断它们的发布）。agent 的一次 `make dist` 覆盖 11 条平台腿且依赖 gui/desktop 产物；gnb 以 `packages/RELEASE-SOURCES` 的 `release_source_commit` 为构建源并保留补丁溯源，二者都不能用单 worktree 的单产物模型替代。
 - **`mynet_web`** 已上分层门禁，但构建仍是占位（CPI-40），没有 `release.json`；真实构建落地后再接入发布。
 
 - **`make guard` 三类红线**（见 `templates/.githooks/guard.sh`，功能自测 `templates/.githooks/guard_test.sh` **45 用例**）：

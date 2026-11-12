@@ -10,3 +10,8 @@ if [ ! -f .env ]; then
 fi
 npm ci
 npm run build
+
+[ -f public/build/manifest.json ] || {
+  echo "✗ public/build/manifest.json 缺失（vite build 未产出一致性资源清单）" >&2
+  exit 1
+}
