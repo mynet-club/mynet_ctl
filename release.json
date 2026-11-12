@@ -1,0 +1,10 @@
+{
+  "project": "mynet_ctl",
+  "platform": "any",
+  "arch": "noarch",
+  "commands": {
+    "build": ["sh", "scripts/release_build.sh"],
+    "test": ["make", "check"],
+    "package": ["sh", "scripts/release_package.sh", "{artifacts}", "{version}", "mynet_ctl"]
+  }
+}
