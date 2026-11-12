@@ -192,34 +192,20 @@ operator / platform / plugin / ticket / sms / form / knowledge / conversation �
 
 ### 2.6 守护机制 —— make 入口 + git hook 强制闸
 
-**双层守护，别绕过。**
+**分层守护：提交查红线，推送不阻断，发布按批准。**
 
 | 层 | 机制 | 内容 | 时机 |
 |---|---|---|---|
-| 入口 | `make check` | guard + lint + **全量**测试（显式全量验证入口） | 随时可跑；依赖升级、基线变更、要全量时 |
+| 入口 | `make check` | guard + lint + **全量**测试（显式全量验证入口） | 随时可跑；发布流水线的 build/test 阶段 |
 | 闸 1 | `.githooks/pre-commit` → `make guard` | **轻量**：安全红线 + 文件名（秒级） | 每次提交 |
-| 闸 2 | `.githooks/pre-push` | guard 恒跑；lint/test **按本次推送全部 ref 选测**，范围不足时扩为全量 | 每次推送 |
+| 闸 2 | `.githooks/pre-push` | 分支推送放行并记 `<git-dir>/gate-status=skipped`；tag 推送只放行与 `<git-common-dir>/release-approvals/<tag>` 的 `sha`、`tag` 完全匹配的记录 | 每次推送 |
 
-- **pre-push 的范围来源是推送本身，不是工作区。** 从 stdin 的 ref 行（`<local ref> <local sha> <remote ref> <remote sha>`）逐条算 `remote..local`，多 ref 各自验、相同范围去重；不看 `HEAD~1`、不用「以前通过过」的标记跳过。各形态的处置：
-
-  | 推送形态 | 处置 |
-  |---|---|
-  | 普通更新 | `scripts/check.py --run --range remote..local`（受影响的 lint + 测试） |
-  | 多 ref（分支 + tag） | 每个 ref 各自范围都验 |
-  | 新分支（远端无基线） | 取远程默认分支（`origin/HEAD`→`main`→`master`）的共同基线；取不到 → 全量 `make check` 并打印原因 |
-  | 远程基线本地不存在（远端被改写 / 未 fetch） | 全量 `make check` 并打印原因 |
-  | 删除 ref | 不新增内容：只跑 guard，明确打印 |
-  | 祖先提交的 ref（如旧 tag） | 只发布既有 ref、不新增树内容：明确打印后跳过内容检查 |
-  | 推送的提交不是当前 HEAD（分叉） | **阻断**：工作区验证不能冒充别的树 |
-  | 工作区有未提交的已跟踪改动 | **阻断**：工作区结果不等于将要推送的提交 |
-  | 选中测试 unresolved（依赖/基础装配/未知文件） | 全量 `make check` 并打印原因 |
-  | 选测失败（exit 1） | 阻断，不降级为全量 |
-  | 无 `scripts/check.py` 的仓 | 维持原语义：guard + 全量 `make check` |
-  | 有 `check.py` 但引擎不可用（锁定框架包还没有 `scripts/devtools/`） | 打印「选测引擎不可用」+ 全量 `make check`；连全量入口都没有则**阻断** |
-
-  选测引擎是实现契约（`scripts/check.py` → 锁定框架包的 `scripts/devtools/`，API v1）；**未知影响绝不静默通过**。功能自测 `templates/.githooks/push_scope_test.sh`（16 用例）跑在临时仓里，桩掉 guard/选测/`make` 逐条断言退出码、理由与**实际执行了什么**。
-
-  引擎不可用 ≠ 跳过检查：`mynet_api` 锁的框架版本还没有 `scripts/devtools/`，所以本仓当前推送会**打印原因后走全量**；把锁定框架包升到带 API v1 的版本后，选测自动生效（入口脚本与钩子都不必改）。
+- **开发推送不阻断**：分支推送不跑全量检查，`gate-status` 记为 `skipped`；全量检查由人工或发布流水线执行，检查结果不决定推送。
+- **tag 只能由发布流水线推送**：`mynet-club/mynet_release` 在 `make check`、打包和证据校验通过后写批准；开发机没有批准记录，tag 一律拒绝（bare 仓同理）。不按主机名/IP 区分机器。
+- **发布按仓库配置执行**：根目录 `release.json` 定义 build/test/sanitize/package/verify 与是否要求 P3；build 只编译，test 通过后 release 才打包、写批准、推 tag。工具在独立仓，本仓只维护配置。
+- **`make check` / `scripts/check.py` 仍是人工入口**：推送不再触发选测；人工全量验证与发布流水线使用同一套 `make` 入口。
+- **例外：`mynet_agent`、`mynet_gnb`** 仍由各自的多平台矩阵 CI 构建并分发到 ctl，tag 由该矩阵使用；在流水线支持同版本多 leg 之前，不要把本节的 tag 批准钩子套到这两个仓（会直接阻断它们的发布）。
+- **`mynet_web`** 已上分层门禁，但构建仍是占位（CPI-40），没有 `release.json`；真实构建落地后再接入发布。
 
 - **`make guard` 三类红线**（见 `templates/.githooks/guard.sh`，功能自测 `templates/.githooks/guard_test.sh` **45 用例**）：
 
@@ -279,13 +265,14 @@ operator / platform / plugin / ticket / sms / form / knowledge / conversation �
 - **精确不激进**：误报过多的守护会被 `--no-verify` 绕过，反而失效。正则取窄，宁可漏报。
 - **显式豁免**：在**违规那一行**写 `GUARD-OK <原因>`，该行即豁免；每次豁免记入 `.git/guard-exempt.log` 便于审计。`A4`（二进制归档）没有行可言、`A3`（按文件名）走上面那条文件级判据。
 - 模板在 `knowledge-base/templates/`，各 repo 复制一份（`Makefile` + `.githooks/`），`make install-hooks` 装 hook。
+  pre-push 自测 `templates/.githooks/pre_push_release_test.sh`（分支放行 / gate-status / 无批准拒绝 / 批准放行 / sha 不匹配拒绝 / tag 删除拒绝）。
   **覆盖前先 `diff` 本仓副本与模板**：`mynet_agent` 的 `B2` 是**有意加严的分叉**（提交
   `9267ce3`「保留本仓 B1/B2 分叉」）—— 它只扫 `mynetd/` 的 **import 字符串**、要求引号
   以免误伤注释里的包名，并额外覆盖 `shared/config` 与 `mynet/keys`。直接从模板 `cp` 会
   **静默削掉**这条已生效的红线。
 - **自包含不跨仓依赖**——各 repo 可独立 clone / build，hook 不能断。
 - **不要用 `--no-verify` 绕过 hook**。拦下了就按红线改。
-- **框架问题回框架，不在本仓修**：先在本仓复现定性（业务代码/本仓配置/本仓 CI 问题就地修），确认根因在 `dsplat/multi-tenant-saas` 才在该仓提 issue。issue 必带最小复现、锁定版本或 ref、失败证据、影响面、是否阻塞。框架发版后：定向 `composer update <具体包> --dry-run` 看闭包 → 正式更新 → 提交 `composer.lock` → 跑受影响测试与 CI → 回填 issue 再由框架侧关单。未更新 lock 视为未送达，本地通过不算验收；处理期间不改 `vendor/`、不手工覆盖框架源码。`mynet_api` 已于 2026-10-30 升到框架 **3.10.3 线**（2.7→3.10 契约迁移完成：S2 账号身份 `users.account_scope` + 显式租户选择，`pre-push` 选测引擎随 `scripts/devtools/` 到位自动生效）。
+- **框架问题回框架，不在本仓修**：先在本仓复现定性（业务代码/本仓配置/本仓 CI 问题就地修），确认根因在 `dsplat/multi-tenant-saas` 才在该仓提 issue。issue 必带最小复现、锁定版本或 ref、失败证据、影响面、是否阻塞。框架发版后：定向 `composer update <具体包> --dry-run` 看闭包 → 正式更新 → 提交 `composer.lock` → 跑受影响测试与 CI → 回填 issue 再由框架侧关单。未更新 lock 视为未送达，本地通过不算验收；处理期间不改 `vendor/`、不手工覆盖框架源码。`mynet_api` 已于 2026-10-30 升到框架 **3.10.3 线**（2.7→3.10 契约迁移完成：S2 账号身份 `users.account_scope` + 显式租户选择；`pre-push` 已改为分层放行，`scripts/check.py` 选测入口随 `scripts/devtools/` 到位自动生效，且只作为人工入口，不在推送路径上）。
 
 ---
 
