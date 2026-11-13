@@ -18,8 +18,8 @@
 | 项目 | 类型 | 生产域名 | 服务器 | 部署路径 | 部署命令 |
 |------|------|---------|--------|---------|---------|
 | **mynet_ctl** | Laravel 12 | ctl.mynet.club | **xiawo** `18.141.199.14` / `172.26.4.91` | `/data/app/mynet.club/ctl` | `cd mynet_ctl && bash scripts/deploy/deploy.sh` |
-| **mynet_api** | Laravel 12 | api.mynet.club（API）<br>console.mynet.club（租户管理） | **xiawo** 同上 | `/data/app/mynet.club/api` | `cd mynet_api && ./manage-prod.sh deploy` |
-| **mynet_gui** | Vue 3 / Quasar | my.mynet.club | **xiawo** 同上 | `/data/app/mynet.club/my/public` | `cd mynet_gui && bash deployment.sh` |
+| **mynet_api** | Laravel 12 | api.mynet.club（API）<br>console.mynet.club（租户管理） | **xiawo** 同上 | `/data/app/mynet.club/api` | 发布流水线 `deploy`（推荐）<br>人工 `./manage-prod.sh deploy` |
+| **mynet_gui** | Vue 3 / Quasar | my.mynet.club | **xiawo** 同上 | `/data/app/mynet.club/my/public` | 发布流水线 `deploy`（推荐）<br>人工 `bash deployment.sh` |
 | **mynet_web** | 静态站点 | www.mynet.club | **xiawo** 同上 | `/data/app/mynet.club/www` | ⚠️ **无部署脚本** |
 | **mynet_gateway** | Go | gw.mynet.club | **`.180`** `172.26.3.227` | `/opt/mynet-stage/bin/` | systemd `mynet-gateway.service` |
 | **sub / xray / client** | 工具面 | sub/xray/client.mynet.club | **`.180`** 留 | 各自路径 | 不随业务迁移 |
@@ -86,9 +86,9 @@ MariaDB 10.11 保留作只读备份（≥7 天）。
 | 用途 | 路径 | 说明 |
 |------|------|------|
 | CTL 部署 | [mynet_ctl/scripts/deploy/deploy.sh](../../scripts/deploy/deploy.sh) | rsync + 远程 composer + **migrate** + 缓存。ctl 自己允许 migrate（「禁止 migration」只约束 mynet_api） |
-| Back 部署 | [mynet_api/manage-prod.sh](../../../mynet_api/manage-prod.sh) | 远端守卫 → 备份 → rsync → composer → 权限 → 重载 FPM → 健康检查。**不跑 migrate** |
-| Back 备份 / 恢复 | [mynet_api/deploy/](../../../mynet_api/deploy/) | `backup.sh` / `restore.sh` / `backup-drill.sh` / `install-cron.sh`（V3-5） |
-| GUI 部署 | [mynet_gui/deployment.sh](../../../mynet_gui/deployment.sh) | 本地 build + rsync `dist/` |
+| Back 部署 | [mynet_api/scripts/release_deploy.sh](../../../mynet_api/scripts/release_deploy.sh) + [manage-prod.sh](../../../mynet_api/manage-prod.sh) | artifact → 远端守卫 → 备份（配置/数据 + code.tar.gz）→ rsync(`.rsyncignore`) → composer → 权限 → FPM → 健康检查。**不跑 migrate**；失败按 stamp 自动回滚 |
+| Back 备份 / 恢复 | [mynet_api/deploy/](../../../mynet_api/deploy/) | `backup.sh` / `restore.sh` / `backup-drill.sh` / `install-cron.sh`（V3-5，数据库） |
+| GUI 部署 | [mynet_gui/scripts/release_deploy.sh](../../../mynet_gui/scripts/release_deploy.sh)（发布）/ [deployment.sh](../../../mynet_gui/deployment.sh)（人工） | 版本目录 + 切换前快照 + `deployment-info` 健康检查；目标 `admin@xiawo` |
 | 客户端打包 | [mynet_agent/Makefile](../../../mynet_agent/Makefile) 的 `dist` 目标 | 5 平台 × 3 二进制 + checksums |
 | OpenWrt 打包 | [mynet_openwrt/Makefile](../../../mynet_openwrt/Makefile) | ipk |
 | gnb 导入 | [mynet_ctl/scripts/import_gnb_v1.6.4.sh](../../scripts/import_gnb_v1.6.4.sh) | 从 GitHub 拉 gnb release → `artisan release:import-gnb` |
@@ -120,6 +120,8 @@ MariaDB 10.11 保留作只读备份（≥7 天）。
 - [ ] 本地代码已提交并推送
 - [ ] `composer install --no-dev --optimize-autoloader`（Laravel）
 - [ ] `npm run build`（前端）
+- [ ] console SPA 已构建（发布包由 `release_build.sh` 自动构建；手工部署先 `cd resources/js/console && npm ci && npm run build`）
+- [ ] 发布走 `mynet_release` 时，`release.json` 已提交到目标 commit（build/test/package/deploy 从该 commit 读取）
 - [ ] 数据库变更评估（mynet_api **禁止 migration**，需 DBA 走 `database/sql/`）——**现网执行顺序与前置取证见 [`dba-operations-ticket-2026-10.md`](dba-operations-ticket-2026-10.md)**（工单外壳，不重复 SQL 正文）
 - [ ] 凭证（`.env`）已同步到生产
 - [ ] `back_priv` 文件权限 **0600**（`manage-prod.sh` 的远端守卫会拦；H7 裁定见 `spec/node-keying.md` §4.6）
@@ -132,8 +134,8 @@ MariaDB 10.11 保留作只读备份（≥7 天）。
 
 | 项目 | 回滚方式 |
 |------|---------|
-| Laravel（ctl / 后端） | `manage-prod.sh rollback`，或 `git reset --hard <prev_commit>` 后重跑部署脚本 |
-| GUI | rsync 备份的旧 `dist/` 目录回原位置 |
+| Laravel（ctl / 后端） | 后端：`manage-prod.sh rollback [stamp]`（恢复代码+配置/数据，重跑 composer/缓存/权限/FPM/健康检查）；ctl：`scripts/deploy/deploy.sh`；或 `git reset --hard <prev_commit>` 后重跑部署脚本 |
+| GUI | `release_deploy.sh --rollback <version>`（版本目录回滚）；旧脚本用 `rollback.sh` 的 `/tmp` 备份 |
 | 客户端 / OpenWrt | 用户保持旧版本；CTL 不强制更新 |
 | 数据库 | **无自动回滚**。备份见 `mynet_api/deploy/backup.sh`（V3-5），恢复用 `restore.sh`——但那是「恢复到某个时点」，不是回滚一次迁移 |
 
