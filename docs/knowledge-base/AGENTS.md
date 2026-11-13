@@ -203,6 +203,7 @@ operator / platform / plugin / ticket / sms / form / knowledge / conversation �
 - **开发推送不阻断**：分支推送不跑全量检查，`gate-status` 记为 `skipped`；全量检查由人工或发布流水线执行，检查结果不决定推送。
 - **tag 只能由发布流水线推送**：`mynet-club/mynet_release` 在 `make check`、打包和证据校验通过后写批准；开发机没有批准记录，tag 一律拒绝（bare 仓同理）。不按主机名/IP 区分机器。
 - **发布按仓库配置执行**：根目录 `release.json` 定义 build/test/sanitize/package/verify 与是否要求 P3；build 只编译，test 通过后 release 才打包、写批准、推 tag。工具在独立仓，本仓只维护配置。
+- **deploy 是发布后的独立阶段**：`commands.deploy` 只在 `released` 后执行，消费 package 产物、不重新构建；web 部署必须保留版本目录与切换前快照，健康检查失败自动回滚。gui 已接入 `scripts/release_deploy.sh`，部署机需要目标站点的 SSH 权限。
 - **`make check` / `scripts/check.py` 仍是人工入口**：推送不再触发选测；人工全量验证与发布流水线使用同一套 `make` 入口。
 - **例外：`mynet_agent`、`mynet_gnb`** 仍由各自的多平台矩阵 CI 构建并分发到 ctl，tag 由该矩阵使用；在流水线支持同版本多 leg 之前，不要把本节的 tag 批准钩子套到这两个仓（会直接阻断它们的发布）。agent 的一次 `make dist` 覆盖 11 条平台腿且依赖 gui/desktop 产物；gnb 以 `packages/RELEASE-SOURCES` 的 `release_source_commit` 为构建源并保留补丁溯源，二者都不能用单 worktree 的单产物模型替代。
 - **`mynet_web`** 已上分层门禁，但构建仍是占位（CPI-40），没有 `release.json`；真实构建落地后再接入发布。
