@@ -72,7 +72,15 @@ HTTP 层（`/api/v1/command`）包装为 `{success, data|message+stdout+stderr+a
 **允许**（有意白名单，与本仓 B2 分叉一致）：
 
 - `mynet/keys`（密钥原语，无系统副作用）
+- `mynet/utc/{hub,hubd,nodedesc}`（UTC hub 通信库，非系统能力；mynetd 承载 hub 面）
+- `shared/creds`（会话/凭证原语）
 - `mynetd/commands`（纯词表）
+
+**组合根豁免**：`cmd/mynetd/main.go` 允许 import `shared/config` 仅用于 wiring
+（ProxyLoad/Save 等注入源构造），行级标 `GUARD-OK <原因>`；guard B2 全量扫
+（含存量），豁免行进审计日志。意图状态（var/tunnel-state.json）唯一读写口 =
+`shared/tunnelstate`（写者：执行器 `mynet service start|stop` 与 localapi 命令面；
+读者：mynetd 开机恢复）——mynetd 不做进程判活，判活问 `mynet service status` 退出码。
 - 经 `Ops` 注入的执行器调用
 
 **迁移前已知违例**（G3.b 清单）：
