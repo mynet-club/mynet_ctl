@@ -420,9 +420,10 @@ mynetd ═══════ WebSocket ═══════> gateway ── 内
 - gateway 只做**字节中继**：`fetch` 携带 method/path/headers/body，
   gateway 转成对后端的一次内网 HTTP 调用，**不解析载荷**，且只放行**白名单路径**；
 - **心跳也默认走网关**（`relay_heartbeat=true`），所以「后端对节点不可达」成立；
-- 本机 API（`localapi`）监听 `127.0.0.1:8096`，Bearer 本机 token（落盘 0600），
-  提供 `/status`、`/logs`、`/service/{start,stop,reload}`、`/config/{sync,refresh}`、
-  `/peers`、`/proxy[/enable|disable]`、`/zones[/switch]`、`/nodes`、`/relay`；
+- 本机 API（`localapi`）监听 `127.0.0.1:8096`，Bearer 本机 token（落盘 0600）。
+  **端点面以 [`spec/local-api.md`](spec/local-api.md) 为准**（含逐处 file:line
+  代码取证）——本文旧清单里的 `/service/*`、`/config/{sync,refresh}`、`/peers`、
+  `/proxy*`、`/zones*` 是目标形态，不在真实路由表里，勿按旧清单排障；
 - `/relay` 就是 GUI 取平台态的通道，经 `localRelay → ControlPlane → gatewayclient` 中继到后端。
 
 **未落地**：
