@@ -131,7 +131,7 @@
 | # | 规则 | 说明 |
 |---|---|---|
 | R1 | **进程锚优先** | `ps`/`/proc` 的 cmdline `-c` 与 exe 路径是唯一真相 |
-| R2 | **同构建配套** | `gnb_ctl`/`gnb_es` 必须与 `gnb` **同目录**；缺则 `tools_missing`，**禁止**捡异构建 |
+| R2 | **同构建配套** | `gnb_ctl`/`gnb_es` 必须与 `gnb` **同目录**；缺则 `tools_missing`，**禁止**捡异构建。运维动作（同批落位/补签/重启）见 [`gnb-suite-runbook.md`](../gnb-suite-runbook.md)；违者 `mynet service start`/`utc driver-run`/`subject` 死限拒跑 |
 | R3 | **多 home 列候选** | 输出 `candidates[]` + `chosen` + `why`，不猜 |
 | R4 | **`--systemd` map 探测** | conf 目录 `gnb.map` 与 `/tmp/gnb.<port>.map` 取 mtime 新且 node_num 合理者 |
 | R5 | **工具缺失显式** | 不静默；错误信息带「不要捡其它树的 ctl」 |
