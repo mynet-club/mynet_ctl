@@ -1047,3 +1047,14 @@
 - LOOP-3 出口规则专项已修（2026-10-08，用户授权“优化他”）：专表/专链与失败报错取代共享链追加；7 个行为测试及隔离 Linux nft/iptables 内核测试通过。旧失败诊断已换成正式回归，详见 `spec/proxy-permission-loop-playbook.md` §9。Proxy client 全局失败回滚、现存 conntrack 终止与实机流量矩阵不在本项达成范围。
 
 LOOP-3 专项提交证据：agent `3e3d464`；默认 make check 与隔离内核规则验收通过。
+
+## CPI-87：GUI 的 `/api/` 反向代理指到公网 CF，SPA boot 白屏（2026-11-23 生产）
+
+- 现象：`my.mynet.club` 页面 HTML/JS 200 但 `#q-app` 空；nginx error.log 显示 `/api/v1/user/tenants/` 被 proxy 到 `https://[2606:4700:...]`（Cloudflare）并 110 超时。SPA boot 里 `restoreCurrentTenant()` await 该请求，永不返回 → 不 mount、无报错。
+- 修复：`location /api/` 改 `proxy_pass http://127.0.0.1:18080/api/`（内部 PHP 入口，Host=api.mynet.club）。
+- 教训：源站反代**绝不要**写自己的公网域名（会被 CF 接走，甚至回环）；同机回环必须显式 127.0.0.1+Host。
+
+## CPI-88：rsync 保留 0600 → php-fpm 整站 500（2026-11-23 生产）
+
+- 本仓 agent/编辑器新建文件是 0600；`rsync -a` 原样同步后 www-data 读不到类文件（`ClassLoader include ... Permission denied`）。
+- 修复：`manage-prod.sh` 新增 `normalize_remote_perms`（代码 644/755，保护 .env/auth.json，不动 storage/vendor）。

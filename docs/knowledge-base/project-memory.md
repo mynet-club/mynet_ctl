@@ -567,3 +567,13 @@ R1 C持久guard本轮检查点：`mynet_static_guard.h` / `src/transport/auth/st
 - 本地排障摘要附动作目录（`actionCatalogForPrompt()`）；模型只能 `[[action:<id>]]` 引用目录内 id（`extractActionIds` 未知 id 忽略）。
 - `UserAiAssistant` 在本地模式渲染「执行：<动作>」按钮并剥离裸标记；点击仍走确认卡片 + 三道闸，AI 不执行命令。云端助手不开启标记解析。
 - 测试：`actionMarkers` 5 例 + 目录/摘要断言；GUI vitest **166 passed**；两份构建 Build succeeded；guard 通过。
+
+## 2026-11-23 生产（xiawo）AI 线落地完成
+
+- **迁移**：24 条 pending 全执行；`invitations` 1 行先重铸 `invite_codes`（metadata.source=invitations，disabled）再带 `INVITATIONS_DROP_ALLOW_NONEMPTY=1` 下架。
+- **RBAC**：生产缺 `operator_roles`（CPI-85 复现）→ 补表 + `super_admin` + `admin@mynet.club`（email_verified、scope=platform）；管理员登录与 `/api/v1/admin/utc/*`、浏览器后台/UTC 总览均实测通过。
+- **AI**：DeepSeek provider 由 `AiProviderConfigServiceProvider` 补 `base_url/api_key`；`ai_providers` 行加密入库；admin 测试接口 200；C 端 `/ai-stream/chat` 全链路 SSE 实测（工具调用 `mynet_user_nodes_list` / `mynet_user_kb_search` + 流式回答）。
+- **Node SSE**：systemd 常驻 127.0.0.1:9200；PHP 回环入口 127.0.0.1:18080（Node 回调专用）。
+- **GUI/Admin**：web 构建部署 my.mynet.club；浏览器实测 AI 抽屉与管理员后台；`/api/` 原本绕 CF 导致 SPA 白屏，已改回环。
+- **本轮修掉**：`deploy/backup.sh` GNU stat 顺序、`manage-prod.sh` 同步后 0600 权限与 CF 410 误判、工具函数名点号、rsync 覆盖生产 `auth.json`。
+- **运行提醒**：租户 slug 已归一；`user-ai`/`knowledge` 只对 staging/platform 开通；管理员口令 `/root/mynet_admin_password.txt`（本机 `/tmp/mynet_admin_pw.txt`），建议改密。
