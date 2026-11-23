@@ -584,3 +584,9 @@ R1 C持久guard本轮检查点：`mynet_static_guard.h` / `src/transport/auth/st
 - console AI 四因：tenant_admin 缺 ai.capability.view/execute；secretary 强制 `config('ai.secretary')` 默认 bailian 无 key；空 `properties:[]` 被 DeepSeek 400（app 归一）；`/ai-stream/` 未在 console/admin 站点暴露 + `ai-streaming` 未按租户开通。
 - 工作台 0/空白：框架 Dashboard 直连核心端点；补只读 `DashboardCompatController`（members=Operator 成员 / settings / credits 零余额）。
 - 剩余：oauth 页依赖微信/域名模块（404）、场景目录空、积分/支付模块未装。
+
+## 2026-11-23 后台侧栏恢复（admin/console）
+
+- admin：super_admin 角色 role_permissions 为空 → 静态菜单全被 `hasPermission` 过滤；授予全部 126 permissions 后恢复。另用本地 AdminLayout 覆盖只列已装模块页面，避免未装页面点击弹回。
+- console：框架 SPA 只静态注册 dashboard；其余靠模块 routes。默认 AI 场景模式用 `v-else` 藏掉传统 sections → 本地 ConsoleLayout 覆盖为同时渲染；新增 ConsoleUI 模块（members/tenant-settings/nodes，复用 console 读模型）；路由需 `meta.permission`（fail-closed）。
+- 仍缺页面 = 未安装模块（租户/计费/订阅/支付/审计/域名等），非配置问题。
