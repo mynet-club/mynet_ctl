@@ -532,3 +532,17 @@ R1 C持久guard本轮检查点：`mynet_static_guard.h` / `src/transport/auth/st
 - **本机真机链路**（平台超管 `admin@mynet.club`，本地 dev 库）：admin UTC 全套 API 200；两租户各声明一条 inventory 并批准一条 → overview `total 2 / pending 1 / approved 1 / eligible 1`；admin SPA 五个 UTC 页全部渲染（截图 `mynet_api/docs/assets/phase3-utc-overview.jpg`、`phase3-utc-relay-inventory.jpg`），无前端报错。
 - **运维要点**：确认 `admin@mynet.club` 为 `scope=platform` 且绑 `super_admin`（与 Phase 2 的 `operator_roles` 核查同一前置）；发布顺序 **API 先 / GUI 后**；`paths/faults/usage` DB 实现当前为空集（等 Core 上报），验收只看 200 与页面可读；瘦身验收通过后的第二个窗口再删旧 `/utc/admin/*` 与 `UTC_ADMIN_ACCOUNT_IDS`。
 - 下一接手：Phase 4（引入 `mcp-client`/`ai`/`knowledge`/`user-ai`/`ai-streaming`，Admin 配默认 Provider 与内置文本知识库，`user-ai` 只读工具白名单）。
+
+## 2026-11-23 Phase 4（AI 底座）落地（mynet_api，生产未迁移/未接 Node SSE）
+
+按 playbook 引入框架 AI 五包并在本机打通，生产迁移与 ai-streaming 运行态待运维。
+
+- **依赖**：`mcp-client`/`ai`/`knowledge`/`user-ai`/`ai-streaming` 均装 `^3.35.0`；`ai` 连带 `laravel/ai v0.8.1`（→ `aws/aws-sdk-php`）。⚠️ `knowledge`/`user-ai`/`ai-streaming` 硬依赖 `dsplat/multi-tenant-saas-base`（会拉 13 个 base 模块），本仓用 root `"replace": {"dsplat/multi-tenant-saas-base": "3.35.0"}` 保留「只装五包」裁定，并实测五包对未装模块引用为 0。台账 CPI-86 + 上游报告 2026-11-23 条。升级框架时须重核验。
+- **拆垫片**：删 `app/Services/stubs/ToolDtoPlaceholder.php`（autoload.files 抢占 Tool DTO → 装包后 `package:discover` 报 `Undefined constant …Tool::AUDIENCE_OPERATOR`）与 `app/Services/NullToolRegistry.php`（AppServiceProvider 的 singleton 绑定随之移除；ToolRegistryContract 由 ai 模块提供）。
+- **四个只读工具**：`mynet.user.nodes.list` / `connections.list` / `services.list` / `utc.status`（`app/Services/Ai/Tools/` + `app/Providers/AiToolServiceProvider.php`）。元数据统一 `audience=USER`、`subjectPolicy=actor_self`、`RISK_L1`、`READ`、`tier=end_user`；主体只从 `ActorContext` 取（模型参数不能指定查谁），无身份 fail-closed。`config/user-ai.php` 白名单 = `knowledge_search` + 这四个，**无任何管理/写/私钥工具**。
+- **内置文本知识库**：`docs/kb/` 2 篇策展文档 + 25 篇 tips（`scripts/gen-system-kb-tips.php` 从 `mynet_ctl/scripts/tips-kb/tips-kb.json` 生成，**必须平铺**在 `docs/kb/`，框架 glob 不递归）；`deploy/.rsyncignore` 增加 `docs/kb` 白名单（原规则整目录排除 `docs/`，线上会检索为空且不报错）。本机 `discover()` 35 篇，中文症状查询命中。
+- **前台**：console 删除 `stubs/AiAssistant.vue` + 精确 alias，改由 `@modules/Ai` 解析模块真组件后重建；admin 重建带出 module-ai 管理页。两份 `public/` 产物构建通过。
+- **迁移**：14 条 AI/knowledge/mcp-client/user-ai 增量，`--pretend` 审查后仅在本机 dev 库执行；生产未跑。`phpunit.xml` 加 `memory_limit=512M`（全量峰值 127MB，默认 128M 踩线）。
+- **验证**：`make check` **708/6182/1skip** 全绿；`module:list` 八模块 enabled；`route:list` user-ai 9 / ai-streaming 5 / knowledge 7；新增 `MyNetAiToolsTest`（7）+ `SystemKbContentTest`（4）。
+- **运维要点**：受控迁移 14 条 → Admin「AI 配置」登记默认 LLM Provider（无 key 时 AI 不报错但答不出）→ `php artisan ai-streaming:{install,nginx,status}` + `AI_STREAMING_SERVICE_TOKEN`（EnvironmentFile 0600，PHP/Node 同值，缺失=503 fail-closed）→ 核对 `docs/kb` 随包。
+- **Phase 5 待决策**：C 端 KB 检索通道三选一 —— ① 给 user 身份补只读能力后暴露 `system_kb_search`；② 新增 `mynet.user.kb.search` 自建工具（突破「仅四个」口径）；③ 配外部 KB（与「不接 Dify」裁定冲突）。`knowledge_search` 未配外部连接时返回空集、**不回落**内置文本 KB（`ExternalKbService::search()`）。

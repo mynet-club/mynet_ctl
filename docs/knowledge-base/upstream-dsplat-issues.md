@@ -1679,3 +1679,50 @@ $ GET /api/v1/admin/system-settings          → 200
 **本仓处置**：不改 `vendor/`（§1.8）。本机 dev 库是按上述子步骤原样执行补齐的；生产库在
 Phase 2 运维清单里列为**上线前必查项**（`SHOW TABLES LIKE 'operator_roles'`），缺失时按受控迁移流程
 补建。台账：`cross-project-issues.md` **CPI-85**。
+
+## AI 三包硬依赖 `multi-tenant-saas-base` metapackage：装 AI 就要装 13 个 base 模块（2026-11-23）
+
+**现象**：按「按需 module」只装 `ai`/`knowledge`/`user-ai`/`mcp-client`/`ai-streaming` 五包时，
+composer 解析失败：`knowledge` / `user-ai` / `ai-streaming` 的 `require` 里都有
+`dsplat/multi-tenant-saas-base: ^3.6`。而该 metapackage（`dsplat/multi-tenant-saas-base`）的
+`require` 是 **17 个包**：根包 + auth/infrastructure/operator + **ai/mcp-client** 再 **+ 10 个 base 模块**
+（api-token / billing / conversation / domain / event / integration / logging / monitoring /
+notification / storage / user）。下游要 AI 就被迫把 billing、conversation、storage、user 这些
+当年被明确裁掉（`AGENTS.md` §1.6「31 个框架包只留 3~4 个」）的模块连带装回来，
+迁移与路由面都跟着膨胀。
+
+**根因**：base 是「版本锚点 + 必装基线」的 metapackage，`self.version` 把所有 base 模块绑成同一版本；
+三个 AI 包把「我和这套基线同一版本线」写成了硬 `require`，而不是
+`conflict`/`suggest`/运行期 `OptionalModule` 守卫。这样一来「按需 module」在 AI 线上不成立。
+
+**实测**（本机 `mynet_api`，core `dev-main as 3.10.3`，AI 包 `v3.35.0`）：
+
+```
+# 只 require 五包 → composer 报 base 未满足
+$ composer update dsplat/multi-tenant-saas-module-{ai,knowledge,user-ai,mcp-client,ai-streaming}
+  Problem 1 - Root composer.json requires dsplat/multi-tenant-saas-module-knowledge ^3.35
+              -> satisfiable ... but these were not loaded: dsplat/multi-tenant-saas-module-knowledge v3.35.0
+              requires dsplat/multi-tenant-saas-base ^3.6 -> found ... but it does not match the constraint.
+# 用 root replace 声明后解析通过（只装五包 + laravel/ai 0.8.1）
+$ composer.json: "replace": {"dsplat/multi-tenant-saas-base": "3.35.0"}
+$ composer update ... --dry-run  →  exit 0，仅装 5 包 + laravel/ai + aws-sdk-php
+```
+
+**下游影响面**（用 grep 实测五包对缺失模块的引用，决定 replace 是否可用）：
+
+| 包 | 对未装模块的引用 |
+|---|---|
+| `knowledge` / `user-ai` / `mcp-client` | **0**（只有跨包接口，不 import 其它模块类） |
+| `ai` | `Conversation`（2，`AgentChatController` 的 Resource）/ `Billing`（4，`AiUsageService`、`CapabilityBilling*`）/ `Storage`（5，`AiImageService`、`AiVideoService`、`DocumentParseTool`）/ `Domain`（2，`UpdateTenantDomain*`）——全是**未启用能力/写适配器**里的 `use`，不是 boot 期必需 |
+| `ai-streaming` | `ActivityPlan\ThreadDigestService`（1，`ResolveController`）——**`ActivityPlan` 连 base 里都没有**，属另一处悬空引用 |
+
+**建议修法**（归属框架）：把 `multi-tenant-saas-base` 从 AI 三包的硬 `require` 里降级为
+`suggest`（或 `conflict` 仅在确实需要某模块能力时声明），让「只装 AI 五包」成为受支持组合；
+对确实需要的能力（如对话存储、计费）改用运行期 `OptionalModule::has/ensure` 守卫，
+与 `auth` 模块对 `notification` 的既有做法一致（见本文件缺陷 1）。`ai-streaming` 的
+`ActivityPlan` 引用要么声明依赖、要么 `OptionalModule` 守卫。
+
+**本仓处置**：`composer.json` 用 `"replace": {"dsplat/multi-tenant-saas-base": "3.35.0"}` 保留
+「只装五包」的裁定，并实测 8 模块 boot、`make check` 708 测试通过（2026-11-23）。
+台账：`cross-project-issues.md` **CPI-86**。该组合属**不受上游支持**的依赖形态，
+升级框架时须重新核验这五包对 base 模块的新增引用。

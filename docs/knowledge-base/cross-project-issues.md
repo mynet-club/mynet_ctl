@@ -777,6 +777,15 @@
 
 ---
 
+### 📝 2026-11-23 Phase 4（AI 底座）落地发现的缺陷（发现即记）
+
+| ID | 优先级 | 问题与证据 | 归属 |
+|---|---|---|---|
+| CPI-86 | P2 | **AI 三包硬依赖 base metapackage ⇒ 装 AI 就要装 13 个 base 模块**。`knowledge`/`user-ai`/`ai-streaming` 的 `require` 含 `dsplat/multi-tenant-saas-base ^3.6`，该 metapackage 拉 17 个包（billing/conversation/storage/user/…），与 AGENTS §1.6「按需 module」冲突。本仓用 root `replace` 保留只装五包，并实测五包对缺失模块引用为 0（`ai` 的 Billing/Storage/Domain/Conversation 引用只在未启用能力里；`ai-streaming` 的 `ActivityPlan` 连 base 都没有）。**不受上游支持的组合**，升级框架时须重核验。另：`ai-streaming` 的 `system_kb_search` 走 `CapabilityAuthorizer`，C 端 user 无 RBAC 能力集，Phase 5 接线前需先决定能力补授 / 自建 KB 工具 / 外部 KB 三选一（证据见 playbook Phase 5 条目） | 框架（dsplat），Phase 5 决策 |
+| — | P1（框架） | 见 `upstream-dsplat-issues.md` 2026-11-23 条：同一 base 依赖问题与 `ActivityPlan` 悬空引用的完整取证 | 框架 |
+
+---
+
 ## 📐 架构设计决策（非 bug，易被误判）
 
 #### mynet_gui 生产 VITE_API_BASE_URL=https://my.mynet.club（同源反代）
