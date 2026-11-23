@@ -1058,3 +1058,13 @@ LOOP-3 专项提交证据：agent `3e3d464`；默认 make check 与隔离内核�
 
 - 本仓 agent/编辑器新建文件是 0600；`rsync -a` 原样同步后 www-data 读不到类文件（`ClassLoader include ... Permission denied`）。
 - 修复：`manage-prod.sh` 新增 `normalize_remote_perms`（代码 644/755，保护 .env/auth.json，不动 storage/vendor）。
+
+## CPI-89：DeepSeek 拒绝空 properties 数组（2026-11-23）
+
+- 框架工具用 `['type'=>'object','properties'=>[]]` 声明无参；PHP 编码 `[]`，OpenAI 兼容端点要求 object → DeepSeek 400，整轮助手失败（前端只显示「AI 服务暂时不可用」）。
+- 修复：`AiToolServiceProvider::normalizeEmptyParameterSchemas()` 在 `booted()` 后省略空 `properties`；测试断言运行时工具定义不得出现 `"properties":[]`。
+
+## CPI-90：console 工作台依赖未安装的核心/计费端点（2026-11-23）
+
+- `Dashboard.vue` 直连 `/v1/tenant/members`、`/v1/tenant/settings`、`/v1/tenants/{id}/credits`；未装模块时 404 → 成员 0、团队信息空白。
+- 修复：只读兼容端点 `DashboardCompatController`（Operator 成员 / 团队档案 / 零余额），不复制写面。

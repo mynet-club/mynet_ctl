@@ -577,3 +577,10 @@ R1 C持久guard本轮检查点：`mynet_static_guard.h` / `src/transport/auth/st
 - **GUI/Admin**：web 构建部署 my.mynet.club；浏览器实测 AI 抽屉与管理员后台；`/api/` 原本绕 CF 导致 SPA 白屏，已改回环。
 - **本轮修掉**：`deploy/backup.sh` GNU stat 顺序、`manage-prod.sh` 同步后 0600 权限与 CF 410 误判、工具函数名点号、rsync 覆盖生产 `auth.json`。
 - **运行提醒**：租户 slug 已归一；`user-ai`/`knowledge` 只对 staging/platform 开通；管理员口令 `/root/mynet_admin_password.txt`（本机 `/tmp/mynet_admin_pw.txt`），建议改密。
+
+## 2026-11-23 晚 console 修复（生产）
+
+- 场景商店 500：`scene_package_installs` 属框架基线子步骤（CPI-85 家族），用基线 `steps()` 补建后 200。
+- console AI 四因：tenant_admin 缺 ai.capability.view/execute；secretary 强制 `config('ai.secretary')` 默认 bailian 无 key；空 `properties:[]` 被 DeepSeek 400（app 归一）；`/ai-stream/` 未在 console/admin 站点暴露 + `ai-streaming` 未按租户开通。
+- 工作台 0/空白：框架 Dashboard 直连核心端点；补只读 `DashboardCompatController`（members=Operator 成员 / settings / credits 零余额）。
+- 剩余：oauth 页依赖微信/域名模块（404）、场景目录空、积分/支付模块未装。
