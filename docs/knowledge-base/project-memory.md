@@ -561,3 +561,9 @@ R1 C持久guard本轮检查点：`mynet_static_guard.h` / `src/transport/auth/st
 - `LocalDiagnosticsPage` 新增「修复动作」tab：卡片展示命令/影响/是否改动本机；确认卡片含命令预览、影响说明、写动作勾选、执行结果回显；成功后刷新状态并重跑 check。
 - 测试：`repairActions.test.ts` 10 例（目录不变量、未知 id、确认闸、只读免确认、写动作 argv、秘密/白名单拒绝）；vitest **160 passed**；`quasar build` 与 `build:embed` 通过；`make guard` 通过。
 - 剩余（可选）：AI 建议 → 动作 id 映射（仍只经用户点击）、动作目录扩展需逐条评估可回滚性。
+
+## 2026-11-23 Phase 5b 增强：AI 建议 → 修复动作
+
+- 本地排障摘要附动作目录（`actionCatalogForPrompt()`）；模型只能 `[[action:<id>]]` 引用目录内 id（`extractActionIds` 未知 id 忽略）。
+- `UserAiAssistant` 在本地模式渲染「执行：<动作>」按钮并剥离裸标记；点击仍走确认卡片 + 三道闸，AI 不执行命令。云端助手不开启标记解析。
+- 测试：`actionMarkers` 5 例 + 目录/摘要断言；GUI vitest **166 passed**；两份构建 Build succeeded；guard 通过。
