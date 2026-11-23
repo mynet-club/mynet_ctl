@@ -519,3 +519,16 @@ R1 C持久guard本轮检查点：`mynet_static_guard.h` / `src/transport/auth/st
 - **本机真机链路**：`php -S 127.0.0.1:8080 -t public server.php`；平台超管登录 200，`/api/v1/admin/{menu,dashboard,operators,auth/roles,system-settings,feature-flags,modules}` 全 200；SPA `/admin/` 登录进 `/admin/dashboard`、`/admin/operators` 渲染正常（截图 `mynet_api/docs/assets/phase2-admin-operators.jpg`）；深链 `/admin/operators` 直出 `index.html`、`/admin/assets/*` 200。
 - **新欠债（已记账）**：存量库缺 `operator_roles`（框架把建表子步骤并入已 Ran 的基线迁移，独立文件未下发）⇒ 平台 Operator 全部 RBAC 门 403。本机 dev 库按 vendor 子步骤原样补齐；生产上线前必查（Phase 2 运维清单第 3 条）。台账 `cross-project-issues.md` **CPI-85**、上游报告 `upstream-dsplat-issues.md` 2026-11-23 条。
 - 下一接手：Phase 3（UTC 权限归位：`/api/v1/admin/utc/*` + `src/Modules/Utc/resources/admin/` 五页 + `mynet_gui` 瘦身）。
+
+## 2026-11-23 Phase 3（UTC 权限归位）落地（mynet_api + mynet_gui，未推送前）
+
+按 playbook 推进 Phase 3，本地开发/构建/测试完成，运维上线待负责人。
+
+- **后端两层拆分**：新 `/api/v1/admin/utc/*`（`domain.admin` + `tenant.permission`）承接全局 `overview`、`tenants` 选择器、`hub/status`、`transports`、`acceleration`、`paths`、`faults`、`usage(+summaries/settlements/settlement-ledger)`、`relay-inventory`（approve/revoke）、`pair-approvals`（revoke）。同一批控制器按 `domainType` 双模（`UtcAdminController`）：平台面只认启用的 `scope=platform` Operator，读缺省**全平台**、`?tenant_id=` 收窄；写必须点名租户（漏参 422 `TENANT_REQUIRED`，点名 B 动 A 一律 404）。用户面旧行为不变（白名单 + 上下文租户；带 tenant_id 也不跨区）。
+- **仓储**：读路径 `null` = 全平台（tenant/account 条件收窄），写签名不动；summary/settlement/ledger 行补 `tenant_id`；`listAcceleration` 加 `tenant_id` 过滤；`UtcController::readTenantScope()` 用 `[tenantId, allowAll]` 钉死 null 的两种含义（用户面 null=空集、平台面 null=全平台）。
+- **Admin 前端**：`src/Modules/Utc/resources/admin/`（routes.ts + utcApi + useTenantFilter + 5 页 Element Plus），`public/admin` 重建；`meta.menu` 归入「UTC 加速」分组。
+- **APP 瘦身（mynet_gui）**：删 `utc/paths`、`utc/faults`、`utc/relay-admin` 三页 + 路由/导航/i18n/组件；`UtcNodesPage` 只留「我的 transport、加速开关、用量进度、登记入口」；`utcService`/types 收窄。旧 `/api/v1/utc/admin/*` 与用户面 `hub/status`/`paths`/`faults` 暂留（注释写明**先发 GUI 再删 API**）。
+- **测试**：新增 `UtcPlatformAdminApiTest` 10 例；`make test` **697/5929/1skip**、`make test-mysql` **202/843** 全绿；GUI vitest **126 passed**、`quasar build` 与 `build:embed` 均通过（`/assets/` vs `/gui/assets/`）、GUI `make guard` 通过。GUI i18n 检查的 3 组 `social.friends.*` 缺键是既有问题（上一提交引入），与本改无关。
+- **本机真机链路**（平台超管 `admin@mynet.club`，本地 dev 库）：admin UTC 全套 API 200；两租户各声明一条 inventory 并批准一条 → overview `total 2 / pending 1 / approved 1 / eligible 1`；admin SPA 五个 UTC 页全部渲染（截图 `mynet_api/docs/assets/phase3-utc-overview.jpg`、`phase3-utc-relay-inventory.jpg`），无前端报错。
+- **运维要点**：确认 `admin@mynet.club` 为 `scope=platform` 且绑 `super_admin`（与 Phase 2 的 `operator_roles` 核查同一前置）；发布顺序 **API 先 / GUI 后**；`paths/faults/usage` DB 实现当前为空集（等 Core 上报），验收只看 200 与页面可读；瘦身验收通过后的第二个窗口再删旧 `/utc/admin/*` 与 `UTC_ADMIN_ACCOUNT_IDS`。
+- 下一接手：Phase 4（引入 `mcp-client`/`ai`/`knowledge`/`user-ai`/`ai-streaming`，Admin 配默认 Provider 与内置文本知识库，`user-ai` 只读工具白名单）。
