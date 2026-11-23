@@ -769,6 +769,14 @@
 
 ---
 
+### 📝 2026-11-23 Phase 2（Admin 平台后台）落地发现的缺陷（发现即记）
+
+| ID | 优先级 | 问题与证据 | 归属 |
+|---|---|---|---|
+| CPI-85 | P1 | **存量库缺 `operator_roles` 表 ⇒ 平台 Operator 在全部 RBAC 门 403**。框架把该建表作为**子步骤**并入了已 Ran 的基线迁移 `2025_01_01_000022_operator_module`（`Database/migrations/…:167-233`），存量库整体跳过该文件、也不存在独立迁移文件可被 `migrate` 发现。`RbacService::resolveRoleIds()`（`module-auth/Services/RbacService.php:145-166`）对 `scope=platform` **只**读 `operator_roles`，表缺 ⇒ 角色集空 ⇒ `rbac.permission:*` 全拒（症状：「能进后台壳，每个列表都无权」，易误判为 `domain.admin` 没生效）。本机实测：补表前 `/api/v1/admin/operators` 403、补后 200。**不改 vendor**；生产上线前必查（Phase 2 运维清单第 3 条），上游报告见 `upstream-dsplat-issues.md` 2026-11-23 条 | 框架（dsplat），运维核查 |
+
+---
+
 ## 📐 架构设计决策（非 bug，易被误判）
 
 #### mynet_gui 生产 VITE_API_BASE_URL=https://my.mynet.club（同源反代）

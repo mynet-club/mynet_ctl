@@ -1632,3 +1632,50 @@ public static function authorize(string $ability, Model $resource): void;       
 **期望**：登录成功后按 `users.tenant_id` 指针 → `tenant_users` 回退解析，并写入响应 `data.tenant_id`（与 `User::tenantId()` 同判据）。
 
 **本仓绕过**：agent `authLogin` 在 `tenant_id` 为空时调 `/api/v1/user/tenants/` 回填默认区（`mynet/cmd_auth.go` `fetchDefaultTenantID`）。上游修复后可删。
+
+## 基线漂移：`operator_roles` 在存量库**永远不会**被创建（2026-11-23，Phase 2 实测）
+
+**现象**：存量库上 `SHOW TABLES LIKE 'operator_roles'` 为空；平台 `Operator`（`scope=platform`）打任何
+RBAC 门（`/api/v1/admin/operators`、`/api/v1/admin/auth/roles`、`/api/v1/admin/system-settings` …）
+一律 `403`，响应里带 `"permission":"platform.member.view"` 之类。极易被误判成「`domain.admin` 没生效」。
+
+**根因**：`operator_roles` 的建表没以独立迁移文件下发，而是作为**子步骤**合并进了
+`vendor/dsplat/multi-tenant-saas-module-operator/Database/migrations/2025_01_01_000022_operator_module.php`：
+
+- `:22-33` 的 `up()` 只做 `foreach ($this->steps() as $step) { $step->up(); }`；
+- `:167-233` 是该文件内嵌的 `'2026_10_19_000002_create_operator_roles' => new class extends Migration { … }`。
+
+存量库在 2026-10-20 归并前就已经把 **外层基线** 记成 Ran，于是 Laravel 的 migrator 整体跳过该文件，
+`steps()` 里的新块**一次都不会执行**；而仓里又没有独立的 `2026_10_19_000002_create_operator_roles.php`
+可被 `migrate` 发现 ⇒ 存量库永远缺这张表。文件头注释写着「后续迁移仍以独立文件随发布包下发，
+并在下个发布线并入本基线」，这条正是**没有**按那句话下发的那个。
+
+**下游后果（为什么这次必须报）**：`RbacService::resolveRoleIds()`
+（`vendor/dsplat/multi-tenant-saas-module-auth/Services/RbacService.php:145-166`）对 `scope=platform`
+的 Operator **只**读 `operator_roles`（`Schema::hasTable('operator_roles')` 为假时直接跳过，
+不回落 `operator_tenants`）；`resolveRoleIds()` 返回空 ⇒ `check()` 返回 false ⇒ 平台后台所有
+`rbac.permission:*` 路由 403。`CheckPermission` 那道 `scope=platform` 域门禁是**过了**的，
+所以症状表现为「能进后台壳、但每个列表都无权」，与实际根因相隔两层。
+
+**实测**（本机 `mynet_api_dev`，MySQL，框架 `dev-main as 3.10.3`）：
+
+```
+$ php artisan migrate --pretend
+   INFO  Nothing to migrate.                    # 没有可补的迁移
+$ SHOW TABLES LIKE 'operator_roles';
+   (空)
+$ GET /api/v1/admin/operators                → 403 {"permission":"platform.member.view"}
+# 按 vendor 子步骤原样执行 create_operator_roles::up() 之后
+$ GET /api/v1/admin/operators                → 200 {"success":true,"data":[]}
+$ GET /api/v1/admin/auth/roles               → 200
+$ GET /api/v1/admin/system-settings          → 200
+```
+
+**建议修法**（归属框架）：把 `2026_10_19_000002_create_operator_roles` 作为**独立、幂等**的迁移文件
+随包下发（建表 + 从 `operator_tenants(tenant_id = platform_tenant_id)` 回填 + 删伪绑定，
+逻辑与 `:167-233` 完全一致即可），让存量库经正常 `php artisan migrate` 补齐；或在框架侧提供
+「基线合并后子步骤补跑」的一次性命令。**替代方案（不推荐）**：每次并入基线时同时保留独立文件。
+
+**本仓处置**：不改 `vendor/`（§1.8）。本机 dev 库是按上述子步骤原样执行补齐的；生产库在
+Phase 2 运维清单里列为**上线前必查项**（`SHOW TABLES LIKE 'operator_roles'`），缺失时按受控迁移流程
+补建。台账：`cross-project-issues.md` **CPI-85**。
