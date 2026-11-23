@@ -546,3 +546,11 @@ R1 C持久guard本轮检查点：`mynet_static_guard.h` / `src/transport/auth/st
 - **验证**：`make check` **708/6182/1skip** 全绿；`module:list` 八模块 enabled；`route:list` user-ai 9 / ai-streaming 5 / knowledge 7；新增 `MyNetAiToolsTest`（7）+ `SystemKbContentTest`（4）。
 - **运维要点**：受控迁移 14 条 → Admin「AI 配置」登记默认 LLM Provider（无 key 时 AI 不报错但答不出）→ `php artisan ai-streaming:{install,nginx,status}` + `AI_STREAMING_SERVICE_TOKEN`（EnvironmentFile 0600，PHP/Node 同值，缺失=503 fail-closed）→ 核对 `docs/kb` 随包。
 - **KB 通道已定（用户 2026-11-23 裁定）**：给 user 身份补只读能力 `mynet.ai.user_read`（`subjectTypes=[user]`、`targetScope=tenant`、`member` 准入、`min_level=authenticated`），五个只读工具统一挂它；框架 `system_kb_search` 仍 operator-only（同 key 不可追加 user）。执行咽喉另需 `ai.tool_platform_bypass` 点名五个 slug（handler 在 App 命名空间，模块解析必然失败 → 框架 fail-closed）。已用 `runRoot(TrustedExecutionInput)` 端到端实测 execute 通过：nodes 返回 2 条、kb.search 命中 5 条。
+
+## 2026-11-23 Phase 5（C 端 AI 前端）落地（mynet_gui，Node SSE/Provider 待运维）
+
+- **云端流式助手**：`mynet_gui/src/services/ai/` 三个文件 —— `dataStreamParser.ts`（AI SDK data-stream：`0:` 文本 / `2:` data / `9,b,a,c` 工具 / `3:` 错误 / `d,e` 结束；容忍半行、`data:` 前缀、坏帧）+ `userAiChat.ts`（`POST {base}/chat` scope=user + Bearer + X-Tenant-ID；404/405/501/503/502 退到 `/api/v1/user-ai/ask`，401/429 不兜底；tenant_slug 反查缓存）+ `UserAiAssistant.vue`（右侧抽屉：增量文本、工具 chips、conversation_id 续接、停止/新对话、错误横幅、来源、快捷问题）。入口 `MainLayout` 顶部机器人按钮（登录后可见）。
+- **本地排障助手**：`LocalDiagnosticsPage` 增加「AI 排障」，注入 `localContext.ts` 的脱敏摘要（白名单状态字段 + parity + check 输出；敏感键整行丢弃、PEM 整块移除、≥64hex 掩码、默认 4000 字截断）。**不读盘、不带 token/私钥**；本轮只给只读建议，写操作确认卡片留 5b。
+- **测试/构建**：新增 3 套件 24 例（解析器 7 / 客户端 10 / 脱敏 7），`vitest run` **150 passed**；`quasar build`（`/assets/`）与 `build:embed`（`/gui/assets/`）通过；`make guard` 通过；i18n 仅剩既有 `social.friends.*` 3 组缺键。
+- **运维要点**：SSE location（`/ai-stream/`，`proxy_buffering off` + 透传 Authorization）要加在 **my.mynet.club（GUI 站点）**，不是 api 站点；`user-ai` 模块需对目标区开通；非流式兜底依赖 `tenants.slug` 非空（本地演示租户 slug 目前为空 → 兜底 422）；Provider 未配时 AI 不报错但答不出。
+- **5b 待做**：本地写动作确认卡片需要 `localApi`/mynetd 受控写端点（重启 gnb、改 DNS/分流），确认后执行、幂等可回滚；**不要**做成 AI 工具。
