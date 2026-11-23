@@ -554,3 +554,10 @@ R1 C持久guard本轮检查点：`mynet_static_guard.h` / `src/transport/auth/st
 - **测试/构建**：新增 3 套件 24 例（解析器 7 / 客户端 10 / 脱敏 7），`vitest run` **150 passed**；`quasar build`（`/assets/`）与 `build:embed`（`/gui/assets/`）通过；`make guard` 通过；i18n 仅剩既有 `social.friends.*` 3 组缺键。
 - **运维要点**：SSE location（`/ai-stream/`，`proxy_buffering off` + 透传 Authorization）要加在 **my.mynet.club（GUI 站点）**，不是 api 站点；`user-ai` 模块需对目标区开通；非流式兜底依赖 `tenants.slug` 非空（本地演示租户 slug 目前为空 → 兜底 422）；Provider 未配时 AI 不报错但答不出。
 - **5b 待做**：本地写动作确认卡片需要 `localApi`/mynetd 受控写端点（重启 gnb、改 DNS/分流），确认后执行、幂等可回滚；**不要**做成 AI 工具。
+
+## 2026-11-23 Phase 5b（本地写动作确认卡片）落地（mynet_gui）
+
+- `src/services/local/repairActions.ts`：固定动作目录（只读 `check`/`parity`/`status`；写 `apply`/`refresh-routes`/`restart-gnb`/`restart-wireguard`），三道闸 —— 目录 id 白名单、`mutating` 动作服务层强制 `confirmed===true`、`argv[0]` 必须在 mynetd `allowedSubcommand()` 镜像白名单内且拒绝秘密参数。**AI 不参与构造命令**，复用既有 `/api/v1/command`，未改 `mynet_agent`。
+- `LocalDiagnosticsPage` 新增「修复动作」tab：卡片展示命令/影响/是否改动本机；确认卡片含命令预览、影响说明、写动作勾选、执行结果回显；成功后刷新状态并重跑 check。
+- 测试：`repairActions.test.ts` 10 例（目录不变量、未知 id、确认闸、只读免确认、写动作 argv、秘密/白名单拒绝）；vitest **160 passed**；`quasar build` 与 `build:embed` 通过；`make guard` 通过。
+- 剩余（可选）：AI 建议 → 动作 id 映射（仍只经用户点击）、动作目录扩展需逐条评估可回滚性。
