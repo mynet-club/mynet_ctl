@@ -60,9 +60,9 @@ main() {
     log_info "输出目录: $OUTPUT_DIR"
     log_info "临时目录: $TEMP_DIR"
 
-    # DNS 上游与域名清单（手工维护的模板，存在即发布）
-    # D2：dns-domestic / dns-clean / proxy-domains / direct-domains
-    for f in dns-domestic.txt dns-clean.txt proxy-domains.txt direct-domains.txt ad-domains.txt malware-domains.txt; do
+    # DNS 上游、域名与预设 IPv4 前缀清单（手工维护的模板，存在即发布）
+    # D2：dns-domestic / dns-clean / proxy-domains / direct-domains / proxy-ips
+    for f in dns-domestic.txt dns-clean.txt proxy-domains.txt direct-domains.txt proxy-ips.txt ad-domains.txt malware-domains.txt; do
         if [ -f "$SCRIPT_DIR/$f" ]; then
             cp "$SCRIPT_DIR/$f" "$OUTPUT_DIR/.$f.tmp"
             chmod 644 "$OUTPUT_DIR/.$f.tmp"
@@ -137,6 +137,7 @@ $(list_meta dns-domestic.txt dns_domestic),
 $(list_meta dns-clean.txt dns_clean),
 $(list_meta proxy-domains.txt proxy_domains),
 $(list_meta direct-domains.txt direct_domains),
+$(list_meta proxy-ips.txt proxy_ips),
 $(list_meta ad-domains.txt ad_domains),
 $(list_meta malware-domains.txt malware_domains)
 }
@@ -147,7 +148,7 @@ EOF
     log_info "=========================================="
     log_info "chinaip.txt: $china_count 条"
     log_info "interip.txt: $inter_count 条"
-    for f in dns-domestic.txt dns-clean.txt proxy-domains.txt direct-domains.txt ad-domains.txt malware-domains.txt; do
+    for f in dns-domestic.txt dns-clean.txt proxy-domains.txt direct-domains.txt proxy-ips.txt ad-domains.txt malware-domains.txt; do
         [ -f "$OUTPUT_DIR/$f" ] && log_info "$f: $(grep -cvE '^\s*(#|$)' "$OUTPUT_DIR/$f") 条"
     done
     log_info "meta.json: 已生成（含 sha256）"

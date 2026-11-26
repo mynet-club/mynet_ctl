@@ -91,8 +91,8 @@ class ProxyController extends Controller
             'meta' => $meta,
         ];
 
-        // DNS 上游与域名清单：可缺省（按需生成），有则带上
-        foreach (['dns-domestic.txt', 'dns-clean.txt', 'proxy-domains.txt', 'direct-domains.txt', 'ad-domains.txt', 'malware-domains.txt'] as $f) {
+        // DNS 上游、域名与预设 IPv4 前缀清单：可缺省（按需生成），有则带上
+        foreach (['dns-domestic.txt', 'dns-clean.txt', 'proxy-domains.txt', 'direct-domains.txt', 'proxy-ips.txt', 'ad-domains.txt', 'malware-domains.txt'] as $f) {
             $key = str_replace('.txt', '', $f);
             $path = $dir.'/'.$f;
             $out[$key] = file_exists($path) ? file_get_contents($path) : '';
@@ -120,8 +120,8 @@ class ProxyController extends Controller
             'interip.txt', 'chinaip.txt',
             // DNS 上游
             'dns-domestic.txt', 'dns-clean.txt',
-            // 域名清单
-            'proxy-domains.txt', 'direct-domains.txt', 'ad-domains.txt', 'malware-domains.txt',
+            // 域名与预设 IPv4 前缀清单
+            'proxy-domains.txt', 'direct-domains.txt', 'proxy-ips.txt', 'ad-domains.txt', 'malware-domains.txt',
         ];
         if (! in_array($name, $allowed, true)) {
             abort(404);
